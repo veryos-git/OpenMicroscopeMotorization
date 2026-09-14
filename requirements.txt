@@ -1,0 +1,4 @@
+# python dependencies for the image stitching scripts
+# installed into ./venv by `deno task install`
+numpy
+opencv-python

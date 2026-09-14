@@ -1,0 +1,10 @@
+{
+    "tasks": {
+        "start": "deno run -A install.js && deno run -A webserver_denojs.js",
+        "install": "deno run -A install.js",
+        "doctor": "deno run -A install.js --check",
+        "verify": "deno run -A install.js --verify-compile",
+        "server": "deno run -A webserver_denojs.js",
+        "flash": "deno run -A startup.js"
+    }
+}

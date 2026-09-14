@@ -1,0 +1,9 @@
+.env
+.gitignored/
+.claude/
+image_stitching_test/
+scans/
+venv/
+weights/
+__pycache__/
+*.pyc
