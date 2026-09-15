@@ -5,6 +5,7 @@ let o_component__page_control = {
     template: `
         <o_component__webcam />
         <o_component__filter />
+        <o_component__flat_field />
         <o_component__toolbar />
         <o_component__jog />
         <o_component__map />

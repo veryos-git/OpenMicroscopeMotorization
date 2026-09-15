@@ -1,4 +1,4 @@
-import { o_state, o_router, f_connect_esp_serial, f_disconnect_esp, f_save_setting__debounced, f_toggle_mouse_jog, f_send_esp_stop_all, f_save_library_current, f_refresh_maps } from './index.js';
+import { o_state, o_router, f_connect_esp_serial, f_disconnect_esp, f_save_setting__debounced, f_save_flat_field, f_toggle_mouse_jog, f_send_esp_stop_all, f_save_library_current, f_refresh_maps } from './index.js';
 import { f_s_key__iso, f_apply_camera_setting, f_set_camera_mode, f_apply_camera__saved } from './o_camera.module.js';
 
 let o_component__toolbar = {
@@ -43,6 +43,12 @@ let o_component__toolbar = {
                 :class="{ active: o_state.o_panel_visibility.optics }"
                 @click="f_toggle_panel('optics')"
             >Optics</button>
+            <button
+                class="toolbar-toggle"
+                :class="{ active: o_state.o_flat_field.b_active }"
+                @click="f_toggle_flat"
+                title="toggle flat-field (dust) correction — shortcut: F"
+            >Flat</button>
 
             <div class="toolbar-sep"></div>
 
@@ -354,6 +360,17 @@ let o_component__toolbar = {
         f_toggle_panel: function(s_name) {
             o_state.o_panel_visibility[s_name] = !o_state.o_panel_visibility[s_name];
             f_save_setting__debounced('o_panel_visibility', o_state.o_panel_visibility);
+        },
+        f_toggle_flat: function() {
+            let o_flat = o_state.o_flat_field;
+            if(!o_flat.s_path_flat){
+                // nothing to enable yet -> open the calibration panel
+                o_state.o_panel_visibility.flat = true;
+                f_save_setting__debounced('o_panel_visibility', o_state.o_panel_visibility);
+                return;
+            }
+            o_flat.b_active = !o_flat.b_active;
+            f_save_flat_field();
         },
         f_on_webcam_change: function() {
             f_save_setting__debounced('s_id__webcam_device', o_state.s_id__webcam_device);

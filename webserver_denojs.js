@@ -468,6 +468,25 @@ let f_handler = async function(o_request, o_conninfo) {
                 }
             }
 
+            // ── Flat-field folder creation ─────────────────────
+            if(o_data.s_type === 'flatfield_create_folder'){
+                try {
+                    // fixed, reusable folder (a flat is recalibrated in place)
+                    let s_path_folder = s_root_dir + s_ds + 'scans' + s_ds + 'flatfield';
+                    await Deno.mkdir(s_path_folder, { recursive: true });
+                    o_socket.send(JSON.stringify({
+                        v_result: { s_path_folder: s_path_folder },
+                        s_uuid: o_data.s_uuid,
+                    }));
+                } catch (o_error) {
+                    console.error('flatfield_create_folder error:', o_error);
+                    o_socket.send(JSON.stringify({
+                        error: o_error.message,
+                        s_uuid: o_data.s_uuid,
+                    }));
+                }
+            }
+
             // ── Focus stack run (focus_stack.py) ────────────────
             if(o_data.s_type === 'focus_stack_run'){
                 try {

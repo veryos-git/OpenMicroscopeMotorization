@@ -1,4 +1,5 @@
 import { o_state } from './index.js';
+import { f_b_flat__matches, f_flat__apply } from './o_flatfield.module.js';
 
 // single capture path. every component that "takes a picture" from the live
 // webcam calls this, so the subtle capture flash always shows, and the frame
@@ -29,7 +30,19 @@ let f_o_capture__frame = function(o_opts) {
         let el_canvas = document.createElement('canvas');
         el_canvas.width = n_scl_x;
         el_canvas.height = n_scl_y;
-        el_canvas.getContext('2d').drawImage(el_video, 0, 0, n_scl_x, n_scl_y);
+        let o_ctx = el_canvas.getContext('2d');
+        o_ctx.drawImage(el_video, 0, 0, n_scl_x, n_scl_y);
+
+        // flat-field (dust remove): correct full-res captures so every scan
+        // tile and stack frame is already corrected when it is written to disk.
+        // downscaled captures (e.g. the locate frame) stay raw.
+        if (o_opts.b_flat !== false && o_state.o_flat_field.b_active && n_scl === 1) {
+            if (f_b_flat__matches(n_scl_x, n_scl_y)) {
+                let o_imagedata = o_ctx.getImageData(0, 0, n_scl_x, n_scl_y);
+                f_flat__apply(o_imagedata);
+                o_ctx.putImageData(o_imagedata, 0, 0);
+            }
+        }
 
         // signal the live preview that a picture was just taken
         if(b_flash) o_state.n_cnt__capture_flash++;
@@ -52,6 +65,30 @@ let f_o_capture__frame = function(o_opts) {
     });
 };
 
+// grab the current webcam frame as raw RGBA pixel data at full resolution.
+// used by the flat-field calibration to average several defocused frames.
+let f_o_frame__imagedata = function() {
+    return new Promise(function(resolve, reject) {
+        let el_video = document.getElementById('webcamVideo');
+        if(!el_video || !el_video.srcObject || el_video.readyState < 2){
+            reject(new Error('no webcam stream available'));
+            return;
+        }
+        let n_scl_x = el_video.videoWidth;
+        let n_scl_y = el_video.videoHeight;
+        let el_canvas = document.createElement('canvas');
+        el_canvas.width = n_scl_x;
+        el_canvas.height = n_scl_y;
+        let o_ctx = el_canvas.getContext('2d');
+        o_ctx.drawImage(el_video, 0, 0, n_scl_x, n_scl_y);
+        resolve({
+            n_scl_x: n_scl_x,
+            n_scl_y: n_scl_y,
+            o_imagedata: o_ctx.getImageData(0, 0, n_scl_x, n_scl_y),
+        });
+    });
+};
+
 let f_save_image = async function(o_blob, s_path_folder, s_filename) {
     let o_array_buffer = await o_blob.arrayBuffer();
     let o_response = await fetch(
@@ -71,5 +108,6 @@ let f_save_image = async function(o_blob, s_path_folder, s_filename) {
 
 export {
     f_o_capture__frame,
+    f_o_frame__imagedata,
     f_save_image,
 };

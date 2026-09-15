@@ -16,6 +16,7 @@ let o_component__optics = {
                     <button class="hub-item" @click="f_open('focus_stack')">Stack</button>
                     <button class="hub-item" @click="f_open('camera_setting')">Camera</button>
                     <button class="hub-item" @click="f_open('filter')">Filter</button>
+                    <button class="hub-item" @click="f_open('flat')">Flat field</button>
                 </div>
             </div>
         </div>

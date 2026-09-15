@@ -1,4 +1,5 @@
 import { o_state, f_save_setting__debounced } from './index.js';
+import { f_b_flat__loaded, f_o_flat } from './o_flatfield.module.js';
 
 // ─── Shader source ──────────────────────────────────────────────────
 
@@ -30,6 +31,10 @@ let S_SHADER__FRAGMENT = `
     uniform float u_grayscale;
     uniform float u_invert;
     uniform int u_colormap;        // 0 none, 1 heat, 2 ice, 3 jet
+
+    uniform sampler2D u_flat;      // flat-field (dust) image, 0..1
+    uniform vec3 u_flat_mean;      // per-channel mean of the flat, 0..1
+    uniform float u_flat_enabled;  // 0 off, 1 divide by the flat
 
     float f_n_luma(vec3 v3_color){
         return dot(v3_color, vec3(0.2126, 0.7152, 0.0722));
@@ -90,6 +95,13 @@ let S_SHADER__FRAGMENT = `
 
     void main(){
         vec3 v3_color = f_v3_sample(vec2(0.0, 0.0));
+
+        // flat-field / dust correction: raw * mean / flat. both the flat and
+        // its mean are in 0..1, so the result keeps the same brightness scale.
+        if(u_flat_enabled > 0.5){
+            vec3 v3_flat = texture2D(u_flat, v_uv).rgb;
+            v3_color = v3_color * u_flat_mean / max(v3_flat, vec3(1.0 / 255.0));
+        }
 
         if(u_kernel == 1){
             v3_color = f_v3_convolve(1.0, 2.0, 1.0,
@@ -309,7 +321,9 @@ let o_component__filter = {
             return o_state.o_filter;
         },
         b_visible__canvas: function() {
-            return o_state.o_filter.b_enabled && o_state.b_streaming__webcam && !this.s_error;
+            return (o_state.o_filter.b_enabled || o_state.o_flat_field.b_active)
+                && o_state.b_streaming__webcam
+                && !this.s_error;
         },
     },
     methods: {
@@ -393,9 +407,20 @@ let o_component__filter = {
                 o_gl.texParameteri(o_gl.TEXTURE_2D, o_gl.TEXTURE_MIN_FILTER, o_gl.LINEAR);
                 o_gl.texParameteri(o_gl.TEXTURE_2D, o_gl.TEXTURE_MAG_FILTER, o_gl.LINEAR);
 
+                // flat-field texture lives on unit 1
+                let o_texture__flat = o_gl.createTexture();
+                o_gl.bindTexture(o_gl.TEXTURE_2D, o_texture__flat);
+                o_gl.texParameteri(o_gl.TEXTURE_2D, o_gl.TEXTURE_WRAP_S, o_gl.CLAMP_TO_EDGE);
+                o_gl.texParameteri(o_gl.TEXTURE_2D, o_gl.TEXTURE_WRAP_T, o_gl.CLAMP_TO_EDGE);
+                o_gl.texParameteri(o_gl.TEXTURE_2D, o_gl.TEXTURE_MIN_FILTER, o_gl.LINEAR);
+                o_gl.texParameteri(o_gl.TEXTURE_2D, o_gl.TEXTURE_MAG_FILTER, o_gl.LINEAR);
+                o_gl.bindTexture(o_gl.TEXTURE_2D, o_texture);
+
                 o_self._o_gl = o_gl;
                 o_self._o_program = o_program;
                 o_self._o_texture = o_texture;
+                o_self._o_texture__flat = o_texture__flat;
+                o_self._a_n_byte__flat__uploaded = null;
                 o_self._o_uniform = {
                     u_texture:    o_gl.getUniformLocation(o_program, 'u_texture'),
                     u_texel:      o_gl.getUniformLocation(o_program, 'u_texel'),
@@ -409,8 +434,12 @@ let o_component__filter = {
                     u_grayscale:  o_gl.getUniformLocation(o_program, 'u_grayscale'),
                     u_invert:     o_gl.getUniformLocation(o_program, 'u_invert'),
                     u_colormap:   o_gl.getUniformLocation(o_program, 'u_colormap'),
+                    u_flat:       o_gl.getUniformLocation(o_program, 'u_flat'),
+                    u_flat_mean:  o_gl.getUniformLocation(o_program, 'u_flat_mean'),
+                    u_flat_enabled: o_gl.getUniformLocation(o_program, 'u_flat_enabled'),
                 };
                 o_gl.uniform1i(o_self._o_uniform.u_texture, 0);
+                o_gl.uniform1i(o_self._o_uniform.u_flat, 1);
                 return true;
             } catch(o_err) {
                 console.error('filter webgl init failed:', o_err);
@@ -454,6 +483,32 @@ let o_component__filter = {
             o_gl.uniform1f(o_uniform.u_grayscale, o_filter.b_grayscale ? 1 : 0);
             o_gl.uniform1f(o_uniform.u_invert, o_filter.b_invert ? 1 : 0);
             o_gl.uniform1i(o_uniform.u_colormap, f_n_colormap(o_filter.s_colormap));
+
+            // flat-field correction (reuses a second texture unit)
+            let b_flat__enabled = !!(o_state.o_flat_field.b_active && f_b_flat__loaded());
+            o_gl.uniform1f(o_uniform.u_flat_enabled, b_flat__enabled ? 1 : 0);
+            if(b_flat__enabled){
+                let o_flat = f_o_flat();
+                if(o_self._a_n_byte__flat__uploaded !== o_flat.a_n_byte__flat){
+                    o_gl.activeTexture(o_gl.TEXTURE1);
+                    o_gl.bindTexture(o_gl.TEXTURE_2D, o_self._o_texture__flat);
+                    o_gl.texImage2D(
+                        o_gl.TEXTURE_2D, 0, o_gl.RGBA,
+                        o_flat.n_scl_x, o_flat.n_scl_y, 0,
+                        o_gl.RGBA, o_gl.UNSIGNED_BYTE, o_flat.a_n_byte__flat
+                    );
+                    o_self._a_n_byte__flat__uploaded = o_flat.a_n_byte__flat;
+                    o_gl.activeTexture(o_gl.TEXTURE0);
+                    o_gl.bindTexture(o_gl.TEXTURE_2D, o_self._o_texture);
+                }
+                let a_n_mean = o_flat.a_n_mean__channel || [0, 0, 0];
+                o_gl.uniform3f(
+                    o_uniform.u_flat_mean,
+                    a_n_mean[0] / 255,
+                    a_n_mean[1] / 255,
+                    a_n_mean[2] / 255
+                );
+            }
 
             o_gl.drawArrays(o_gl.TRIANGLES, 0, 6);
         },

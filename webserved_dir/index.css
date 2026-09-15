@@ -1189,6 +1189,11 @@ input[type="range"]::-moz-range-thumb {
   max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
   --card-accent: var(--accent-1);
 }
+.panel-flat_field {
+  top: var(--topbar-h); left: 492px; width: 340px;
+  max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
+  --card-accent: var(--accent-2);
+}
 .filter-group {
   margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);
 }

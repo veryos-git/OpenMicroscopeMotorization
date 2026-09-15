@@ -23,6 +23,7 @@ import { o_component__macro } from './o_component__macro.js';
 import { o_component__auto_move } from './o_component__auto_move.js';
 import { o_component__autostitch } from './o_component__autostitch.js';
 import { o_component__filter, f_o_filter__default } from './o_component__filter.js';
+import { o_component__flat_field } from './o_component__flat_field.js';
 import { o_component__focus } from './o_component__focus.js';
 import { o_component__focus_stack } from './o_component__focus_stack.js';
 import { o_component__backlash } from './o_component__backlash.js';
@@ -111,6 +112,19 @@ let o_state = reactive({
     // image filter (webgl processing of the webcam image)
     o_filter: f_o_filter__default(),
 
+    // flat-field ("dust remove") correction — metadata only; the heavy pixel
+    // buffers live in o_flatfield.module.js outside the reactive proxy.
+    o_flat_field: {
+        b_active: false,
+        b_loaded: false,
+        s_path_flat: '',
+        n_scl_x: 0,
+        n_scl_y: 0,
+        a_n_mean__channel: [0, 0, 0],
+        n_ms__created: 0,
+        o_camera__flat: null,
+    },
+
     // live slide-map localizer
     b_running__locate: false,
     // selected map for localization, shared between the Map panel and the toolbar
@@ -120,7 +134,7 @@ let o_state = reactive({
     a_o_map__scanned: [],
 
     // UI
-    o_panel_visibility: { map: false, motion: false, optics: false, slide_library: false, jog: true, motors: true, scan: false, camera_setting: false, manual_stitch: false, macro: false, auto_move: false, autostitch: false, filter: false, focus: false, focus_stack: false, backlash: false, stats: false },
+    o_panel_visibility: { map: false, motion: false, optics: false, slide_library: false, jog: true, motors: true, scan: false, camera_setting: false, manual_stitch: false, macro: false, auto_move: false, autostitch: false, filter: false, flat: false, focus: false, focus_stack: false, backlash: false, stats: false },
     o_key_held: {},
 
     // scan
@@ -312,6 +326,7 @@ let f_apply_setting_from_db = function(){
     o_state.s_id__webcam_device = f_get('s_id__webcam_device', '');
 
     let o_vis = f_get_json('o_panel_visibility', { map: false, motion: false, optics: false, jog: true, motors: true, scan: false, camera_setting: false, stats: false });
+    o_state.o_panel_visibility.flat = o_vis.flat || false;
     o_state.o_panel_visibility.map = o_vis.map || false;
     o_state.o_panel_visibility.motion = o_vis.motion || false;
     o_state.o_panel_visibility.optics = o_vis.optics || false;
@@ -332,6 +347,10 @@ let f_apply_setting_from_db = function(){
 
     // keep unknown/missing filter keys on their defaults
     Object.assign(o_state.o_filter, f_get_json('o_filter', {}));
+
+    // flat-field metadata (the pixel data is re-loaded from s_path_flat on the
+    // control page once the flat-field component mounts)
+    Object.assign(o_state.o_flat_field, f_get_json('o_flat_field', {}));
 
     o_state.o_mapping__w = f_get_json('o_mapping__w', o_state.o_mapping__w);
     o_state.o_mapping__s = f_get_json('o_mapping__s', o_state.o_mapping__s);
@@ -470,6 +489,21 @@ let f_toggle_mouse_jog = function() {
 let f_save_setting__debounced = function(s_key, v_value) {
     clearTimeout(n_id__save_timeout);
     n_id__save_timeout = setTimeout(function(){ f_save_setting(s_key, v_value); }, 300);
+};
+
+// persist the flat-field metadata (never the pixel buffers — those stay in the
+// non-reactive module cache and are re-loaded from s_path_flat on startup).
+let f_save_flat_field = function() {
+    let o_flat = o_state.o_flat_field;
+    f_save_setting__debounced('o_flat_field', {
+        b_active: o_flat.b_active,
+        s_path_flat: o_flat.s_path_flat,
+        n_scl_x: o_flat.n_scl_x,
+        n_scl_y: o_flat.n_scl_y,
+        a_n_mean__channel: o_flat.a_n_mean__channel,
+        n_ms__created: o_flat.n_ms__created,
+        o_camera__flat: o_flat.o_camera__flat,
+    });
 };
 
 // ─── Auto-redirect logic ──────────────────────────────────────────────
@@ -951,6 +985,7 @@ o_app.component('o_component__macro', o_component__macro);
 o_app.component('o_component__auto_move', o_component__auto_move);
 o_app.component('o_component__autostitch', o_component__autostitch);
 o_app.component('o_component__filter', o_component__filter);
+o_app.component('o_component__flat_field', o_component__flat_field);
 o_app.component('o_component__focus', o_component__focus);
 o_app.component('o_component__focus_stack', o_component__focus_stack);
 o_app.component('o_component__backlash', o_component__backlash);
@@ -982,6 +1017,7 @@ export {
     f_send_esp_circle_stop,
     f_save_setting,
     f_save_setting__debounced,
+    f_save_flat_field,
     f_save_library_current,
     f_o_map__link,
     f_set_mouse_jog,
