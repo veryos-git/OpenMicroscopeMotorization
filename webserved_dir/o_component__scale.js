@@ -59,6 +59,7 @@ let o_component__scale = {
                         line: <b>{{ n_px__line.toFixed(1) }}</b> px
                         · {{ n_um__known.toFixed(1) }} µm
                         → <b>{{ n_um__per_px__preview.toFixed(3) }}</b> µm/px
+                        ({{ n_px__per_um__preview.toFixed(3) }} px/µm)
                     </div>
                     <div class="filter-row" style="margin-top: 8px;">
                         <button class="btn-scan-start" @click="f_apply" :disabled="!(n_px__line > 0 && n_um__known > 0)">Apply</button>
@@ -68,6 +69,7 @@ let o_component__scale = {
 
                 <div class="focus-note" v-if="s_status === 'done'">
                     stored <b>{{ o_state.o_calibration.n_um__per_px.toFixed(3) }}</b> µm/px
+                    ({{ n_px__per_um.toFixed(3) }} px/µm)
                     <span v-if="n_um__per_step__x"> · X <b>{{ n_um__per_step__x.toFixed(2) }}</b> µm/step</span>
                     <span v-if="n_um__per_step__y"> · Y <b>{{ n_um__per_step__y.toFixed(2) }}</b> µm/step</span>
                 </div>
@@ -103,6 +105,14 @@ let o_component__scale = {
         n_um__per_px__preview: function() {
             if(!this.n_um__known || !this.n_px__line) return 0;
             return this.n_um__known / this.n_px__line;
+        },
+        n_px__per_um__preview: function() {
+            if(!this.n_um__per_px__preview) return 0;
+            return 1 / this.n_um__per_px__preview;
+        },
+        n_px__per_um: function() {
+            if(!o_state.o_calibration.n_um__per_px) return 0;
+            return 1 / o_state.o_calibration.n_um__per_px;
         },
         n_um__per_step__x: function() {
             let n_um__per_px = o_state.o_calibration.n_um__per_px;
