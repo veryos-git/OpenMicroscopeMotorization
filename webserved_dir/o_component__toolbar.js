@@ -49,6 +49,12 @@ let o_component__toolbar = {
                 @click="f_toggle_flat"
                 title="toggle flat-field (dust) correction — shortcut: F"
             >Flat</button>
+            <button
+                class="toolbar-toggle"
+                :class="{ active: o_state.o_panel_visibility.calibration }"
+                @click="f_toggle_panel('calibration')"
+                title="open the calibration checklist"
+            >Calib</button>
 
             <div class="toolbar-sep"></div>
 

@@ -24,6 +24,7 @@ import { o_component__auto_move } from './o_component__auto_move.js';
 import { o_component__autostitch } from './o_component__autostitch.js';
 import { o_component__filter, f_o_filter__default } from './o_component__filter.js';
 import { o_component__flat_field } from './o_component__flat_field.js';
+import { o_component__calibration } from './o_component__calibration.js';
 import { o_component__focus } from './o_component__focus.js';
 import { o_component__focus_stack } from './o_component__focus_stack.js';
 import { o_component__backlash } from './o_component__backlash.js';
@@ -125,6 +126,20 @@ let o_state = reactive({
         o_camera__flat: null,
     },
 
+    // calibration profile: timestamps + recorded results per step. a single
+    // profile (single objective for now) — staleness is derived from these
+    // timestamps and the camera snapshot they were taken under.
+    o_calibration: {
+        n_ts_ms__camera: 0,
+        a_n_ts_ms__backlash: [0, 0, 0],  // per motor
+        n_ts_ms__flat: 0,
+        n_ts_ms__focus: 0,              // focus step / DoF (tool pending)
+        n_ts_ms__scale: 0,              // µm/px (tool pending)
+        o_camera__baseline: null,
+        n_step__focus: 0,
+        n_um__per_px: 0,
+    },
+
     // live slide-map localizer
     b_running__locate: false,
     // selected map for localization, shared between the Map panel and the toolbar
@@ -134,7 +149,7 @@ let o_state = reactive({
     a_o_map__scanned: [],
 
     // UI
-    o_panel_visibility: { map: false, motion: false, optics: false, slide_library: false, jog: true, motors: true, scan: false, camera_setting: false, manual_stitch: false, macro: false, auto_move: false, autostitch: false, filter: false, flat: false, focus: false, focus_stack: false, backlash: false, stats: false },
+    o_panel_visibility: { map: false, motion: false, optics: false, slide_library: false, jog: true, motors: true, scan: false, camera_setting: false, manual_stitch: false, macro: false, auto_move: false, autostitch: false, filter: false, flat: false, focus: false, focus_stack: false, backlash: false, calibration: false, stats: false },
     o_key_held: {},
 
     // scan
@@ -343,6 +358,7 @@ let f_apply_setting_from_db = function(){
     o_state.o_panel_visibility.focus = o_vis.focus || false;
     o_state.o_panel_visibility.focus_stack = o_vis.focus_stack || false;
     o_state.o_panel_visibility.backlash = o_vis.backlash || false;
+    o_state.o_panel_visibility.calibration = o_vis.calibration || false;
     o_state.o_panel_visibility.stats = o_vis.stats || false;
 
     // keep unknown/missing filter keys on their defaults
@@ -351,6 +367,9 @@ let f_apply_setting_from_db = function(){
     // flat-field metadata (the pixel data is re-loaded from s_path_flat on the
     // control page once the flat-field component mounts)
     Object.assign(o_state.o_flat_field, f_get_json('o_flat_field', {}));
+
+    // calibration profile (timestamps + recorded results per step)
+    Object.assign(o_state.o_calibration, f_get_json('o_calibration', {}));
 
     o_state.o_mapping__w = f_get_json('o_mapping__w', o_state.o_mapping__w);
     o_state.o_mapping__s = f_get_json('o_mapping__s', o_state.o_mapping__s);
@@ -504,6 +523,11 @@ let f_save_flat_field = function() {
         n_ms__created: o_flat.n_ms__created,
         o_camera__flat: o_flat.o_camera__flat,
     });
+};
+
+// persist the calibration profile (timestamps + recorded results).
+let f_save_calibration = function() {
+    f_save_setting__debounced('o_calibration', o_state.o_calibration);
 };
 
 // ─── Auto-redirect logic ──────────────────────────────────────────────
@@ -986,6 +1010,7 @@ o_app.component('o_component__auto_move', o_component__auto_move);
 o_app.component('o_component__autostitch', o_component__autostitch);
 o_app.component('o_component__filter', o_component__filter);
 o_app.component('o_component__flat_field', o_component__flat_field);
+o_app.component('o_component__calibration', o_component__calibration);
 o_app.component('o_component__focus', o_component__focus);
 o_app.component('o_component__focus_stack', o_component__focus_stack);
 o_app.component('o_component__backlash', o_component__backlash);
@@ -1018,6 +1043,7 @@ export {
     f_save_setting,
     f_save_setting__debounced,
     f_save_flat_field,
+    f_save_calibration,
     f_save_library_current,
     f_o_map__link,
     f_set_mouse_jog,

@@ -1194,6 +1194,28 @@ input[type="range"]::-moz-range-thumb {
   max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
   --card-accent: var(--accent-2);
 }
+.panel-calibration {
+  top: var(--topbar-h); right: 16px; width: 360px;
+  max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
+  --card-accent: var(--accent-1);
+}
+.calib-step {
+  margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);
+}
+.calib-title {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+  color: var(--text); text-transform: uppercase; letter-spacing: 1px;
+}
+.calib-badge {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.62rem;
+  padding: 2px 7px; border-radius: 10px; text-transform: uppercase;
+  letter-spacing: 1px; border: 1px solid var(--border); color: var(--dim);
+}
+.calib-badge.ready { color: var(--accent-0); border-color: var(--accent-0); }
+.calib-badge.stale { color: var(--yellow); border-color: var(--yellow); }
+.calib-badge.partial { color: var(--accent-1); border-color: var(--accent-1); }
+.calib-badge.missing { color: var(--danger); border-color: var(--danger); }
+.calib-badge.todo { color: var(--dim); border-color: var(--border); }
 .filter-group {
   margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);
 }

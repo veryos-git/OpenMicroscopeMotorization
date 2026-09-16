@@ -4,6 +4,7 @@ import {
     f_send_esp_stop,
     f_send_esp_set_backlash,
     f_save_setting__debounced,
+    f_save_calibration,
 } from './index.js';
 import { f_o_profile, f_o_shift, f_o_fit__backlash, f_o_onset, f_o_stat } from './backlash_math.module.js';
 import { f_n_score } from './focus_metric.module.js';
@@ -518,6 +519,8 @@ let o_component__backlash = {
                         // effect, so it goes to the motor without being asked
                         o_self.f_apply();
                         o_self.f_save_scale();
+                        o_state.o_calibration.a_n_ts_ms__backlash[n_motor] = Date.now();
+                        f_save_calibration();
                         b_applied = true;
                         o_self.s_status = `done — ${n_cnt__valid}/${o_self.a_o_round.length} runs usable, applied`;
                     } else {

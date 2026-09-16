@@ -1,4 +1,4 @@
-import { o_state, f_send_esp_move_step, f_send_esp_stop, f_send_wsmsg_with_response, f_save_setting__debounced, f_save_flat_field } from './index.js';
+import { o_state, f_send_esp_move_step, f_send_esp_stop, f_send_wsmsg_with_response, f_save_setting__debounced, f_save_flat_field, f_save_calibration } from './index.js';
 import { f_o_wsmsg } from './constructors.module.js';
 import { f_save_image, f_o_frame__imagedata } from './o_capture.module.js';
 import { f_o_camera_snapshot } from './o_camera.module.js';
@@ -379,6 +379,8 @@ let o_component__flat_field = {
                 o_state.o_flat_field.n_ms__created = Date.now();
                 o_state.o_flat_field.o_camera__flat = f_o_camera_snapshot();
                 f_save_flat_field();
+                o_state.o_calibration.n_ts_ms__flat = Date.now();
+                f_save_calibration();
 
                 o_self.s_src__preview = o_self.f_s_src__flat_preview(o_flat);
                 o_self.s_status = 'verify';
