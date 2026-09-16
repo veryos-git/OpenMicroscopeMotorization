@@ -104,11 +104,11 @@ let o_component__calibration = {
                     n_idx: 5,
                     s_title: 'Scale (µm / pixel)',
                     s_desc: 'physical pixel size from a stage micrometer or known grid.',
-                    s_status: 'todo',
-                    s_detail: 'tool not built yet',
-                    s_action: '—',
-                    f_action: function(){},
-                    b_disabled: true,
+                    s_status: o_self.s_status__scale,
+                    s_detail: o_self.s_detail__scale,
+                    s_action: 'open Scale',
+                    f_action: function(){ o_self.f_open('scale'); },
+                    b_disabled: false,
                 },
             ];
         },
@@ -154,6 +154,13 @@ let o_component__calibration = {
         s_detail__flat: function() {
             if(!o_state.o_flat_field.s_path_flat) return 'no flat image yet';
             return 'taken ' + this.f_s_age(o_state.o_calibration.n_ts_ms__flat);
+        },
+        s_status__scale: function() {
+            return o_state.o_calibration.n_um__per_px ? 'ready' : 'missing';
+        },
+        s_detail__scale: function() {
+            if(!o_state.o_calibration.n_um__per_px) return 'needs a stage micrometer or known grid';
+            return o_state.o_calibration.n_um__per_px.toFixed(3) + ' µm/px · taken ' + this.f_s_age(o_state.o_calibration.n_ts_ms__scale);
         },
     },
     methods: {

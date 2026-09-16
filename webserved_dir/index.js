@@ -25,6 +25,7 @@ import { o_component__autostitch } from './o_component__autostitch.js';
 import { o_component__filter, f_o_filter__default } from './o_component__filter.js';
 import { o_component__flat_field } from './o_component__flat_field.js';
 import { o_component__calibration } from './o_component__calibration.js';
+import { o_component__scale } from './o_component__scale.js';
 import { o_component__focus } from './o_component__focus.js';
 import { o_component__focus_stack } from './o_component__focus_stack.js';
 import { o_component__backlash } from './o_component__backlash.js';
@@ -149,7 +150,7 @@ let o_state = reactive({
     a_o_map__scanned: [],
 
     // UI
-    o_panel_visibility: { map: false, motion: false, optics: false, slide_library: false, jog: true, motors: true, scan: false, camera_setting: false, manual_stitch: false, macro: false, auto_move: false, autostitch: false, filter: false, flat: false, focus: false, focus_stack: false, backlash: false, calibration: false, stats: false },
+    o_panel_visibility: { map: false, motion: false, optics: false, slide_library: false, jog: true, motors: true, scan: false, camera_setting: false, manual_stitch: false, macro: false, auto_move: false, autostitch: false, filter: false, flat: false, focus: false, focus_stack: false, backlash: false, calibration: false, scale: false, stats: false },
     o_key_held: {},
 
     // scan
@@ -359,6 +360,7 @@ let f_apply_setting_from_db = function(){
     o_state.o_panel_visibility.focus_stack = o_vis.focus_stack || false;
     o_state.o_panel_visibility.backlash = o_vis.backlash || false;
     o_state.o_panel_visibility.calibration = o_vis.calibration || false;
+    o_state.o_panel_visibility.scale = o_vis.scale || false;
     o_state.o_panel_visibility.stats = o_vis.stats || false;
 
     // keep unknown/missing filter keys on their defaults
@@ -1011,6 +1013,7 @@ o_app.component('o_component__autostitch', o_component__autostitch);
 o_app.component('o_component__filter', o_component__filter);
 o_app.component('o_component__flat_field', o_component__flat_field);
 o_app.component('o_component__calibration', o_component__calibration);
+o_app.component('o_component__scale', o_component__scale);
 o_app.component('o_component__focus', o_component__focus);
 o_app.component('o_component__focus_stack', o_component__focus_stack);
 o_app.component('o_component__backlash', o_component__backlash);

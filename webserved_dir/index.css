@@ -1199,6 +1199,16 @@ input[type="range"]::-moz-range-thumb {
   max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
   --card-accent: var(--accent-1);
 }
+.panel-scale {
+  bottom: 16px; left: 50%; transform: translateX(-50%); width: 640px;
+  max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
+  --card-accent: var(--accent-1);
+}
+.scale-canvas {
+  width: 100%; height: auto; display: block;
+  border: 1px solid var(--border); border-radius: 6px;
+  cursor: crosshair; background: #000;
+}
 .calib-step {
   margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);
 }
