@@ -142,6 +142,21 @@ let o_component__scan = {
                             @click="f_test_square"
                             :disabled="b_testing || !o_state.b_connected__esp || n_step__x < 1 || n_step__y < 1 || n_tile_x < 1 || n_tile_y < 1"
                         >{{ b_testing ? 'Testing...' : 'Test Square' }}</button>
+
+                        <div class="scan-field-row" style="margin-top: 8px;">
+                            <button
+                                class="btn-small"
+                                style="flex: 1; margin-left: 0;"
+                                @click="f_test_axis('x')"
+                                :disabled="b_testing || !o_state.b_connected__esp || n_step__x < 1 || n_tile_x < 1"
+                            >Test X</button>
+                            <button
+                                class="btn-small"
+                                style="flex: 1; margin-left: 0;"
+                                @click="f_test_axis('y')"
+                                :disabled="b_testing || !o_state.b_connected__esp || n_step__y < 1 || n_tile_y < 1"
+                            >Test Y</button>
+                        </div>
                     </div>
 
                     <div class="scan-section">
@@ -620,6 +635,24 @@ let o_component__scan = {
                 if (n_total_y > 0) await o_self.f_move_motor_n_step(1, -n_total_y);
             } catch (e) {
                 console.error('Test square error:', e);
+            }
+            o_self.b_testing = false;
+        },
+
+        // drive only one axis along its side of the boundary box and back
+        f_test_axis: async function(s_axis) {
+            let o_self = this;
+            o_self.b_testing = true;
+            o_self.b_stop_requested = false;
+            try {
+                let n_motor = (s_axis === 'x') ? 0 : 1;
+                let n_total = (s_axis === 'x')
+                    ? (o_self.n_tile_x - 1) * o_self.n_step__x
+                    : (o_self.n_tile_y - 1) * o_self.n_step__y;
+                if (n_total > 0) await o_self.f_move_motor_n_step(n_motor, n_total);
+                if (n_total > 0) await o_self.f_move_motor_n_step(n_motor, -n_total);
+            } catch (e) {
+                console.error('Test axis error:', e);
             }
             o_self.b_testing = false;
         },
