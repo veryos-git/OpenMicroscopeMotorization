@@ -1350,6 +1350,11 @@ input[type="range"]::-moz-range-thumb {
   max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
   --card-accent: var(--accent-2);
 }
+.panel-focus_step {
+  bottom: 16px; left: 50%; transform: translateX(-50%); width: 360px;
+  max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
+  --card-accent: var(--accent-2);
+}
 .focusstack-progress-count {
   font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
   color: var(--text); margin-bottom: 8px;

@@ -8,6 +8,7 @@ let o_component__page_control = {
         <o_component__flat_field />
         <o_component__calibration />
         <o_component__scale />
+        <o_component__focus_step />
         <o_component__toolbar />
         <o_component__jog />
         <o_component__map />
