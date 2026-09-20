@@ -1,4 +1,4 @@
-import {
+import { f_n_motor__axis,
     o_state,
     f_send_wsmsg_with_response,
     f_save_setting__debounced,
@@ -204,9 +204,9 @@ let o_component__slide_library = {
             let o_slide = this.o_slide__current;
             if(!o_slide) return;
             let o_update = {
-                n_x__stage: o_state.a_o_motor[0] ? o_state.a_o_motor[0].n_position : 0,
-                n_y__stage: o_state.a_o_motor[1] ? o_state.a_o_motor[1].n_position : 0,
-                n_z__stage: o_state.a_o_motor[2] ? o_state.a_o_motor[2].n_position : 0,
+                n_x__stage: o_state.a_o_motor[f_n_motor__axis('x')] ? o_state.a_o_motor[f_n_motor__axis('x')].n_position : 0,
+                n_y__stage: o_state.a_o_motor[f_n_motor__axis('y')] ? o_state.a_o_motor[f_n_motor__axis('y')].n_position : 0,
+                n_z__stage: o_state.a_o_motor[f_n_motor__axis('z')] ? o_state.a_o_motor[f_n_motor__axis('z')].n_position : 0,
             };
             let o_resp = await f_send_wsmsg_with_response(
                 f_o_wsmsg(o_sfunexposed__f_v_crud__indb.s_name,
@@ -222,8 +222,9 @@ let o_component__slide_library = {
             let o_slide = this.o_slide__current;
             if(!o_slide) return;
             let a_n_target = [o_slide.n_x__stage, o_slide.n_y__stage, o_slide.n_z__stage];
-            for(let n_motor = 0; n_motor < 3; n_motor++){
-                let n_target = a_n_target[n_motor];
+            for(let n_axis = 0; n_axis < 3; n_axis++){
+                let n_motor = f_n_motor__axis(['x', 'y', 'z'][n_axis]);
+                let n_target = a_n_target[n_axis];
                 if(typeof n_target !== 'number') continue;
                 let o_motor = o_state.a_o_motor[n_motor];
                 let n_current = o_motor ? o_motor.n_position : 0;

@@ -21,7 +21,7 @@ import {
 import {
     f_o_detect_esp_usb,
     f_o_check_arduino_cli,
-    f_flash_esp,
+    f_compile_esp,
 } from "./flash_functions.module.js";
 import {
     f_o_stitch_run,
@@ -36,13 +36,37 @@ import {
     f_o_locate_list_maps,
     f_s_locate_save_frame,
 } from "./locate_map.module.js";
-
-f_init_db();
+import {
+    f_o_cellpose_start,
+    f_cellpose_stop,
+    f_o_cellpose_status,
+    f_s_cellpose_save_frame,
+    f_o_cellpose_infer,
+} from "./cellpose_functions.module.js";
+import {
+    f_o_recording_create,
+    f_recording_write_manifest,
+    f_recording_read_manifest,
+    f_recording_append_frame,
+    f_a_o_recording_frame,
+    f_recording_write_frame,
+    f_recording_append_blob,
+    f_recording_remux,
+    f_o_disk__free,
+    f_o_recording_encode,
+    f_o_recording_tiff,
+    f_a_o_recording__list,
+    f_recording_delete,
+    f_recording_mark_interrupted,
+    f_o_camera__probe,
+    f_ensure_recording_dir,
+} from "./recording_functions.module.js";
 
 // ─── CLI args ───────────────────────────────────────────────────────
 
 let n_port = 8000;
 let s_ip__esp = '';
+let s_path_db = '';
 
 let a_s_arg = Deno.args;
 for(let n_idx = 0; n_idx < a_s_arg.length; n_idx++){
@@ -54,7 +78,25 @@ for(let n_idx = 0; n_idx < a_s_arg.length; n_idx++){
         s_ip__esp = a_s_arg[n_idx + 1];
         n_idx++;
     }
+    if(a_s_arg[n_idx] === '--db' && a_s_arg[n_idx + 1]){
+        s_path_db = a_s_arg[n_idx + 1];
+        n_idx++;
+    }
 }
+
+// ─── Database ───────────────────────────────────────────────────────
+
+await f_init_db(s_path_db || undefined);
+
+// a recording left "running" by a crash or a power cut must not look alive
+let f_update_status__recording = async function(s_path_folder, s_status){
+    let a_o_row = await f_v_crud__indb('read', 'a_o_recording', { s_path_folder });
+    if(a_o_row && a_o_row.length > 0){
+        await f_v_crud__indb('update', 'a_o_recording', { n_id: a_o_row[0].n_id }, { s_status, n_ts_ms__end: Date.now() });
+    }
+};
+await f_ensure_recording_dir();
+await f_recording_mark_interrupted(f_update_status__recording);
 
 // ─── Content type detection ─────────────────────────────────────────
 
@@ -69,6 +111,9 @@ let f_s_content_type = function(s_path) {
     if (s_path.endsWith('.svg')) return 'image/svg+xml';
     if (s_path.endsWith('.ico')) return 'image/x-icon';
     if (s_path.endsWith('.webp')) return 'image/webp';
+    if (s_path.endsWith('.mp4')) return 'video/mp4';
+    if (s_path.endsWith('.webm')) return 'video/webm';
+    if (s_path.endsWith('.jsonl')) return 'application/x-ndjson';
     return 'application/octet-stream';
 };
 
@@ -124,7 +169,6 @@ let f_handler = async function(o_request, o_conninfo) {
 
         let { socket: o_socket, response: o_response } = Deno.upgradeWebSocket(o_request);
 
-        let f_resolve_password__pending = null;
 
         let o_wsclient = f_o_model_instance(
             o_model__o_wsclient,
@@ -169,6 +213,17 @@ let f_handler = async function(o_request, o_conninfo) {
 
         o_socket.onmessage = async function(o_evt) {
             let o_data = JSON.parse(o_evt.data);
+
+            // uniform response for the plain message handlers below
+            let f_send_result = async function(s_label, f_run){
+                try {
+                    let v_result = await f_run();
+                    o_socket.send(JSON.stringify({ v_result, s_uuid: o_data.s_uuid }));
+                } catch (o_error) {
+                    console.error(s_label + ' error:', o_error);
+                    o_socket.send(JSON.stringify({ error: o_error.message, s_uuid: o_data.s_uuid }));
+                }
+            };
 
             let o_sfunexposed = a_o_sfunexposed.find(function(o){ return o.s_name === o_data.s_type; });
             if(o_sfunexposed){
@@ -224,13 +279,6 @@ let f_handler = async function(o_request, o_conninfo) {
                 }));
             }
 
-            if(o_data.s_type === 'flash_password_response'){
-                if(f_resolve_password__pending){
-                    f_resolve_password__pending(o_data.v_data.s_password);
-                    f_resolve_password__pending = null;
-                }
-            }
-
             // ── Scan folder creation ─────────────────────────────
             if(o_data.s_type === 'scan_create_folder'){
                 try {
@@ -250,6 +298,97 @@ let f_handler = async function(o_request, o_conninfo) {
                         s_uuid: o_data.s_uuid,
                     }));
                 }
+            }
+
+            // ── Recording (time-lapse / video sessions) ───────────
+            if(o_data.s_type === 'recording_create_folder'){
+                await f_send_result('recording_create_folder', function(){
+                    return f_o_recording_create({
+                        s_prefix: (o_data.v_data && o_data.v_data.s_prefix) || 'rec_',
+                        s_path_folder: o_data.v_data && o_data.v_data.s_path_folder,
+                        n_cnt__position: o_data.v_data && o_data.v_data.n_cnt__position,
+                    });
+                });
+            }
+
+            if(o_data.s_type === 'recording_write_manifest'){
+                await f_send_result('recording_write_manifest', function(){
+                    return f_recording_write_manifest(o_data.v_data.s_path_folder, o_data.v_data.o_manifest);
+                });
+            }
+
+            if(o_data.s_type === 'recording_read_manifest'){
+                await f_send_result('recording_read_manifest', function(){
+                    return f_recording_read_manifest(o_data.v_data.s_path_folder);
+                });
+            }
+
+            if(o_data.s_type === 'recording_append_frame'){
+                await f_send_result('recording_append_frame', function(){
+                    return f_recording_append_frame(o_data.v_data.s_path_folder, o_data.v_data.o_frame, o_data.v_data.s_file);
+                });
+            }
+
+            if(o_data.s_type === 'recording_read_frame'){
+                await f_send_result('recording_read_frame', async function(){
+                    let a_o_frame = await f_a_o_recording_frame(o_data.v_data.s_path_folder);
+                    return { a_o_frame };
+                });
+            }
+
+            if(o_data.s_type === 'recording_status'){
+                await f_send_result('recording_status', function(){
+                    return f_o_disk__free();
+                });
+            }
+
+            if(o_data.s_type === 'recording_encode'){
+                await f_send_result('recording_encode', function(){
+                    return f_o_recording_encode({
+                        s_path_folder: o_data.v_data.s_path_folder,
+                        n_fps: o_data.v_data.n_fps,
+                    });
+                });
+            }
+
+            if(o_data.s_type === 'recording_tiff'){
+                await f_send_result('recording_tiff', function(){
+                    return f_o_recording_tiff({
+                        s_path_folder: o_data.v_data.s_path_folder,
+                        s_pos: o_data.v_data.s_pos,
+                        s_name__out: o_data.v_data.s_name__out,
+                        n_sec__interval: o_data.v_data.n_sec__interval,
+                        n_um__per_px: o_data.v_data.n_um__per_px,
+                    });
+                });
+            }
+
+            if(o_data.s_type === 'recording_remux'){
+                await f_send_result('recording_remux', function(){
+                    return f_recording_remux({
+                        s_path_folder: o_data.v_data.s_path_folder,
+                        s_name__src: o_data.v_data.s_name__src,
+                        s_name__out: o_data.v_data.s_name__out,
+                    });
+                });
+            }
+
+            if(o_data.s_type === 'recording_list'){
+                await f_send_result('recording_list', async function(){
+                    return { a_o_recording: await f_a_o_recording__list() };
+                });
+            }
+
+            if(o_data.s_type === 'recording_delete'){
+                await f_send_result('recording_delete', function(){
+                    return f_recording_delete(o_data.v_data.s_path_folder);
+                });
+            }
+
+            if(o_data.s_type === 'recording_probe_camera'){
+                await f_send_result('recording_probe_camera', function(){
+                    return f_o_camera__probe();
+                });
             }
 
             // ── Manual stitch folder creation ─────────────────────
@@ -552,7 +691,49 @@ let f_handler = async function(o_request, o_conninfo) {
                 o_socket.send(JSON.stringify({ v_result: o_result, s_uuid: o_data.s_uuid }));
             }
 
-            if(o_data.s_type === 'flash_esp'){
+            // ── Cellpose cell segmentation (cellpose_worker.py) ────
+            if(o_data.s_type === 'cellpose_start'){
+                let o_result = { b_success: false, s_error: '' };
+                try {
+                    o_result = await f_o_cellpose_start(o_data.v_data || {});
+                } catch (o_error) {
+                    console.error('cellpose_start error:', o_error);
+                    o_result = { b_success: false, s_error: o_error.message };
+                }
+                o_socket.send(JSON.stringify({ v_result: o_result, s_uuid: o_data.s_uuid }));
+            }
+            if(o_data.s_type === 'cellpose_stop'){
+                let o_result = { b_success: false, s_error: '' };
+                try {
+                    o_result = await f_cellpose_stop();
+                } catch (o_error) {
+                    console.error('cellpose_stop error:', o_error);
+                    o_result = { b_success: false, s_error: o_error.message };
+                }
+                o_socket.send(JSON.stringify({ v_result: o_result, s_uuid: o_data.s_uuid }));
+            }
+            if(o_data.s_type === 'cellpose_status'){
+                o_socket.send(JSON.stringify({
+                    v_result: f_o_cellpose_status(),
+                    s_uuid: o_data.s_uuid,
+                }));
+            }
+            if(o_data.s_type === 'cellpose_infer'){
+                let o_result = { b_success: false, s_error: '' };
+                try {
+                    // the frame was uploaded to /api/cellpose/frame just before
+                    o_result = await f_o_cellpose_infer(
+                        o_data.v_data.n_seq,
+                        o_data.v_data.s_path_frame,
+                    );
+                } catch (o_error) {
+                    console.error('cellpose_infer error:', o_error);
+                    o_result = { b_success: false, s_error: o_error.message };
+                }
+                o_socket.send(JSON.stringify({ v_result: o_result, s_uuid: o_data.s_uuid }));
+            }
+
+            if(o_data.s_type === 'compile_esp'){
                 let v = o_data.v_data;
                 let f_on_line = function(s_line, s_source){
                     try {
@@ -563,31 +744,12 @@ let f_handler = async function(o_request, o_conninfo) {
                     } catch { /* socket may have closed */ }
                 };
 
-                let f_s_request_password = function(){
-                    return new Promise(function(resolve){
-                        f_resolve_password__pending = resolve;
-                        o_socket.send(JSON.stringify({
-                            s_type: 'flash_password_request',
-                        }));
-                    });
-                };
-
-                let o_result = await f_flash_esp(
-                    v.s_port,
-                    v.s_wifi_ssid,
-                    v.s_wifi_password,
-                    v.a_o_pin_config,
-                    f_on_line,
-                    f_s_request_password,
+                let o_result = await f_compile_esp(
+                    v.s_wifi_ssid, v.s_wifi_password, v.a_o_pin_config, f_on_line,
                 );
 
-                // update stored ESP IP if flash succeeded
-                if(o_result.b_success && o_result.s_ip__esp){
-                    s_ip__esp = o_result.s_ip__esp;
-                }
-
                 o_socket.send(JSON.stringify({
-                    s_type: 'flash_result',
+                    s_type: 'compile_result',
                     v_data: o_result,
                     s_uuid: o_data.s_uuid,
                 }));
@@ -620,6 +782,44 @@ let f_handler = async function(o_request, o_conninfo) {
             });
         } catch (o_error) {
             console.error('Error in exposed function:', o_sfunexposed.s_name, o_error);
+            return new Response('Error: ' + o_error.message, { status: 500 });
+        }
+    }
+
+    // recording frame save endpoint (same shape as the scan image save)
+    if (s_path === '/api/recording/save_frame' && o_request.method === 'POST') {
+        let s_path_folder = o_url.searchParams.get('s_path_folder');
+        let s_filename = o_url.searchParams.get('s_filename');
+        if (!s_path_folder || !s_filename) {
+            return new Response('Missing s_path_folder or s_filename', { status: 400 });
+        }
+        try {
+            let a_n_byte = new Uint8Array(await o_request.arrayBuffer());
+            let o_result = await f_recording_write_frame(s_path_folder, s_filename, a_n_byte);
+            return new Response(JSON.stringify(o_result), {
+                headers: { 'content-type': 'application/json' },
+            });
+        } catch (o_error) {
+            console.error('recording save_frame error:', o_error);
+            return new Response('Error: ' + o_error.message, { status: 500 });
+        }
+    }
+
+    // recording video chunk append endpoint (MediaRecorder timeslices)
+    if (s_path === '/api/recording/append_blob' && o_request.method === 'POST') {
+        let s_path_folder = o_url.searchParams.get('s_path_folder');
+        let s_filename = o_url.searchParams.get('s_filename');
+        if (!s_path_folder || !s_filename) {
+            return new Response('Missing s_path_folder or s_filename', { status: 400 });
+        }
+        try {
+            let a_n_byte = new Uint8Array(await o_request.arrayBuffer());
+            let o_result = await f_recording_append_blob(s_path_folder, s_filename, a_n_byte);
+            return new Response(JSON.stringify(o_result), {
+                headers: { 'content-type': 'application/json' },
+            });
+        } catch (o_error) {
+            console.error('recording append_blob error:', o_error);
             return new Response('Error: ' + o_error.message, { status: 500 });
         }
     }
@@ -662,6 +862,25 @@ let f_handler = async function(o_request, o_conninfo) {
             });
         } catch (o_error) {
             console.error('locate frame upload error:', o_error);
+            return new Response('Error: ' + o_error.message, { status: 500 });
+        }
+    }
+
+    // cellpose frame upload endpoint: stores the camera frame and answers with
+    // the path + sequence the client then hands to the cellpose_infer message
+    if (s_path === '/api/cellpose/frame' && o_request.method === 'POST') {
+        try {
+            let a_n_byte = new Uint8Array(await o_request.arrayBuffer());
+            let o_frame = await f_s_cellpose_save_frame(a_n_byte);
+            return new Response(JSON.stringify({
+                b_success: true,
+                s_path_frame: o_frame.s_path,
+                n_seq: o_frame.n_seq,
+            }), {
+                headers: { 'content-type': 'application/json' },
+            });
+        } catch (o_error) {
+            console.error('cellpose frame upload error:', o_error);
             return new Response('Error: ' + o_error.message, { status: 500 });
         }
     }
@@ -715,3 +934,14 @@ Deno.serve({
         console.log(`server running on http://localhost:${n_port}`);
     },
 }, f_handler);
+
+// the cellpose worker is a child process; take it down with the server
+for(let s_signal of ['SIGINT', 'SIGTERM']){
+    Deno.addSignalListener(s_signal, async function(){
+        try { await f_cellpose_stop(); } catch { /* nothing to stop */ }
+        Deno.exit(0);
+    });
+}
+globalThis.addEventListener('unload', function(){
+    f_cellpose_stop().catch(function(){});
+});

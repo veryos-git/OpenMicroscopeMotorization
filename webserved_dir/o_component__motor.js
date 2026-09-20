@@ -1,11 +1,5 @@
 import { o_state, f_send_esp, f_send_esp_run_continuous, f_send_esp_stop, f_send_esp_stop_all, f_send_esp_set_backlash, f_save_setting__debounced } from './index.js';
 
-let a_o_motor_config = [
-    { s_name: 'Motor A', s_gpio: '4, 5, 6, 7' },
-    { s_name: 'Motor B', s_gpio: '15, 16, 17, 18' },
-    { s_name: 'Motor C', s_gpio: '8, 9, 10, 11' },
-];
-
 let o_component__motor = {
     name: 'component-motor',
     template: `
@@ -18,12 +12,12 @@ let o_component__motor = {
                 <div class="motors-stack">
                     <div
                         class="motor-card"
-                        v-for="(o_config, n_idx) in a_o_motor_config"
+                        v-for="(o_config, n_idx) in o_state.a_o_pin_config"
                         :key="n_idx"
                     >
                         <div class="card-header">
-                            <h2>{{ o_config.s_name }}</h2>
-                            <span class="motor-id">GPIO {{ o_config.s_gpio }}</span>
+                            <h2>Motor {{ n_idx + 1 }}</h2>
+                            <span class="motor-id">GPIO {{ [o_config.n_pin1, o_config.n_pin2, o_config.n_pin3, o_config.n_pin4].join(", ") }}</span>
                         </div>
                         <div class="position-display">
                             Position: <strong>{{ o_state.a_o_motor[n_idx].n_position }}</strong> steps
@@ -81,7 +75,6 @@ let o_component__motor = {
     data: function() {
         return {
             o_state: o_state,
-            a_o_motor_config: a_o_motor_config,
             a_n_id__debounce: [0, 0, 0],
         };
     },

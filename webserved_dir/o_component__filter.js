@@ -369,7 +369,9 @@ let o_component__filter = {
             let el_canvas = o_self.$refs.el_canvas;
             if(!el_canvas) return false;
 
-            let o_gl = el_canvas.getContext('webgl', { preserveDrawingBuffer: false })
+            // preserveDrawingBuffer lets the video recorder copy this canvas
+            // between frames (the "processed view" source); the cost is small
+            let o_gl = el_canvas.getContext('webgl', { preserveDrawingBuffer: true })
                 || el_canvas.getContext('experimental-webgl');
             if(!o_gl){
                 o_self.s_error = 'WebGL is not available in this browser';

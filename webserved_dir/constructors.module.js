@@ -88,6 +88,12 @@ let f_o_model_prop__string_nullable = function(s_name){
         return typeof s === 'string';
     });
 }
+let f_o_model_prop__boolean_nullable = function(s_name){
+    return f_o_property(s_name, 'boolean', function(b){
+        if (b === undefined || b === null) return true;
+        return typeof b === 'boolean';
+    });
+}
 let f_o_model__from_s_name_table = function(s_name_table) {
     return a_o_model.find(function(o_model) {
         return f_s_name_table__from_o_model(o_model) === s_name_table;
@@ -227,6 +233,77 @@ let o_model__o_marker_map_position = f_o_model({
 })
 
 
+// ─── Recording (time-lapse / video sessions) ────────────────────────
+// one row per recording session.  the frames themselves are not rows: a
+// time-lapse is tens of thousands of images, so the folder carries an
+// append-only frame.jsonl and the DB only keeps the session + its positions.
+
+let o_model__o_recording = f_o_model({
+    s_name: 'o_recording',
+    a_o_property: [
+        f_o_model_prop__default_id(s_name_prop_id),
+        f_o_model_prop__integer_nullable('n_o_project_n_id'),
+        f_o_model_prop__integer_nullable('n_o_slide_n_id'),
+        f_o_property('s_name', 'string', function(s){ return typeof s === 'string' && s !== ''; }),
+        // 'timelapse' | 'video' | 'burst'
+        f_o_property('s_kind', 'string', function(s){ return s === 'timelapse' || s === 'video' || s === 'burst'; }),
+        // 'running' | 'paused' | 'done' | 'stopped' | 'interrupted' | 'error'
+        f_o_property('s_status', 'string', function(s){
+            return ['running', 'paused', 'done', 'stopped', 'interrupted', 'error'].includes(s);
+        }),
+        f_o_model_prop__number_nullable('n_sec__interval'),
+        f_o_model_prop__number_nullable('n_its__frame'),
+        f_o_model_prop__number_nullable('n_its__frame__done'),
+        f_o_model_prop__number_nullable('n_its__autofocus'),
+        f_o_model_prop__number_nullable('n_ms__settle'),
+        f_o_model_prop__number_nullable('n_x__roi'),
+        f_o_model_prop__number_nullable('n_y__roi'),
+        f_o_model_prop__number_nullable('n_scl_x__roi'),
+        f_o_model_prop__number_nullable('n_scl_y__roi'),
+        f_o_model_prop__number_nullable('n_um__per_px'),
+        f_o_model_prop__boolean_nullable('b_autofocus'),
+        f_o_model_prop__boolean_nullable('b_position__all'),
+        f_o_model_prop__string_nullable('s_path_folder'),
+        f_o_model_prop__string_nullable('s_path_media'),
+        f_o_model_prop__string_nullable('s_error'),
+        f_o_model_prop__string_nullable('s_note'),
+        f_o_model_prop__number_nullable('n_ts_ms__start'),
+        f_o_model_prop__number_nullable('n_ts_ms__end'),
+        f_o_model_prop__timestamp_default(s_name_prop_ts_created),
+        f_o_model_prop__timestamp_default(s_name_prop_ts_updated),
+    ]
+})
+
+// one field of view a recording visits (multi-position / point visiting)
+let o_model__o_recording_position = f_o_model({
+    s_name: 'o_recording_position',
+    a_o_property: [
+        f_o_model_prop__default_id(s_name_prop_id),
+        f_o_model_prop__integer_nullable('n_o_recording_n_id'),
+        f_o_property('s_label', 'string', function(s){ return typeof s === 'string' && s !== ''; }),
+        f_o_model_prop__number_nullable('n_x__stage'),
+        f_o_model_prop__number_nullable('n_y__stage'),
+        f_o_model_prop__number_nullable('n_z__stage'),
+        f_o_model_prop__timestamp_default(s_name_prop_ts_created),
+        f_o_model_prop__timestamp_default(s_name_prop_ts_updated),
+    ]
+})
+
+// provenance: gaps, focus results, errors, camera restarts
+let o_model__o_recording_event = f_o_model({
+    s_name: 'o_recording_event',
+    a_o_property: [
+        f_o_model_prop__default_id(s_name_prop_id),
+        f_o_model_prop__integer_nullable('n_o_recording_n_id'),
+        f_o_property('s_kind', 'string', function(s){ return typeof s === 'string' && s !== ''; }),
+        f_o_model_prop__string_nullable('s_message'),
+        f_o_model_prop__number_nullable('n_its__frame'),
+        f_o_model_prop__number_nullable('n_ts_ms'),
+        f_o_model_prop__timestamp_default(s_name_prop_ts_created),
+        f_o_model_prop__timestamp_default(s_name_prop_ts_updated),
+    ]
+})
+
 let a_o_model = [
     o_model__o_setting,
     o_model__o_wsclient,
@@ -236,6 +313,9 @@ let a_o_model = [
     o_model__o_map,
     o_model__o_marker,
     o_model__o_marker_map_position,
+    o_model__o_recording,
+    o_model__o_recording_position,
+    o_model__o_recording_event,
 ];
 
 // ─── Toast ──────────────────────────────────────────────────────────
@@ -290,6 +370,9 @@ export {
     o_model__o_map,
     o_model__o_marker,
     o_model__o_marker_map_position,
+    o_model__o_recording,
+    o_model__o_recording_position,
+    o_model__o_recording_event,
     a_o_model,
     f_s_name_table__from_o_model,
     f_s_name_foreign_key__from_o_model,

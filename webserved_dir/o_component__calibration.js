@@ -143,7 +143,7 @@ let o_component__calibration = {
             let a_s_axis = [];
             for(let n_idx = 0; n_idx < 2; n_idx++){
                 let s_ok = (a_per_px[n_idx] > 0 && a_backlash[n_idx] > 0) ? '✓' : '✗';
-                a_s_axis.push('M' + n_idx + ' ' + s_ok);
+                a_s_axis.push('Motor ' + (n_idx + 1) + ' ' + s_ok);
             }
             return a_s_axis.join('  ');
         },

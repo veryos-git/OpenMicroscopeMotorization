@@ -16,6 +16,15 @@ let o_component__webcam = {
             <span>No camera active</span>
             <span style="font-size:0.75rem;">select a camera in the toolbar above</span>
         </div>
+        <!-- cellpose segmentation mask: the same full-page box as the video and
+             the same object-fit, so the found cells land exactly on the image -->
+        <img
+            id="cellposeMask"
+            v-if="o_state.o_cellpose.b_visible && o_state.o_cellpose.s_path_mask"
+            :src="'/api/file?path=' + encodeURIComponent(o_state.o_cellpose.s_path_mask) + '&t=' + o_state.o_cellpose.n_ts_ms__mask"
+            :style="{ opacity: o_state.o_cellpose.n_pct__opacity / 100 }"
+            alt=""
+        />
         <div class="capture-flash" :class="{ flash: b_flash }"></div>
     `,
     data: function() {

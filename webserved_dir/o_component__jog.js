@@ -1,4 +1,4 @@
-import { o_state, f_send_esp_run_continuous, f_send_esp_stop, f_save_setting, f_save_setting__debounced, f_set_mouse_jog, f_toggle_mouse_jog } from './index.js';
+import { o_state, f_send_esp_run_continuous, f_send_esp_stop, f_send_esp_stop_all, f_save_setting, f_save_setting__debounced, f_set_mouse_jog, f_toggle_mouse_jog } from './index.js';
 
 // ─── Gamepad constants ──────────────────────────────────────────────
 
@@ -24,6 +24,16 @@ let o_component__jog = {
                 <button class="panel-close" @click="f_close">&times;</button>
             </div>
             <div class="panel-body">
+                <div class="jog-section-header">Axis assignments</div>
+                <p>Choose the motor for each axis. Selecting an occupied motor swaps the assignments.</p>
+                <div class="mapping-row" v-for="s_axis in ['x', 'y', 'z']" :key="s_axis">
+                    <label :for="'axis-motor-' + s_axis">{{ s_axis.toUpperCase() }}</label>
+                    <select :id="'axis-motor-' + s_axis" :value="o_state.o_motor__axis[s_axis]"
+                        :disabled="o_state.b_scanning || o_state.a_o_motor.some(o_motor => o_motor.b_running)"
+                        @change="f_assign_axis(s_axis, Number($event.target.value))">
+                        <option v-for="n_motor in [0, 1, 2]" :value="n_motor">Motor {{ n_motor + 1 }}</option>
+                    </select>
+                </div>
                 <div class="jog-section-header">Keyboard</div>
                 <div class="keybind-body">
                     <div>
@@ -69,9 +79,9 @@ let o_component__jog = {
                                 @change="f_on_mapping_change(s_key)"
                             >
                                 <option value="none">&mdash;</option>
-                                <option value="0">M0</option>
-                                <option value="1">M1</option>
-                                <option value="2">M2</option>
+                                <option value="0">Motor 1</option>
+                                <option value="1">Motor 2</option>
+                                <option value="2">Motor 3</option>
                             </select>
                             <select
                                 v-model="f_o_mapping(s_key).s_dir"
@@ -124,9 +134,9 @@ let o_component__jog = {
                                 @change="f_on_mapping_change__mouse_right"
                             >
                                 <option value="none">&mdash;</option>
-                                <option value="0">M0</option>
-                                <option value="1">M1</option>
-                                <option value="2">M2</option>
+                                <option value="0">Motor 1</option>
+                                <option value="1">Motor 2</option>
+                                <option value="2">Motor 3</option>
                             </select>
                             <select
                                 v-model="o_state.o_mapping__mouse_right.s_dir"
@@ -283,6 +293,22 @@ let o_component__jog = {
         },
     },
     methods: {
+        f_assign_axis: function(s_axis, n_motor) {
+            this.f_on_blur();
+            f_send_esp_stop_all();
+            let o_axes = { ...o_state.o_motor__axis };
+            let s_other = Object.keys(o_axes).find(s_key => o_axes[s_key] === n_motor);
+            if(s_other) o_axes[s_other] = o_axes[s_axis];
+            o_axes[s_axis] = n_motor;
+            o_state.o_motor__axis = o_axes;
+            f_save_setting('o_motor__axis', o_axes);
+            for(let [s_name, a_s_key] of Object.entries({ x: ['a', 'd'], y: ['w', 's'], z: ['q', 'e', 'mouse_right'] })){
+                for(let s_key of a_s_key){
+                    o_state['o_mapping__' + s_key].s_motor = String(o_axes[s_name]);
+                    f_save_setting('o_mapping__' + s_key, o_state['o_mapping__' + s_key]);
+                }
+            }
+        },
         f_o_mapping: function(s_key) {
             return o_state['o_mapping__' + s_key];
         },

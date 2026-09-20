@@ -21,6 +21,7 @@ let s_path__venv = `${s_root_dir}${s_ds}venv`;
 // the webserver invokes venv/bin/python3 directly, so match that layout exactly
 let s_path__python__venv = `${s_path__venv}${s_ds}bin${s_ds}python3`;
 let s_path__requirement = `${s_root_dir}${s_ds}requirements.txt`;
+let s_path__requirement__cellpose = `${s_root_dir}${s_ds}requirements_cellpose.txt`;
 // the scan panel stitches its tiles with this script
 let s_path__stitch = `${s_root_dir}${s_ds}stitch.py`;
 let s_dir__bin = `${Deno.env.get('HOME')}${s_ds}.local${s_ds}bin`;
@@ -28,8 +29,15 @@ let s_path__arduino_cli = `${s_dir__bin}${s_ds}arduino-cli`;
 
 let s_url__lightglue = 'git+https://github.com/cvg/LightGlue.git';
 let s_url__torch_cpu = 'https://download.pytorch.org/whl/cpu';
+// CUDA 13.0 — matches the driver of this project's dev machine.  a machine with
+// an older driver needs the matching cu* index (see the pytorch install page).
+let s_url__torch_cuda = 'https://download.pytorch.org/whl/cu130';
 
 let s_path__ino = `${s_root_dir}${s_ds}stepper_websocket.ino`;
+// cellpose lives in its own venv so its pins cannot break the stitcher stack
+let s_path__venv__cellpose = `${s_root_dir}${s_ds}venv_cellpose`;
+let s_path__python__cellpose = `${s_path__venv__cellpose}${s_ds}bin${s_ds}python3`;
+let s_path__worker__cellpose = `${s_root_dir}${s_ds}cellpose_worker.py`;
 // arduino-cli requires the sketch file to be named exactly like its directory
 let s_name__sketch__verify = 'stepper_websocket__verify';
 let s_dir__verify = `/tmp/${s_name__sketch__verify}`;
@@ -43,7 +51,10 @@ let b_check_only = a_s_arg.includes('--check');
 let b_skip_arduino = a_s_arg.includes('--skip-arduino');
 let b_skip_python = a_s_arg.includes('--skip-python');
 let b_skip_stitch_ai = a_s_arg.includes('--skip-stitch-ai');
+let b_skip_cellpose = a_s_arg.includes('--skip-cellpose');
 let b_verify_compile = a_s_arg.includes('--verify-compile');
+// cellpose wants a GPU by default; --cpu asks for the small CPU-only build
+let b_cpu = a_s_arg.includes('--cpu');
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -103,6 +114,60 @@ let f_s_arduino_cli = async function() {
     }
     if (await f_b_path_exists(s_path__arduino_cli)) {
         return s_path__arduino_cli;
+    }
+    return '';
+};
+
+// ─── GPU detection ──────────────────────────────────────────────────
+
+// an NVIDIA driver usable by torch needs BOTH the kernel modules and the device
+// nodes: a container or a sandbox can have the modules on the host while the
+// nodes are not passed through, and then CUDA still cannot open a device.
+let f_o_gpu = async function() {
+    let o_gpu = { b_found: false, s_name: '', s_driver: '', s_cuda: '', b_node: false, b_usable: false };
+
+    try {
+        o_gpu.b_node = await f_b_path_exists('/dev/nvidia0');
+    } catch { /* not linux */ }
+
+    let o_smi = await f_o_run('nvidia-smi', [
+        '--query-gpu=name,driver_version',
+        '--format=csv,noheader',
+    ]);
+    if(o_smi.b_success && o_smi.s_stdout.trim()){
+        o_gpu.b_found = true;
+        let a_s_part = o_smi.s_stdout.trim().split('\n')[0].split(',');
+        o_gpu.s_name = (a_s_part[0] || '').trim();
+        o_gpu.s_driver = (a_s_part[1] || '').trim();
+    } else {
+        // nvidia-smi could not reach the driver.  that may mean "no GPU" OR
+        // "this shell cannot see /dev/nvidia*" — a container, a sandbox or a
+        // systemd unit with DeviceAllow= can hide the nodes while the driver is
+        // alive on the host.  the PCI device tells the two apart.
+        o_gpu.s_name = await f_s_name_gpu__pci();
+    }
+
+    // the driver's CUDA version is printed in the nvidia-smi banner
+    let o_banner = await f_o_run('nvidia-smi', []);
+    if(o_banner.b_success){
+        let o_match = o_banner.s_stdout.match(/CUDA Version:\s*([0-9.]+)/);
+        if(o_match) o_gpu.s_cuda = o_match[1];
+    }
+
+    o_gpu.b_usable = o_gpu.b_found && o_gpu.b_node;
+    return o_gpu;
+};
+
+// "this machine has an NVIDIA card" independent of what nvidia-smi can reach:
+// lspci sees the PCI device without needing the driver or /dev nodes.
+let f_s_name_gpu__pci = async function() {
+    let o_lspci = await f_o_run('lspci', []);
+    if(!o_lspci.b_success) return '';
+    for(let s_line of o_lspci.s_stdout.split('\n')){
+        if(/nvidia/i.test(s_line) && /(vga|3d|display)/i.test(s_line)){
+            let o_match = s_line.match(/\[([^\]]+)\]\s*$/);
+            return (o_match ? o_match[1] : s_line.trim());
+        }
     }
     return '';
 };
@@ -230,6 +295,201 @@ let f_setup_python = async function() {
         }
         f_log_ok('torch + lightglue + kornia installed');
     }
+};
+
+// ─── Step: cellpose venv (the "Cell pose" panel) ────────────────────
+//
+// Cellpose gets its own venv: it pins its own numpy / opencv / torch versions
+// and must not drag the stitcher stack with it.  The split is the whole point —
+// a cellpose upgrade can never break stitch.py.
+let f_setup_cellpose = async function() {
+    f_log_step('cellpose (AI cell segmentation)');
+
+    // pick the torch build.  an NVIDIA card means a CUDA build even when this
+    // shell cannot see /dev/nvidia* — a CUDA torch degrades to the CPU by
+    // itself, so guessing "cuda" costs download size at worst, while guessing
+    // "cpu" would silently waste the card.  --cpu forces the small build.
+    let o_gpu = await f_o_gpu();
+    let b_gpu = !b_cpu;
+    if(o_gpu.b_usable){
+        f_log_ok(`nvidia gpu: ${o_gpu.s_name} (driver ${o_gpu.s_driver}, cuda ${o_gpu.s_cuda || '?'})`);
+    } else if(o_gpu.s_name){
+        f_log(`nvidia gpu present: ${o_gpu.s_name}`);
+        f_log('  but nvidia-smi cannot reach the driver from here — this shell may');
+        f_log('  not have the /dev/nvidia* device nodes (container / sandbox / unit)');
+        f_log('  installing the CUDA build anyway; torch will use the GPU if the');
+        f_log('  process that runs the server can open the device, else the CPU');
+    } else {
+        f_log_todo('no nvidia gpu found — cellpose will run on the cpu');
+    }
+    if(!b_gpu) f_log('--cpu given: forcing the cpu build');
+    f_log(b_gpu
+        ? `torch build: cuda (${s_url__torch_cuda}, ~3 GB)`
+        : `torch build: cpu (${s_url__torch_cpu})`);
+
+    if (!await f_b_binary_exists('python3')) {
+        f_log_error('python3 not found — install it (e.g. sudo apt install python3 python3-venv)');
+        a_s_problem.push('python3 missing for cellpose');
+        return;
+    }
+
+    let b_venv = await f_b_path_exists(s_path__python__cellpose);
+    if (!b_venv) {
+        if (b_check_only) {
+            f_log_todo('cellpose venv missing (the Cell pose panel will not run)');
+            a_s_problem.push('cellpose venv missing');
+            return;
+        }
+        f_log('creating the cellpose venv...');
+        if (!await f_b_run_live('python3', ['-m', 'venv', s_path__venv__cellpose])) {
+            f_log_error('could not create the cellpose venv — try: sudo apt install python3-venv');
+            a_s_problem.push('cellpose venv creation failed');
+            return;
+        }
+    }
+
+    // torch + cellpose + the worker's direct imports; 'packaging' is a missing
+    // transitive dependency of fastremap (its import fails without it)
+    let s_check = b_gpu
+        ? 'import cellpose, torch, cv2, numpy, packaging; assert torch.cuda.is_available(), "cuda not available"'
+        : 'import cellpose, torch, cv2, numpy, packaging';
+    let o_import = await f_o_run(s_path__python__cellpose, ['-c', s_check]);
+    let b_installed__right = o_import.b_success;
+
+    // a venv installed as CPU keeps its +cpu wheels forever; switching builds
+    // means reinstalling torch and the nvidia-* runtime packages
+    let b_need__torch = !b_installed__right;
+    if (b_installed__right) {
+        f_log_ok(b_gpu ? 'cellpose + torch (cuda) installed' : 'cellpose + torch (cpu) installed');
+    } else if (b_check_only) {
+        f_log_todo(b_gpu
+            ? 'cellpose + cuda torch missing (the Cell pose panel will not run on the gpu)'
+            : 'cellpose missing (the Cell pose panel will not run)');
+        a_s_problem.push('cellpose missing');
+    } else {
+        f_log(b_gpu
+            ? 'installing torch (cuda build) + cellpose — this downloads ~3 GB...'
+            : 'installing torch (cpu build) + cellpose — this downloads a few hundred MB...');
+        await f_b_run_live(s_path__python__cellpose, ['-m', 'pip', 'install', '--upgrade', 'pip']);
+        let b_ok = true;
+        if(b_need__torch){
+            // drop any previous build first: the CUDA wheels and the CPU wheels
+            // declare conflicting nvidia-* / cuda-* dependencies, and pip will
+            // not swap them in place
+            f_log('removing any previous torch build...');
+            await f_b_run_live(s_path__python__cellpose, [
+                '-m', 'pip', 'uninstall', '-y',
+                'torch', 'torchvision', 'torchaudio',
+                'triton', 'nvidia-cublas', 'nvidia-cuda-cupti', 'nvidia-cuda-nvrtc',
+                'nvidia-cuda-runtime', 'nvidia-cudnn', 'nvidia-cufft', 'nvidia-cufile',
+                'nvidia-curand', 'nvidia-cusolver', 'nvidia-cusparse',
+                'nvidia-cusparselt', 'nvidia-nccl', 'nvidia-nvjitlink', 'nvidia-nvtx',
+                'nvidia-nvshmem', 'cuda-toolkit', 'cuda-bindings', 'cuda-pathfinder',
+            ]);
+            b_ok = await f_b_run_live(s_path__python__cellpose, [
+                '-m', 'pip', 'install', 'torch', 'torchvision',
+                '--index-url', b_gpu ? s_url__torch_cuda : s_url__torch_cpu,
+            ]);
+        }
+        if (b_ok) {
+            b_ok = await f_b_run_live(s_path__python__cellpose, [
+                '-m', 'pip', 'install', '-r', s_path__requirement__cellpose,
+            ]);
+        }
+        if (!b_ok) {
+            f_log_error('cellpose install failed — the Cell pose panel will not run, the rest still does');
+            a_s_problem.push('cellpose install failed');
+            return;
+        }
+        f_log_ok(b_gpu ? 'cellpose + torch (cuda) installed' : 'cellpose + torch (cpu) installed');
+    }
+
+    // the model weights are downloaded on first use into ./weights/cellpose
+    // (~1.2 GB for cpsam, ~25 MB for cyto3) — not part of the install
+    if (!await f_b_path_exists(s_path__worker__cellpose)) {
+        f_log_error(`cellpose_worker.py not found at ${s_path__worker__cellpose}`);
+        a_s_problem.push('cellpose_worker.py missing');
+        return;
+    }
+    let o_help = await f_o_run(s_path__python__cellpose, [s_path__worker__cellpose, '--help']);
+    if (o_help.b_success) {
+        f_log_ok('cellpose_worker.py runs in its venv');
+    } else {
+        f_log_error('cellpose_worker.py cannot run in its venv:');
+        f_log((o_help.s_stderr || o_help.s_stdout).trim().split('\n').slice(-3).join('\n'));
+        a_s_problem.push('cellpose_worker.py not runnable');
+    }
+
+    // --check must not spend a minute loading a model, but a real run should
+    // prove the device actually works — a torch that cannot open the device is
+    // the failure this whole step exists to prevent
+    if(!b_check_only){
+        await f_verify_cellpose();
+    }
+    f_log('model weights download on first use into weights/cellpose (cpsam ~1.2 GB)');
+    f_log('note: the Cellpose *code* is BSD-3, the pretrained *models* are CC-BY-NC');
+};
+
+// load a model and report the device it actually runs on.  this is the check
+// that catches "driver installed but /dev/nvidia* not usable", which pip cannot.
+let f_verify_cellpose = async function() {
+    f_log('verifying the cellpose device (loads the model, may take a moment)...');
+    let s_path__weights = `${s_root_dir}${s_ds}weights${s_ds}cellpose`;
+    let s_script = `
+import numpy as np, torch
+from cellpose import models
+print('torch', torch.__version__)
+b_cuda = torch.cuda.is_available()
+print('cuda available:', b_cuda)
+if b_cuda:
+    print('device:', torch.cuda.get_device_name(0))
+o_model = models.CellposeModel(gpu=b_cuda)
+o_img = np.zeros((128, 128, 3), dtype=np.uint8)
+o_model.eval(o_img)
+print('DEVICE_OK ' + ('cuda' if b_cuda else 'cpu'))
+`;
+    // the model cache must point at the project folder: cellpose otherwise
+    // wants to write ~/.cellpose, which does not exist on a fresh machine
+    let o_command = new Deno.Command(s_path__python__cellpose, {
+        args: ['-c', s_script],
+        stdout: 'piped',
+        stderr: 'piped',
+        stdin: 'null',
+        env: {
+            ...Deno.env.toObject(),
+            CELLPOSE_LOCAL_MODELS_PATH: s_path__weights,
+        },
+    });
+    let o_result;
+    try {
+        o_result = await o_command.output();
+    } catch (o_error) {
+        f_log_error(`could not run cellpose: ${o_error.message}`);
+        a_s_problem.push('cellpose verification failed');
+        return false;
+    }
+    let s_stdout = new TextDecoder().decode(o_result.stdout);
+    let s_stderr = new TextDecoder().decode(o_result.stderr);
+    for(let s_line of s_stdout.trim().split('\n')){
+        if(s_line.trim()) f_log(s_line.trim());
+    }
+    if(!o_result.success){
+        f_log_error('cellpose could not run a segmentation:');
+        f_log(s_stderr.trim().split('\n').slice(-4).join('\n'));
+        a_s_problem.push('cellpose inference failed');
+        return false;
+    }
+    let s_device = s_stdout.includes('DEVICE_OK cuda') ? 'cuda' : 'cpu';
+    f_log_ok(`cellpose inference works on ${s_device.toUpperCase()}`);
+    if(b_cpu && s_device === 'cuda'){
+        f_log_todo('--cpu was given but the cuda build is active — reinstall with --cpu to shrink it');
+    }
+    if(!b_cpu && s_device === 'cpu'){
+        f_log_todo('torch fell back to the cpu: either this shell cannot open the');
+        f_log_todo('device nodes, or the CUDA build does not match the driver.');
+        f_log_todo('run the server and check the panel log line "running on CUDA"');
+    }
+    return true;
 };
 
 // ─── Step: arduino-cli ──────────────────────────────────────────────
@@ -431,6 +691,7 @@ console.log(`
   ╚══════════════════════════════════════╝`);
 
 if (!b_skip_python) await f_setup_python();
+if (!b_skip_python && !b_skip_cellpose) await f_setup_cellpose();
 if (!b_skip_arduino) await f_setup_arduino();
 await f_check_serial();
 

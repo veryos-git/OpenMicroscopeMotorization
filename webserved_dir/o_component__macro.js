@@ -114,16 +114,16 @@ let o_component__macro = {
         },
         f_s_command_label: function(o_msg) {
             if(o_msg.command === 'runContinuous'){
-                return 'M' + o_msg.motor + ' run ' + o_msg.direction + ' ' + o_msg.n_rpm + 'rpm';
+                return 'Motor ' + (o_msg.motor + 1) + ' run ' + o_msg.direction + ' ' + o_msg.n_rpm + 'rpm';
             }
             if(o_msg.command === 'stop'){
-                return 'M' + o_msg.motor + ' stop';
+                return 'Motor ' + (o_msg.motor + 1) + ' stop';
             }
             if(o_msg.command === 'stopAll'){
                 return 'Stop all';
             }
             if(o_msg.command === 'moveSteps'){
-                return 'M' + o_msg.motor + ' move ' + o_msg.n_step + ' steps';
+                return 'Motor ' + (o_msg.motor + 1) + ' move ' + o_msg.n_step + ' steps';
             }
             return o_msg.command;
         },

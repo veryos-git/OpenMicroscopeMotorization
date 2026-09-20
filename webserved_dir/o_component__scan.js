@@ -1,4 +1,4 @@
-import { o_state, f_send_esp_move_step, f_send_esp_stop, f_send_esp_stop_all, f_send_wsmsg_with_response, f_register_handler, f_save_setting__debounced, f_o_map__link } from './index.js';
+import { f_n_motor__axis, o_state, f_send_esp_move_step, f_send_esp_stop, f_send_esp_stop_all, f_send_wsmsg_with_response, f_register_handler, f_save_setting__debounced, f_o_map__link } from './index.js';
 import { f_o_wsmsg } from './constructors.module.js';
 import { f_n_score__video, f_o_focus__fast } from './focus_search.module.js';
 import { f_o_capture__frame, f_save_image } from './o_capture.module.js';
@@ -30,7 +30,7 @@ let o_component__scan = {
                     <div class="scan-section">
                         <div class="scan-label">Auto Grid (mark points)</div>
                         <div class="scan-hint">
-                            calibrate steps/px first (Backlash panel, motors 0 and 1).
+                            calibrate steps/px first (Backlash panel, the motors assigned to X and Y).
                             then jog around the area and mark points — the grid covers
                             the bounding box of every point.
                         </div>
@@ -176,9 +176,9 @@ let o_component__scan = {
                         <div class="scan-field" v-if="b_focus__before_tile">
                             <label>Focus motor</label>
                             <select v-model="s_motor__focus" @change="f_save_config">
-                                <option value="0">M0</option>
-                                <option value="1">M1</option>
-                                <option value="2">M2</option>
+                                <option value="0">Motor 1</option>
+                                <option value="1">Motor 2</option>
+                                <option value="2">Motor 3</option>
                             </select>
                         </div>
                         <div class="scan-field" v-if="b_focus__before_tile">
@@ -430,10 +430,10 @@ let o_component__scan = {
             return this.s_path__preview__stitch || this.s_path__stitched_image;
         },
         n_step__per_px__x: function() {
-            return (o_state.a_n_step__per_px && o_state.a_n_step__per_px[0]) || 0;
+            return (o_state.a_n_step__per_px && o_state.a_n_step__per_px[f_n_motor__axis('x')]) || 0;
         },
         n_step__per_px__y: function() {
-            return (o_state.a_n_step__per_px && o_state.a_n_step__per_px[1]) || 0;
+            return (o_state.a_n_step__per_px && o_state.a_n_step__per_px[f_n_motor__axis('y')]) || 0;
         },
         o_box__grid: function() {
             let a_o_point = this.a_o_point__grid;
@@ -608,7 +608,7 @@ let o_component__scan = {
             o_self.b_testing = true;
             o_self.b_stop_requested = false;
             try {
-                let n_motor = (s_axis === 'x') ? 0 : 1;
+                let n_motor = f_n_motor__axis(s_axis);
                 let n_step = (s_axis === 'x') ? o_self.n_step__x : o_self.n_step__y;
                 await o_self.f_move_motor_n_step(n_motor, n_step * n_sign);
             } catch (e) {
@@ -626,13 +626,13 @@ let o_component__scan = {
                 let n_total_y = (o_self.n_tile_y - 1) * o_self.n_step__y;
 
                 // move along right edge
-                if (n_total_x > 0) await o_self.f_move_motor_n_step(0, n_total_x);
+                if (n_total_x > 0) await o_self.f_move_motor_n_step(f_n_motor__axis('x'), n_total_x);
                 // move along bottom edge
-                if (n_total_y > 0) await o_self.f_move_motor_n_step(1, n_total_y);
+                if (n_total_y > 0) await o_self.f_move_motor_n_step(f_n_motor__axis('y'), n_total_y);
                 // move back along left edge
-                if (n_total_x > 0) await o_self.f_move_motor_n_step(0, -n_total_x);
+                if (n_total_x > 0) await o_self.f_move_motor_n_step(f_n_motor__axis('x'), -n_total_x);
                 // move back to start
-                if (n_total_y > 0) await o_self.f_move_motor_n_step(1, -n_total_y);
+                if (n_total_y > 0) await o_self.f_move_motor_n_step(f_n_motor__axis('y'), -n_total_y);
             } catch (e) {
                 console.error('Test square error:', e);
             }
@@ -645,7 +645,7 @@ let o_component__scan = {
             o_self.b_testing = true;
             o_self.b_stop_requested = false;
             try {
-                let n_motor = (s_axis === 'x') ? 0 : 1;
+                let n_motor = f_n_motor__axis(s_axis);
                 let n_total = (s_axis === 'x')
                     ? (o_self.n_tile_x - 1) * o_self.n_step__x
                     : (o_self.n_tile_y - 1) * o_self.n_step__y;
@@ -661,8 +661,8 @@ let o_component__scan = {
 
         f_add_point: function() {
             this.a_o_point__grid.push({
-                n_x: o_state.a_o_motor[0] ? o_state.a_o_motor[0].n_position : 0,
-                n_y: o_state.a_o_motor[1] ? o_state.a_o_motor[1].n_position : 0,
+                n_x: o_state.a_o_motor[f_n_motor__axis('x')] ? o_state.a_o_motor[f_n_motor__axis('x')].n_position : 0,
+                n_y: o_state.a_o_motor[f_n_motor__axis('y')] ? o_state.a_o_motor[f_n_motor__axis('y')].n_position : 0,
             });
         },
         f_remove_point: function() {
@@ -767,17 +767,17 @@ let o_component__scan = {
 
             // move to the computed grid start corner before the first tile
             if(o_self.a_n_grid__start){
-                let n_motor0 = o_state.a_o_motor[0] ? o_state.a_o_motor[0].n_position : 0;
-                let n_motor1 = o_state.a_o_motor[1] ? o_state.a_o_motor[1].n_position : 0;
+                let n_motor0 = o_state.a_o_motor[f_n_motor__axis('x')] ? o_state.a_o_motor[f_n_motor__axis('x')].n_position : 0;
+                let n_motor1 = o_state.a_o_motor[f_n_motor__axis('y')] ? o_state.a_o_motor[f_n_motor__axis('y')].n_position : 0;
                 let n_dx = o_self.a_n_grid__start[0] - n_motor0;
                 let n_dy = o_self.a_n_grid__start[1] - n_motor1;
                 if(n_dx !== 0){
                     o_self.s_status__detail = 'Moving to start X...';
-                    await o_self.f_move_motor_n_step(0, n_dx);
+                    await o_self.f_move_motor_n_step(f_n_motor__axis('x'), n_dx);
                 }
                 if(n_dy !== 0){
                     o_self.s_status__detail = 'Moving to start Y...';
-                    await o_self.f_move_motor_n_step(1, n_dy);
+                    await o_self.f_move_motor_n_step(f_n_motor__axis('y'), n_dy);
                 }
             }
 
@@ -802,13 +802,13 @@ let o_component__scan = {
 
                     if (n_delta_col !== 0) {
                         o_self.s_status__detail = 'Moving X...';
-                        await o_self.f_move_motor_n_step(0, n_delta_col * o_self.n_step__x);
+                        await o_self.f_move_motor_n_step(f_n_motor__axis('x'), n_delta_col * o_self.n_step__x);
                         if (o_self.b_stop_requested) break;
                     }
 
                     if (n_delta_row !== 0) {
                         o_self.s_status__detail = 'Moving Y...';
-                        await o_self.f_move_motor_n_step(1, n_delta_row * o_self.n_step__y);
+                        await o_self.f_move_motor_n_step(f_n_motor__axis('y'), n_delta_row * o_self.n_step__y);
                         if (o_self.b_stop_requested) break;
                     }
                 }

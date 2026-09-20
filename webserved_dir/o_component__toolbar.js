@@ -1,5 +1,6 @@
 import { o_state, o_router, f_connect_esp_serial, f_disconnect_esp, f_save_setting__debounced, f_save_flat_field, f_toggle_mouse_jog, f_send_esp_stop_all, f_save_library_current, f_refresh_maps } from './index.js';
 import { f_s_key__iso, f_apply_camera_setting, f_set_camera_mode, f_apply_camera__saved } from './o_camera.module.js';
+import { f_recording_stop } from './o_recording.module.js';
 
 let o_component__toolbar = {
     name: 'component-toolbar',
@@ -55,6 +56,36 @@ let o_component__toolbar = {
                 @click="f_toggle_panel('calibration')"
                 title="open the calibration checklist"
             >Calib</button>
+            <button
+                class="toolbar-toggle"
+                :class="{ active: o_state.o_panel_visibility.cellpose }"
+                @click="f_toggle_panel('cellpose')"
+                title="segment the camera feed with the Cellpose AI model"
+            >Cell pose</button>
+            <button
+                class="toolbar-toggle"
+                :class="{ active: o_state.o_panel_visibility.zoom }"
+                @click="f_toggle_panel('zoom')"
+                title="digital zoom — drag a box on the live image to magnify it"
+            >Zoom</button>
+            <button
+                class="toolbar-toggle"
+                :class="{ active: o_state.o_panel_visibility.record, running: o_state.o_record.b_running }"
+                @click="f_toggle_panel('record')"
+                title="time-lapse recording — interval, positions and autofocus"
+            >Record</button>
+            <button
+                class="toolbar-toggle"
+                :class="{ active: o_state.o_panel_visibility.video, running: o_state.o_video.b_recording }"
+                @click="f_toggle_panel('video')"
+                title="real-time video — record, burst or pre-roll"
+            >Video</button>
+            <button
+                v-if="o_state.o_record.b_running"
+                class="toolbar-toggle toolbar-record-stop"
+                @click="f_stop_recording"
+                title="stop the running recording"
+            >&#9632; {{ o_state.o_record.n_its__frame__done }} rec</button>
 
             <div class="toolbar-sep"></div>
 
@@ -366,6 +397,9 @@ let o_component__toolbar = {
         f_toggle_panel: function(s_name) {
             o_state.o_panel_visibility[s_name] = !o_state.o_panel_visibility[s_name];
             f_save_setting__debounced('o_panel_visibility', o_state.o_panel_visibility);
+        },
+        f_stop_recording: function() {
+            f_recording_stop();
         },
         f_toggle_flat: function() {
             let o_flat = o_state.o_flat_field;

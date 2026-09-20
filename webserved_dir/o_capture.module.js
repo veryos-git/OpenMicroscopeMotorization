@@ -10,6 +10,9 @@ import { f_b_flat__matches, f_flat__apply } from './o_flatfield.module.js';
 //   s_type     - mime type, default 'image/png'
 //   n_quality  - jpeg quality, optional
 //   b_flash    - show the capture flash, default true
+//   o_roi      - optional crop in camera pixels: { n_x, n_y, n_scl_x, n_scl_y }
+//                (the digital-zoom region).  flat-field correction is skipped
+//                for a crop: the flat frame is full-frame geometry.
 let f_o_capture__frame = function(o_opts) {
     o_opts = o_opts || {};
     let b_flash = o_opts.b_flash !== false;
@@ -21,22 +24,40 @@ let f_o_capture__frame = function(o_opts) {
         }
         let n_scl_x__video = el_video.videoWidth;
         let n_scl_y__video = el_video.videoHeight;
+
+        // source rectangle: the whole frame, or the requested crop
+        let n_px_x__src = 0;
+        let n_px_y__src = 0;
+        let n_scl_x__src = n_scl_x__video;
+        let n_scl_y__src = n_scl_y__video;
+        let b_roi = !!(o_opts.o_roi && o_opts.o_roi.n_scl_x > 0 && o_opts.o_roi.n_scl_y > 0);
+        if(b_roi){
+            n_px_x__src = Math.max(0, Math.min(n_scl_x__video - 1, Math.round(o_opts.o_roi.n_x || 0)));
+            n_px_y__src = Math.max(0, Math.min(n_scl_y__video - 1, Math.round(o_opts.o_roi.n_y || 0)));
+            n_scl_x__src = Math.max(1, Math.min(Math.round(o_opts.o_roi.n_scl_x), n_scl_x__video - n_px_x__src));
+            n_scl_y__src = Math.max(1, Math.min(Math.round(o_opts.o_roi.n_scl_y), n_scl_y__video - n_px_y__src));
+        }
+
         let n_scl = 1;
         if(o_opts.n_scl_max){
-            n_scl = Math.min(1, o_opts.n_scl_max / Math.max(n_scl_x__video, n_scl_y__video));
+            n_scl = Math.min(1, o_opts.n_scl_max / Math.max(n_scl_x__src, n_scl_y__src));
         }
-        let n_scl_x = Math.max(1, Math.round(n_scl_x__video * n_scl));
-        let n_scl_y = Math.max(1, Math.round(n_scl_y__video * n_scl));
+        let n_scl_x = Math.max(1, Math.round(n_scl_x__src * n_scl));
+        let n_scl_y = Math.max(1, Math.round(n_scl_y__src * n_scl));
         let el_canvas = document.createElement('canvas');
         el_canvas.width = n_scl_x;
         el_canvas.height = n_scl_y;
         let o_ctx = el_canvas.getContext('2d');
-        o_ctx.drawImage(el_video, 0, 0, n_scl_x, n_scl_y);
+        o_ctx.drawImage(
+            el_video,
+            n_px_x__src, n_px_y__src, n_scl_x__src, n_scl_y__src,
+            0, 0, n_scl_x, n_scl_y
+        );
 
         // flat-field (dust remove): correct full-res captures so every scan
         // tile and stack frame is already corrected when it is written to disk.
         // downscaled captures (e.g. the locate frame) stay raw.
-        if (o_opts.b_flat !== false && o_state.o_flat_field.b_active && n_scl === 1) {
+        if (o_opts.b_flat !== false && !b_roi && o_state.o_flat_field.b_active && n_scl === 1) {
             if (f_b_flat__matches(n_scl_x, n_scl_y)) {
                 let o_imagedata = o_ctx.getImageData(0, 0, n_scl_x, n_scl_y);
                 f_flat__apply(o_imagedata);
@@ -57,6 +78,13 @@ let f_o_capture__frame = function(o_opts) {
                     n_scl_y__video: n_scl_y__video,
                     n_scl_x: n_scl_x,
                     n_scl_y: n_scl_y,
+                    b_roi: b_roi,
+                    o_roi: b_roi ? {
+                        n_x: n_px_x__src,
+                        n_y: n_px_y__src,
+                        n_scl_x: n_scl_x__src,
+                        n_scl_y: n_scl_y__src,
+                    } : null,
                 });
             } else {
                 reject(new Error('failed to capture frame'));
@@ -106,8 +134,27 @@ let f_save_image = async function(o_blob, s_path_folder, s_filename) {
     }
 };
 
+// recording frames go to recordings/, which the scan endpoint refuses by design
+let f_save_image__recording = async function(o_blob, s_path_folder, s_filename) {
+    let o_array_buffer = await o_blob.arrayBuffer();
+    let o_response = await fetch(
+        '/api/recording/save_frame'
+            + '?s_path_folder=' + encodeURIComponent(s_path_folder)
+            + '&s_filename=' + encodeURIComponent(s_filename),
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/octet-stream' },
+            body: o_array_buffer,
+        }
+    );
+    if(!o_response.ok){
+        throw new Error('failed to save frame: ' + o_response.statusText);
+    }
+};
+
 export {
     f_o_capture__frame,
     f_o_frame__imagedata,
     f_save_image,
+    f_save_image__recording,
 };

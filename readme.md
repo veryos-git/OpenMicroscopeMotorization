@@ -15,10 +15,11 @@ irm https://deno.land/install.ps1 | iex
 this installs every missing dependency and then starts the web server on http://localhost:8000
 
 installed on first run (skipped afterwards, so `deno task start` stays fast):
-- `arduino-cli` into `~/.local/bin` + the `esp32:esp32` board package + the `ESP Async WebServer` / `Async TCP` / `ArduinoJson` libraries — without these the setup page cannot detect the ESP32
+- `arduino-cli` into `~/.local/bin` + the `esp32:esp32` board package + the `ESP Async WebServer` / `Async TCP` / `ArduinoJson` libraries — these compile the ESP32 firmware on the server
   (`Async TCP` provides `AsyncTCP.h` and must be installed explicitly — arduino-cli does not pull it in as a dependency when run non-interactively)
 - `./venv` with `numpy` + `opencv-python` — used by `stitch.py` (the tile scan mosaic) and `stich_image_in_folder.py`
 - `torch` (cpu build) + `lightglue` + `kornia` — used by `autostitch.py` and by `stitch.py --matcher loftr`
+- `./venv_cellpose` with `torch` + `cellpose` — used by `cellpose_worker.py` for the `Cell pose` panel
 
 the installer also runs `stitch.py --help` inside the venv, so a broken numpy/opencv
 install is reported before a scan is started rather than after it.
@@ -35,6 +36,29 @@ install is reported before a scan is started rather than after it.
 
 `deno task install --skip-stitch-ai` leaves out torch/lightglue/kornia if you do not need
 autostitch or the LoFTR rescue matcher. `stitch.py` itself only needs numpy + opencv.
+
+`deno task install --skip-cellpose` leaves out the separate `./venv_cellpose` if you do
+not need the `Cell pose` panel. `--cpu` installs the small CPU-only torch build instead
+of the ~3 GB CUDA one.
+
+## flash from the browser
+
+Open Setup in desktop Chrome or Edge using HTTPS or `http://localhost:8000`.
+Plug the ESP32-S3 into the **computer running the browser**, then click
+**Generate Firmware & Flash ESP32** and select its USB port. WiFi credentials
+are optional when using USB control.
+
+The server compiles the firmware; the browser uploads it with Web Serial,
+verifies the written images, and reconnects USB control after reset. The firmware
+accepts commands on both native USB and the USB-to-UART connector. The app waits
+for a motor-status reply before reporting a USB control connection. An existing
+USB control connection is paused automatically. If the port changes after
+reset, use **Connect via USB** to select it again. If bootloader connection
+fails, hold BOOT and press RESET, then retry flashing.
+
+The browser flasher is bundled locally in `webserved_dir/vendor`; it does not
+need a CDN. `deno task flash` remains the separate command-line wizard and
+uses a USB device attached to the machine running that command.
 
 ## tile scan -> mosaic
 the scan panel drives the stage over a grid, saves every tile as
@@ -123,6 +147,165 @@ samples:
 that is 3-8 measurements instead of the 20 positions (at 2 frames each) the panel
 sweeps, and on a gently tilted slide it usually settles after 4. the search always
 ends on the position it decided on, not where the last probe left the motor.
+
+## digital zoom (`Zoom` panel)
+the `Zoom` button opens a floating magnifier window. hold `Ctrl` and drag a box on
+the live image and the region inside it is shown magnified in the window — a
+cheap way to read the pixels of a small detail without moving the stage or
+changing the objective.
+
+- the picked region is stored in camera pixels, so the frame stays on the same
+  spot when the browser window is resized.
+- the wheel over the preview window zooms in and out around the centre of the
+  region. with nothing picked yet the first scroll-in starts from the centre of
+  the frame.
+- drag inside the preview window to pan: the magnified picture follows the
+  pointer, so the picked region slides across the main image.
+- drag the window's corner (or use the `Preview` slider) to resize it. the
+  picture keeps the region's aspect ratio, so it is never stretched. there is no
+  fixed size cap — the preview grows until it fills the browser window.
+- `Resample` picks `interpolated` (smooth) or `pixelated` (nearest neighbour —
+  shows the real sensor pixels at a strong zoom).
+- move the window by its header. `Clear` drops the region, `Select area` arms a
+  plain drag for when no keyboard is at hand, `Esc` cancels while picking.
+
+while picking is armed the drag layer only then takes the pointer, so a plain
+drag on the image still jogs the stage; `Ctrl` + drag never jogs and does not
+fight `Mouse Jog`.
+
+## recording: time-lapse and video (`Record` / `Video` panels)
+two recording engines share one storage layout under `recordings/<session>/`
+(`manifest.json`, append-only `frame.jsonl`, `pos_XX/t_000001.png`, `media/`,
+`thumb/`). see `recording_design.md` for the reasoning.
+
+**`Record` — time-lapse, built for hours and days**
+- interval plus frame count, with 1 h / 6 h / 12 h / 24 h / 3 d shortcuts
+  (default 1 frame every 10 min for 24 h);
+- **autofocus between timepoints** using the existing focus search, with the
+  focus score stored next to every frame, so thermal drift is visible in the data;
+- **multi-position**: add the current stage position to a list and every
+  timepoint visits all of them (settle delay after a move, coordinates recorded
+  per frame);
+- optional **crop to the digital-zoom region** — record only what you zoomed;
+- the camera is **locked** (manual exposure / white balance) when a run starts;
+- frames are numbered PNGs (or jpg), timing is scheduled against absolute time so
+  a slow frame never accumulates drift, and a frozen / black / blown frame is
+  logged and retried once;
+- on finish an **mp4 is encoded with ffmpeg** at a playback rate independent of
+  the capture interval;
+- a **disk reserve** stops the run cleanly before the volume fills up;
+- **resume**: `frame.jsonl` is the truth, so a browser reload or a server restart
+  leaves a session that can be continued from the next frame.
+
+**`Video` — real time, for fast events**
+- **record** one clip (raw camera, or the processed flat-field / filter view);
+- **burst**: a short clip every N minutes until stopped;
+- **pre-roll**: keep the last N seconds in a ring buffer and save them only when
+  the interesting thing happens, plus a configurable tail;
+- timeslices are appended to the server as they arrive, so a long recording never
+  sits in browser memory; mp4 + thumbnail use the same ffmpeg path.
+
+**`sessions…` library** — every recording: thumbnail, playback, `export mp4`,
+`export TIFF` (OME-TIFF with physical pixel size and time increment, opens in
+Fiji / napari), `resume` for interrupted runs, `delete`.
+
+the camera belongs to the browser, so the page must stay open for the length of a
+run; a Screen Wake Lock is requested while recording, and gaps caused by a hidden
+tab or a sleeping host are recorded as events instead of silently losing time.
+the `Record` panel also probes the server for `/dev/video*`, the prerequisite for
+a future unattended server-side capture mode.
+
+## cell segmentation with cellpose (`Cell pose` panel)
+the `Cell pose` button opens a panel that segments the live camera image with
+[Cellpose](https://github.com/MouseLand/cellpose) and draws the found cells
+**straight onto the live image** as a coloured mask — the mask is an overlay on
+the main window, not a second preview inside the panel. two modes:
+
+| mode | what it does |
+| --- | --- |
+| `Single image` | grab one frame, segment it, stop. the safe default on a CPU |
+| `Loop` | capture → segment → pause → repeat until you press stop |
+
+the mask stays on the image after a single run, so you can compare it with the
+next one; **Remove mask** takes it off (during a loop it also stops the loop).
+the opacity slider blends it over the video, and the overlay ignores mouse
+events, so mouse jog keeps working underneath.
+
+**the stage has to stand still.** `Capture & segment` is disabled while any motor
+is turning, and the mask is taken off the image the moment a motor starts again —
+a frame grabbed mid-move is smeared, and a mask computed from it points at cells
+that are no longer under the crosshair. a running `Loop` does not fail on motion:
+it pauses and picks up again once the stage is still. this covers every source of
+motion (jog keys, mouse jog, gamepad, macro, autofocus), because it watches the
+motor state the firmware reports rather than the input device.
+
+the mask is cleared whenever a motor starts — even while a `Loop` is paused
+between frames — so you see the mask go the moment you touch the jog keys, and
+the next paused frame draws a fresh one. clearing it during a seek inside one
+inference cost nothing: the mask is already being redrawn.
+
+the model runs on the **server**, not in the browser (`cellpose_worker.py`, driven
+by `cellpose_functions.module.js`). the worker is started once and kept alive, so
+the weights are loaded a single time instead of once per frame. the browser only
+grabs frames and uploads them (`POST /api/cellpose/frame`), which also means the
+flat-field correction is applied to what the model sees.
+
+`Inference size` is the long side the frame is scaled to before the network sees
+it (the mask is scaled back up to the full frame afterwards). **this is the
+speed/accuracy dial.** `cpsam` (Cellpose-SAM, the default) and `cyto3` (the
+smaller Cellpose 3 cytoplasm model) are both available. measured here on a
+32-core CPU with no GPU, one 1920×1080 blood-smear frame, through the full worker
+path:
+
+| model | inference size | time per frame | cells found |
+| --- | --- | --- | --- |
+| `cyto3` | 384 px | ~51 s | ~950 |
+| `cpsam` | 384 px | ~50 s | ~910 |
+| `cyto3` | 512 px | ~150 s | ~1110 |
+| `cpsam` | 512 px | ~155 s | ~1100 |
+| `cpsam` | 1024 px | ~380 s | ~1120 |
+
+two things worth knowing before you pick a model or a size:
+
+- **there is no fast setting on a CPU.** even a 144 px inference costs ~50 s,
+  because the cost is dominated by the network's fixed work, not by the pixel
+  count; below ~300 px the cells are simply too small to resolve and the mask
+  comes back empty. budget roughly a minute per frame at 384 px, several minutes
+  at 512 px. **these numbers are the no-GPU case** — see below.
+- **`cyto3` is not the shortcut it sounds like** *in the Cellpose 4 venv this
+  project installs*: it is segmented through the same pipeline and takes about
+  as long as `cpsam` (it does find slightly more of the tightly packed cells at
+  512 px). pick it for the smaller 25 MB weight download and its cytoplasm
+  training, not for speed.
+
+### GPU
+
+`deno task install` detects an NVIDIA card and installs a **CUDA build of
+torch**; on a GPU a frame is 1–2 s instead of 50–150 s and the `Loop` mode becomes
+genuinely live. the panel shows the device it is running on next to the frame
+stats (`CUDA` / `CPU`), and the worker logs it when the model loads.
+
+if the panel says `CPU` on a machine that has a card, the usual cause is that the
+process cannot open `/dev/nvidia*` — `nvidia-smi` and `torch.cuda.is_available()`
+have to be run **by the same process that runs the server**. check inside that
+environment with:
+
+```sh
+venv_cellpose/bin/python -c "import torch; print(torch.cuda.is_available(), torch.cuda.get_device_name(0) if torch.cuda.is_available() else '')"
+```
+
+a CUDA build degrades to the CPU on its own, so an unreadable device is not an
+error — it is just slow. use `--cpu` to install the smaller CPU-only build when
+you know the machine will never have a card.
+
+the weights are downloaded on first use into `weights/cellpose/` — ~1.2 GB for
+`cpsam`, ~25 MB for `cyto3` — and every frame with its `.json` numbers (cell
+count, areas, inference seconds) is written into
+`scans/cellpose_<date>_<time>/`.
+
+**licence note:** the Cellpose *code* is BSD-3-Clause, but every pretrained model
+is trained on **CC-BY-NC** data and is therefore **non-commercial use only** (see
+[`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md)).
 
 ## live "grow" stitching — not in this release
 earlier builds could grow a mosaic in real time while you drive the stage by

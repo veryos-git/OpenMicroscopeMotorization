@@ -1,7 +1,5 @@
 import { o_state, f_save_setting__debounced, f_reset_stat__session } from './index.js';
 
-let a_s_name__axis = ['X', 'Y', 'Z'];
-
 let f_s_run_time = function(n_ms) {
     if (!n_ms || n_ms < 0) n_ms = 0;
     let n_sec = Math.floor(n_ms / 1000);
@@ -49,7 +47,7 @@ let o_component__stats = {
                         :key="n_idx"
                     >
                         <div class="card-header">
-                            <h2>Axis {{ a_s_name__axis[n_idx] }}</h2>
+                            <h2>Motor {{ n_idx + 1 }}</h2>
                             <span
                                 class="motor-id"
                                 :class="{ 'stats-live': o_state.a_o_motor[n_idx].b_running }"
@@ -79,7 +77,6 @@ let o_component__stats = {
     data: function() {
         return {
             o_state: o_state,
-            a_s_name__axis: a_s_name__axis,
         };
     },
     computed: {

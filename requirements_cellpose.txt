@@ -1,0 +1,12 @@
+# python dependencies for the cellpose segmentation worker (cellpose_worker.py)
+# installed into its own ./venv_cellpose by `deno task install`.
+#
+# cellpose gets a separate venv on purpose: it pins numpy/opencv versions that
+# do not match the stitcher stack in ./venv, and an upgrade here must never be
+# able to break stitch.py.
+#
+# torch is installed separately from the CPU wheel index (see install.js).
+cellpose
+# 'packaging' is a missing transitive dependency of fastremap — importing
+# fastremap fails without it, and py3-none wheels of cellpose always pull it in
+packaging

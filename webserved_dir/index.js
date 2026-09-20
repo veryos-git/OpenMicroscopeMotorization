@@ -1,3 +1,4 @@
+import { f_wait_for_esp_status } from './serial_handshake.module.js';
 import { createApp, reactive, watch, markRaw } from 'vue';
 import { createRouter, createWebHistory } from 'vue-router';
 import {
@@ -29,6 +30,13 @@ import { o_component__scale } from './o_component__scale.js';
 import { o_component__focus_step } from './o_component__focus_step.js';
 import { o_component__focus } from './o_component__focus.js';
 import { o_component__focus_stack } from './o_component__focus_stack.js';
+import { o_component__cellpose } from './o_component__cellpose.js';
+import { o_component__zoom } from './o_component__zoom.js';
+import { o_component__record } from './o_component__record.js';
+import { o_component__recording_library } from './o_component__recording_library.js';
+import { o_component__video } from './o_component__video.js';
+import { f_o_config__default, f_b_recording__server } from './o_recording.module.js';
+import { f_o_video_config__default } from './o_video.module.js';
 import { o_component__backlash } from './o_component__backlash.js';
 import { o_component__slide_library } from './o_component__slide_library.js';
 import { o_component__page_setup } from './o_component__page_setup.js';
@@ -73,6 +81,8 @@ let o_state = reactive({
     // ESP32 connection
     s_ip__esp: '',
     b_connected__esp: false,
+    b_connecting__esp_serial: false,
+    s_error__esp_serial: '',
     s_transport__esp: '',       // 'serial' | 'ws' | '' (empty = disconnected)
     b_available__serial: (typeof navigator !== 'undefined') && ('serial' in navigator),
     s_port__esp: '',            // USB serial port path/name when connected via Web Serial
@@ -97,6 +107,9 @@ let o_state = reactive({
         n_ms__run_session: 0,
         n_cnt__halt: 0,
     },
+
+    b_axis_assignment__circle: false,
+    o_motor__axis: { x: 0, y: 1, z: 2 },
 
     // jog settings
     n_rpm__jog: 5.0,
@@ -128,6 +141,77 @@ let o_state = reactive({
         o_camera__flat: null,
     },
 
+    // cellpose segmentation mask drawn over the live image. the panel fills
+    // this in; the webcam component owns the full-page <img> that renders it,
+    // so the mask sits on the main window instead of in a second preview.
+    o_cellpose: {
+        s_path_mask: '',
+        n_pct__opacity: 70,
+        b_visible: true,
+        n_ts_ms__mask: 0,
+    },
+
+    // digital zoom magnifier: a floating overlay window that shows a region of
+    // the live image picked with Ctrl + drag (or the Select area button).  the
+    // region is kept in camera pixels (n_..._roi) so it follows a window resize.
+    o_zoom: {
+        b_selecting: false,
+        s_resample: 'interpolated', // 'interpolated' | 'pixelated'
+        n_scl_x__mag: 380,          // preview window width in CSS px
+        n_px__panel_x: -1,          // window position (negative = not placed yet)
+        n_px__panel_y: -1,
+        n_x__roi: 0,
+        n_y__roi: 0,
+        n_scl_x__roi: 0,
+        n_scl_y__roi: 0,
+    },
+
+    // recording (time-lapse / video).  the engine in o_recording.module.js
+    // keeps this live for the panel, the toolbar badge and the sessions library.
+    o_record: {
+        b_running: false,
+        b_pause: false,
+        b_encoding: false,
+        s_status: 'idle',
+        s_message: '',
+        s_error: '',
+        s_path_folder: '',
+        s_path_media: '',
+        n_its__frame: 0,
+        n_its__frame__done: 0,
+        n_its__position: 0,
+        n_idx__position: 0,
+        n_ts_ms__start: 0,
+        n_ts_ms__next: 0,
+        n_free__byte: null,
+        n_sz__est__byte: 0,
+        o_frame__last: null,
+        a_s_warn: [],
+        a_o_recording: [],
+        o_camera__probe: null,
+        b_wake_lock: false,
+    },
+    o_record_config: f_o_config__default(),
+
+    // real-time video (MediaRecorder): record / burst / pre-roll
+    o_video: {
+        b_recording: false,
+        b_preroll: false,
+        b_burst: false,
+        s_status: 'idle',
+        s_message: '',
+        s_error: '',
+        s_path_folder: '',
+        s_path_media: '',
+        s_mime: '',
+        n_sec__elapsed: 0,
+        n_sec__buffered: 0,
+        n_sz__byte: 0,
+        n_chunk: 0,
+        n_chunk__uploaded: 0,
+    },
+    o_video_config: f_o_video_config__default(),
+
     // calibration profile: timestamps + recorded results per step. a single
     // profile (single objective for now) — staleness is derived from these
     // timestamps and the camera snapshot they were taken under.
@@ -151,7 +235,7 @@ let o_state = reactive({
     a_o_map__scanned: [],
 
     // UI
-    o_panel_visibility: { map: false, motion: false, optics: false, slide_library: false, jog: true, motors: true, scan: false, camera_setting: false, manual_stitch: false, macro: false, auto_move: false, autostitch: false, filter: false, flat: false, focus: false, focus_step: false, focus_stack: false, backlash: false, calibration: false, scale: false, stats: false },
+    o_panel_visibility: { map: false, motion: false, optics: false, slide_library: false, jog: true, motors: true, scan: false, camera_setting: false, manual_stitch: false, macro: false, auto_move: false, autostitch: false, filter: false, flat: false, focus: false, focus_step: false, focus_stack: false, backlash: false, calibration: false, scale: false, stats: false, cellpose: false, zoom: false, record: false, recording_library: false, video: false },
     o_key_held: {},
 
     // scan
@@ -212,9 +296,9 @@ let o_state = reactive({
     s_wifi_ssid: '',
     s_wifi_password: '',
     a_o_pin_config: [
-        { s_name: 'Motor X', n_pin1: 4, n_pin2: 5, n_pin3: 6, n_pin4: 7 },
-        { s_name: 'Motor Y', n_pin1: 15, n_pin2: 16, n_pin3: 17, n_pin4: 18 },
-        { s_name: 'Motor Z', n_pin1: 8, n_pin2: 9, n_pin3: 10, n_pin4: 11 },
+        { s_name: 'Motor 1', n_pin1: 4, n_pin2: 5, n_pin3: 6, n_pin4: 7 },
+        { s_name: 'Motor 2', n_pin1: 15, n_pin2: 16, n_pin3: 17, n_pin4: 18 },
+        { s_name: 'Motor 3', n_pin1: 8, n_pin2: 3, n_pin3: 46, n_pin4: 9 },
     ],
     b_flashing: false,
     s_flash_output: '',
@@ -236,18 +320,34 @@ let f_register_handler = function(f_handler) {
     };
 };
 
-let f_send_wsmsg_with_response = async function(o_wsmsg){
+let f_send_wsmsg_with_response = async function(o_wsmsg, n_ms_timeout = 0){
     return new Promise(function(resolve, reject) {
-        let f_handler_response = function(o_wsmsg2){
+        let o_request_socket = o_socket;
+        let n_timer;
+        let f_cleanup = function() {
+            f_unregister();
+            clearTimeout(n_timer);
+            o_request_socket.removeEventListener('close', f_closed);
+        };
+        let f_closed = function() {
+            f_cleanup();
+            reject(new Error('Server connection closed. Reconnect and try again.'));
+        };
+        let f_unregister = f_register_handler(function(o_wsmsg2){
             if(o_wsmsg2.s_uuid === o_wsmsg.s_uuid){
+                f_cleanup();
                 resolve(o_wsmsg2);
-                f_unregister();
             }
-        }
-        let f_unregister = f_register_handler(f_handler_response);
-        o_socket.send(JSON.stringify(o_wsmsg))
+        });
+        o_request_socket.addEventListener('close', f_closed);
+        if (n_ms_timeout) n_timer = setTimeout(function() {
+            f_cleanup();
+            reject(new Error('Server request timed out. Try again when the firmware build finishes.'));
+        }, n_ms_timeout);
+        try { o_request_socket.send(JSON.stringify(o_wsmsg)); }
+        catch (o_error) { f_cleanup(); reject(o_error); }
     });
-}
+};
 
 let f_connect = async function() {
     return new Promise(function(resolve, reject) {
@@ -364,6 +464,29 @@ let f_apply_setting_from_db = function(){
     o_state.o_panel_visibility.calibration = o_vis.calibration || false;
     o_state.o_panel_visibility.scale = o_vis.scale || false;
     o_state.o_panel_visibility.stats = o_vis.stats || false;
+    o_state.o_panel_visibility.cellpose = o_vis.cellpose || false;
+    o_state.o_panel_visibility.zoom = o_vis.zoom || false;
+    o_state.o_panel_visibility.record = o_vis.record || false;
+    o_state.o_panel_visibility.recording_library = o_vis.recording_library || false;
+    o_state.o_panel_visibility.video = o_vis.video || false;
+
+    // recording setup (interval, positions, autofocus, format …)
+    Object.assign(o_state.o_record_config, f_get_json('o_record_config', {}));
+    if(!Array.isArray(o_state.o_record_config.a_o_position)) o_state.o_record_config.a_o_position = [];
+    Object.assign(o_state.o_video_config, f_get_json('o_video_config', {}));
+
+    // digital zoom: restore window position + size, but never the armed state —
+    // an overlay that swallows the first drag on page load would be a trap
+    Object.assign(o_state.o_zoom, f_get_json('o_zoom', {}));
+    o_state.o_zoom.b_selecting = false;
+    // drop resample values from before the rename, and keep the preview on screen
+    if(o_state.o_zoom.s_resample === 'pixel') o_state.o_zoom.s_resample = 'pixelated';
+    if(o_state.o_zoom.s_resample === 'smooth') o_state.o_zoom.s_resample = 'interpolated';
+    if(o_state.o_zoom.s_resample !== 'interpolated' && o_state.o_zoom.s_resample !== 'pixelated'){
+        o_state.o_zoom.s_resample = 'interpolated';
+    }
+    // the component caps this to whatever the current window can show
+    o_state.o_zoom.n_scl_x__mag = Math.min(Math.max(Number(o_state.o_zoom.n_scl_x__mag) || 380, 140), 8000);
 
     // keep unknown/missing filter keys on their defaults
     Object.assign(o_state.o_filter, f_get_json('o_filter', {}));
@@ -385,6 +508,8 @@ let f_apply_setting_from_db = function(){
 
     o_state.b_enabled__mouse_jog = f_get('b_enabled__mouse_jog', 'true') === 'true';
 
+    o_state.o_motor__axis = f_get_json('o_motor__axis', o_state.o_motor__axis);
+
     // backlash (per motor)
     o_state.a_n_step__backlash = f_get_json('a_n_step__backlash', o_state.a_n_step__backlash);
     // steps per pixel (per motor), used by the scan auto-grid
@@ -393,7 +518,8 @@ let f_apply_setting_from_db = function(){
     // setup page settings
     o_state.s_wifi_ssid = f_get('s_wifi_ssid', o_state.s_wifi_ssid);
     o_state.s_wifi_password = f_get('s_wifi_password', o_state.s_wifi_password);
-    o_state.a_o_pin_config = f_get_json('a_o_pin_config', o_state.a_o_pin_config);
+    o_state.a_o_pin_config = f_get_json('a_o_pin_config', o_state.a_o_pin_config)
+        .map((o_pin, n_idx) => ({ ...o_pin, s_name: 'Motor ' + (n_idx + 1) }));
 
     // auto-redirect: if ESP IP is known, try to connect and go to control page
     f_try_auto_redirect();
@@ -669,6 +795,7 @@ let f_update_stat__motor = function() {
 
 let f_handle_esp_message = function(o_data) {
     if (o_data.type === 'status' && o_data.a_o_motor) {
+        o_state.b_axis_assignment__circle = o_data.b_axis_assignment__circle === true;
         for (let n_idx = 0; n_idx < o_data.a_o_motor.length && n_idx < o_state.a_o_motor.length; n_idx++) {
             let o_src = o_data.a_o_motor[n_idx];
             o_state.a_o_motor[n_idx].n_rpm = o_src.n_rpm;
@@ -713,25 +840,30 @@ let f_b_esp_connected = function() {
     return false;
 };
 
-let f_close_esp_serial = function() {
-    if (o_writer__serial) { try { o_writer__serial.releaseLock(); } catch {} o_writer__serial = null; }
-    if (o_reader__serial) { try { o_reader__serial.cancel(); } catch {} o_reader__serial = null; }
-    if (o_serial__esp) { try { o_serial__esp.close(); } catch {} o_serial__esp = null; }
+let f_close_esp_serial = async function() {
+    let o_port = o_serial__esp;
+    let o_reader = o_reader__serial;
+    let o_writer = o_writer__serial;
+    o_serial__esp = o_reader__serial = o_writer__serial = null;
     if (o_state.s_transport__esp === 'serial') {
         o_state.s_transport__esp = '';
         o_state.s_port__esp = '';
         o_state.b_connected__esp = false;
     }
+    if (o_writer) { try { o_writer.releaseLock(); } catch {} }
+    if (o_reader) { try { await o_reader.cancel(); } catch {} }
+    if (o_port) { try { await o_port.close(); } catch {} }
 };
 
 let f_disconnect_esp = function() {
     clearInterval(n_id__esp_status_poll);
     clearInterval(n_id__esp_reconnect);
     if (o_ws__esp) { try { o_ws__esp.close(); } catch {} o_ws__esp = null; }
-    f_close_esp_serial();
+    let o_closed = f_close_esp_serial();
     f_notify_esp_disconnect();
     o_state.b_connected__esp = false;
     o_state.s_transport__esp = '';
+    return o_closed;
 };
 
 let f_read_esp_serial = async function(o_port) {
@@ -757,6 +889,7 @@ let f_read_esp_serial = async function(o_port) {
     } catch (o_err) {
         // reader cancelled (intentional disconnect) or device unplugged
     }
+    o_reader.releaseLock();
     // only clean up if this port is still the active one (device unplugged)
     if (o_serial__esp === o_port) {
         f_notify_esp_disconnect();
@@ -815,11 +948,13 @@ let f_connect_esp = function(s_ip) {
 
 // ─── Web Serial transport (primary) ─────────────────────────────────
 
-let f_connect_esp_serial = async function(b_request_if_none) {
-    if (!o_state.b_available__serial) return false;
+let f_connect_esp_serial = async function(b_request_if_none, o_selected_port = null) {
+    if (!o_state.b_available__serial || o_state.b_flashing || o_state.b_connecting__esp_serial) return false;
+    o_state.b_connecting__esp_serial = true;
+    o_state.s_error__esp_serial = '';
     try {
-        let o_port = null;
-        let a_o_port = await navigator.serial.getPorts();
+        let o_port = o_selected_port;
+        let a_o_port = o_port ? [o_port] : await navigator.serial.getPorts();
         if (a_o_port.length > 0) {
             o_port = a_o_port[0];
         } else if (b_request_if_none !== false) {
@@ -827,26 +962,36 @@ let f_connect_esp_serial = async function(b_request_if_none) {
         }
         if (!o_port) return false;
 
+        await f_disconnect_esp();
         await o_port.open({ baudRate: 115200 });
-
-        f_disconnect_esp();
 
         o_serial__esp = o_port;
         o_state.s_transport__esp = 'serial';
         o_state.s_port__esp = 'USB (Web Serial)';
-        o_state.b_connected__esp = true;
-        console.log('ESP32 serial connected');
-
+        o_state.b_connected__esp = false;
+        // Release boot/reset lines left by flashing or the USB-UART driver.
+        await o_port.setSignals({ dataTerminalReady: false, requestToSend: false });
         o_writer__serial = o_port.writable.getWriter();
+        let o_writer = o_writer__serial;
+        f_read_esp_serial(o_port);
+        await f_wait_for_esp_status(f_register_esp_handler, o_msg =>
+            o_writer.write(new TextEncoder().encode(JSON.stringify(o_msg) + '\n'))
+        );
+        if (o_serial__esp !== o_port) throw new Error('USB disconnected during connection.');
+        o_state.b_connected__esp = true;
+        console.log('ESP32 motor firmware replied over serial');
         f_push_esp_config();
-        f_read_esp_serial(o_port);  // async reader loop, intentionally not awaited
         return true;
     } catch (o_err) {
         // NotFoundError = user cancelled the port picker
         if (o_err && o_err.name !== 'NotFoundError') {
+            o_state.s_error__esp_serial = o_err.message;
             console.warn('Serial connect error:', o_err);
+            await f_disconnect_esp();
         }
         return false;
+    } finally {
+        o_state.b_connecting__esp_serial = false;
     }
 };
 
@@ -876,7 +1021,7 @@ let f_send_esp = function(o_msg) {
         o_state.a_o_command__macro.push({ n_ms__delta, o_msg: JSON.parse(JSON.stringify(o_msg)) });
     }
 
-    if (o_state.s_transport__esp === 'serial' && o_writer__serial) {
+    if (o_state.s_transport__esp === 'serial' && o_writer__serial && o_state.b_connected__esp) {
         o_writer__serial.write(new TextEncoder().encode(JSON.stringify(o_msg) + '\n')).catch(function(){});
     } else if (o_ws__esp && o_ws__esp.readyState === WebSocket.OPEN) {
         o_ws__esp.send(JSON.stringify(o_msg));
@@ -884,6 +1029,9 @@ let f_send_esp = function(o_msg) {
 };
 
 // ─── ESP32 motor command helpers ─────────────────────────────────────
+
+// Axis assignments resolve to physical motor indices; calibration stays per motor.
+let f_n_motor__axis = s_axis => o_state.o_motor__axis[s_axis];
 
 let f_send_esp_run_continuous = function(n_motor, n_rpm, s_direction) {
     f_send_esp({ motor: n_motor, command: 'runContinuous', n_rpm: n_rpm, direction: s_direction });
@@ -947,6 +1095,8 @@ let f_send_esp_circle_start = function(n_step__radius, n_rpm, b_loop) {
         });
         f_send_esp({
             command: 'circleStart',
+            n_motor__x: f_n_motor__axis('x'),
+            n_motor__y: f_n_motor__axis('y'),
             n_step__radius: n_step__radius,
             n_rpm: n_rpm,
             b_loop: b_loop,
@@ -1019,6 +1169,11 @@ o_app.component('o_component__scale', o_component__scale);
 o_app.component('o_component__focus_step', o_component__focus_step);
 o_app.component('o_component__focus', o_component__focus);
 o_app.component('o_component__focus_stack', o_component__focus_stack);
+o_app.component('o_component__cellpose', o_component__cellpose);
+o_app.component('o_component__zoom', o_component__zoom);
+o_app.component('o_component__record', o_component__record);
+o_app.component('o_component__recording_library', o_component__recording_library);
+o_app.component('o_component__video', o_component__video);
 o_app.component('o_component__backlash', o_component__backlash);
 o_app.component('o_component__slide_library', o_component__slide_library);
 o_app.component('o_component__stats', o_component__stats);
@@ -1027,6 +1182,18 @@ o_app.use(o_router);
 
 globalThis.o_app = o_app;
 o_app.mount('#app');
+
+// recording needs a server build that knows the recording messages; say so once
+// instead of letting the first Record click time out with no explanation
+f_b_recording__server().then(function(b_ready){
+    if(b_ready) return;
+    o_state.a_o_toast.push(f_o_toast(
+        'Recording is unavailable: restart the app server (deno task server) to load the recording build',
+        'error',
+        Date.now(),
+        20000
+    ));
+});
 
 export {
     o_state,
@@ -1039,6 +1206,7 @@ export {
     f_connect_esp__auto,
     f_disconnect_esp,
     f_send_esp,
+    f_n_motor__axis,
     f_send_esp_run_continuous,
     f_send_esp_move_step,
     f_send_esp_stop,

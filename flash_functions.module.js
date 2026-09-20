@@ -1,8 +1,8 @@
+import { createHash } from "node:crypto";
 import { s_root_dir, s_ds } from "./runtimedata.module.js";
 
 let s_path__ino_template = `${s_root_dir}${s_ds}stepper_websocket.ino`;
 let s_path__tmp_dir = '/tmp/stepper_websocket';
-let s_path__tmp_ino = `${s_path__tmp_dir}/stepper_websocket.ino`;
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -125,12 +125,12 @@ let f_o_check_arduino_cli = async function() {
 
 // ─── Generate .ino firmware from template ───────────────────────────
 
-let f_generate_ino = async function(s_wifi_ssid, s_wifi_password, a_o_pin_config) {
+let f_generate_ino = async function(s_wifi_ssid, s_wifi_password, a_o_pin_config, s_dir = s_path__tmp_dir) {
     let s_ino = await Deno.readTextFile(s_path__ino_template);
 
     // replace WiFi placeholders
-    s_ino = s_ino.replace('{{wifi_ssid}}', s_wifi_ssid);
-    s_ino = s_ino.replace('{{wifi_password}}', s_wifi_password);
+    s_ino = s_ino.replace('{{wifi_ssid}}', () => JSON.stringify(s_wifi_ssid || '').slice(1, -1));
+    s_ino = s_ino.replace('{{wifi_password}}', () => JSON.stringify(s_wifi_password || '').slice(1, -1));
 
     // replace pin placeholders for each motor
     for (let n_idx = 0; n_idx < a_o_pin_config.length; n_idx++) {
@@ -141,10 +141,10 @@ let f_generate_ino = async function(s_wifi_ssid, s_wifi_password, a_o_pin_config
         s_ino = s_ino.replace(`{{n_pin4__motor_${n_idx}}}`, String(o_pin.n_pin4));
     }
 
-    await Deno.mkdir(s_path__tmp_dir, { recursive: true });
-    await Deno.writeTextFile(s_path__tmp_ino, s_ino);
+    await Deno.mkdir(s_dir, { recursive: true });
+    await Deno.writeTextFile(`${s_dir}/stepper_websocket.ino`, s_ino);
 
-    return s_path__tmp_ino;
+    return `${s_dir}/stepper_websocket.ino`;
 };
 
 // ─── Install arduino-cli ────────────────────────────────────────────
@@ -242,151 +242,58 @@ let f_install_esp32_deps = async function(f_on_line) {
     return true;
 };
 
-// ─── Full flash pipeline ────────────────────────────────────────────
-
-let f_flash_esp = async function(s_port, s_wifi_ssid, s_wifi_password, a_o_pin_config, f_on_line, f_s_request_password) {
-    let s_bin = await f_s_arduino_cli_bin();
-    if (!s_bin) {
-        f_on_line('arduino-cli not found. Installing...', 'stdout');
-        let b_installed = await f_install_arduino_cli(f_on_line);
-        if (!b_installed) {
-            return { b_success: false, s_ip__esp: '', s_error: 'Failed to install arduino-cli' };
-        }
-        s_bin = await f_s_arduino_cli_bin();
+// Only compilation runs on the server; the browser owns the USB device.
+let b_building = false;
+let f_compile_esp = async function(s_wifi_ssid, s_wifi_password, a_o_pin_config, f_on_line) {
+    if (b_building) return { b_success: false, s_error: 'Another firmware build is running. Try again when it finishes.' };
+    b_building = true;
+    let s_dir;
+    try {
+        let s_bin = await f_s_arduino_cli_bin();
         if (!s_bin) {
-            return { b_success: false, s_ip__esp: '', s_error: 'arduino-cli still not found after install' };
+            if (!await f_install_arduino_cli(f_on_line)) throw new Error('Failed to install arduino-cli');
+            s_bin = await f_s_arduino_cli_bin();
         }
-    }
-
-    // install deps
-    f_on_line('--- Installing ESP32 dependencies ---', 'stdout');
-    let b_deps = await f_install_esp32_deps(f_on_line);
-    if (!b_deps) {
-        return { b_success: false, s_ip__esp: '', s_error: 'Failed to install ESP32 dependencies' };
-    }
-
-    // generate firmware
-    f_on_line('--- Generating firmware ---', 'stdout');
-    await f_generate_ino(s_wifi_ssid, s_wifi_password, a_o_pin_config);
-    f_on_line('Firmware generated with custom pin configuration.', 'stdout');
-
-    // fix serial port permissions if needed
-    try {
-        let o_file = await Deno.open(s_port, { read: true });
-        o_file.close();
-    } catch {
-        f_on_line(`Need permission to access ${s_port}. Please enter your sudo password.`, 'stdout');
-        let s_sudo_password = '';
-        if (f_s_request_password) {
-            s_sudo_password = await f_s_request_password();
+        if (!await f_install_esp32_deps(f_on_line)) throw new Error('Failed to install ESP32 dependencies');
+        s_dir = await Deno.makeTempDir({ prefix: 'microscope-firmware-' });
+        let s_sketch = `${s_dir}/stepper_websocket`;
+        await f_generate_ino(s_wifi_ssid, s_wifi_password, a_o_pin_config, s_sketch);
+        let s_output = `${s_dir}/output`;
+        f_on_line('--- Compiling ESP32-S3 firmware ---', 'stdout');
+        if (!await f_run_and_stream(s_bin, [
+            'compile', '--fqbn', 'esp32:esp32:esp32s3', '--output-dir', s_output, s_sketch,
+        ], f_on_line)) throw new Error('Compilation failed');
+        let a_o_image = [];
+        for (let [s_suffix, n_address] of [['bootloader.bin', 0], ['partitions.bin', 0x8000], ['bin', 0x10000]]) {
+            let a_bytes = await Deno.readFile(`${s_output}/stepper_websocket.ino.${s_suffix}`);
+            a_o_image.push(f_o_image(a_bytes, n_address));
         }
-        if (!s_sudo_password) {
-            return { b_success: false, s_ip__esp: '', s_error: 'No password provided for serial port permissions' };
-        }
-        let o_command = new Deno.Command('sudo', {
-            args: ['-S', 'chmod', '666', s_port],
-            stdout: 'piped',
-            stderr: 'piped',
-            stdin: 'piped',
-        });
-        let o_process = o_command.spawn();
-        let o_writer = o_process.stdin.getWriter();
-        await o_writer.write(new TextEncoder().encode(s_sudo_password + '\n'));
-        await o_writer.close();
-        let o_status = await o_process.status;
-        if (!o_status.success) {
-            return { b_success: false, s_ip__esp: '', s_error: 'Failed to fix serial port permissions (wrong password?)' };
-        }
-        f_on_line(`Permissions fixed on ${s_port}.`, 'stdout');
-    }
-
-    // compile
-    f_on_line('--- Compiling firmware (this may take a while on first run) ---', 'stdout');
-    let b_compiled = await f_run_and_stream(s_bin, [
-        'compile',
-        '--fqbn', 'esp32:esp32:esp32s3',
-        s_path__tmp_dir,
-    ], f_on_line);
-
-    if (!b_compiled) {
-        return { b_success: false, s_ip__esp: '', s_error: 'Compilation failed' };
-    }
-    f_on_line('Compilation successful!', 'stdout');
-
-    // upload
-    f_on_line(`--- Uploading firmware to ${s_port} ---`, 'stdout');
-    let b_uploaded = await f_run_and_stream(s_bin, [
-        'upload',
-        '--fqbn', 'esp32:esp32:esp32s3',
-        '-p', s_port,
-        s_path__tmp_dir,
-    ], f_on_line);
-
-    if (!b_uploaded) {
-        return { b_success: false, s_ip__esp: '', s_error: 'Upload failed' };
-    }
-    f_on_line('Firmware uploaded successfully!', 'stdout');
-
-    // read serial for IP
-    f_on_line('--- Waiting for ESP32 to connect to WiFi (30s timeout) ---', 'stdout');
-    let s_ip__esp = '';
-    try {
-        s_ip__esp = await f_s_read_serial_ip(s_bin, s_port, 30000, f_on_line);
-        f_on_line(`ESP32 connected! IP: ${s_ip__esp}`, 'stdout');
-    } catch (o_err) {
-        f_on_line(`Could not detect ESP32 IP automatically: ${o_err.message}`, 'stderr');
-        f_on_line('You can enter the IP manually on the setup page.', 'stderr');
-    }
-
-    return { b_success: true, s_ip__esp: s_ip__esp, s_error: '' };
-};
-
-// ─── Read ESP32 IP from serial output ───────────────────────────────
-
-let f_s_read_serial_ip = async function(s_bin, s_port, n_ms__timeout, f_on_line) {
-    // configure baud rate directly via stty — much faster than arduino-cli monitor
-    await f_run('stty', ['-F', s_port, '115200', 'raw', '-echo', '-echoe', '-echok']);
-
-    let o_file = await Deno.open(s_port, { read: true });
-    let o_reader = o_file.readable.getReader();
-    let o_decoder = new TextDecoder();
-    let s_buffer = '';
-
-    let o_promise__timeout = new Promise(function(_, reject) {
-        setTimeout(function() { reject(new Error('timeout')); }, n_ms__timeout);
-    });
-
-    let o_promise__read = (async function() {
-        while (true) {
-            let { done, value } = await o_reader.read();
-            if (done) break;
-            let s_chunk = o_decoder.decode(value, { stream: true });
-            s_buffer += s_chunk;
-            if (s_chunk.trim()) {
-                f_on_line(s_chunk.trim(), 'stdout');
-            }
-
-            let o_match = s_buffer.match(/IP:\s*(\d+\.\d+\.\d+\.\d+)/);
-            if (o_match) {
-                return o_match[1];
-            }
-        }
-        throw new Error('Serial closed without IP');
-    })();
-
-    try {
-        return await Promise.race([o_promise__read, o_promise__timeout]);
+        // The Arduino core's merged image includes its matching OTA boot selector.
+        let a_merged = await Deno.readFile(`${s_output}/stepper_websocket.ino.merged.bin`);
+        if (a_merged.length < 0x10000) throw new Error('Incomplete merged firmware image');
+        a_o_image.splice(2, 0, f_o_image(a_merged.slice(0xe000, 0x10000), 0xe000));
+        f_on_line('Firmware ready for browser USB upload.', 'stdout');
+        return { b_success: true, s_chip: 'ESP32-S3', a_o_image };
+    } catch (o_error) {
+        return { b_success: false, s_error: o_error.message };
     } finally {
-        try { o_reader.cancel(); } catch { /* ignore */ }
-        try { o_file.close(); } catch { /* ignore */ }
+        b_building = false;
+        if (s_dir) await Deno.remove(s_dir, { recursive: true });
     }
 };
+
+function f_o_image(a_bytes, n_address) {
+    let a_padded = new Uint8Array(Math.ceil(a_bytes.length / 4) * 4).fill(0xff);
+    a_padded.set(a_bytes);
+    a_bytes = a_padded;
+    let s_binary = '';
+    for (let n = 0; n < a_bytes.length; n += 8192) {
+        s_binary += String.fromCharCode(...a_bytes.subarray(n, n + 8192));
+    }
+    return { n_address, s_base64: btoa(s_binary), s_md5: createHash('md5').update(a_bytes).digest('hex') };
+}
 
 export {
-    f_o_detect_esp_usb,
-    f_o_check_arduino_cli,
-    f_generate_ino,
-    f_flash_esp,
-    f_install_arduino_cli,
-    f_install_esp32_deps,
+    f_o_detect_esp_usb, f_o_check_arduino_cli, f_generate_ino,
+    f_compile_esp, f_install_arduino_cli, f_install_esp32_deps,
 };

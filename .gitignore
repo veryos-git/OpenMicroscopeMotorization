@@ -3,7 +3,9 @@
 .claude/
 image_stitching_test/
 scans/
+recordings/
 venv/
+venv_cellpose/
 weights/
 __pycache__/
 *.pyc

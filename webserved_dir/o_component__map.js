@@ -1,4 +1,4 @@
-import {
+import { f_n_motor__axis,
     o_state,
     f_send_wsmsg_with_response,
     f_save_setting__debounced,
@@ -392,8 +392,8 @@ let o_component__map = {
             let n_step__x = Math.round((n_x__full - n_x__cur) * o_self.n_step__per_px_x);
             let n_step__y = Math.round((n_y__full - n_y__cur) * o_self.n_step__per_px_y);
 
-            if(n_step__x) await f_send_esp_move_step(0, n_step__x, o_state.n_rpm__jog || 5);
-            if(n_step__y) await f_send_esp_move_step(1, n_step__y, o_state.n_rpm__jog || 5);
+            if(n_step__x) await f_send_esp_move_step(f_n_motor__axis('x'), n_step__x, o_state.n_rpm__jog || 5);
+            if(n_step__y) await f_send_esp_move_step(f_n_motor__axis('y'), n_step__y, o_state.n_rpm__jog || 5);
         },
     },
     mounted: function() {

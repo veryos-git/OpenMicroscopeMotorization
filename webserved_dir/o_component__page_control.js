@@ -24,6 +24,11 @@ let o_component__page_control = {
         <o_component__autostitch />
         <o_component__focus />
         <o_component__focus_stack />
+        <o_component__cellpose />
+        <o_component__zoom />
+        <o_component__record />
+        <o_component__recording_library />
+        <o_component__video />
         <o_component__backlash />
         <o_component__slide_library />
     `,

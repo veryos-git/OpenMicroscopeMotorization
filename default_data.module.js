@@ -16,9 +16,9 @@ let a_o_data_default = [
     { o_setting: { s_key: 's_wifi_ssid', s_value: '' } },
     { o_setting: { s_key: 's_wifi_password', s_value: '' } },
     { o_setting: { s_key: 'a_o_pin_config', s_value: JSON.stringify([
-        { s_name: 'Motor X', n_pin1: 4, n_pin2: 5, n_pin3: 6, n_pin4: 7 },
-        { s_name: 'Motor Y', n_pin1: 15, n_pin2: 16, n_pin3: 17, n_pin4: 18 },
-        { s_name: 'Motor Z', n_pin1: 8, n_pin2: 9, n_pin3: 10, n_pin4: 11 },
+        { s_name: 'Motor 1', n_pin1: 4, n_pin2: 5, n_pin3: 6, n_pin4: 7 },
+        { s_name: 'Motor 2', n_pin1: 15, n_pin2: 16, n_pin3: 17, n_pin4: 18 },
+        { s_name: 'Motor 3', n_pin1: 8, n_pin2: 3, n_pin3: 46, n_pin4: 9 },
     ]) } },
 ]
 

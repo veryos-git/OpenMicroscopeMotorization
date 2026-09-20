@@ -39,6 +39,18 @@ body {
   object-fit: contain; background: #000;
   z-index: 1;
 }
+/* cellpose segmentation mask, drawn straight onto the main window.  it has to
+   mirror #webcamVideo exactly (same box, same object-fit) or the masks would
+   not sit on the cells.  above the video and the filter canvas, below the
+   panels (z-index 100) and the capture flash.
+   pointer-events: none keeps mouse jog working through the mask. */
+#cellposeMask {
+  position: fixed; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: contain;
+  z-index: 4;
+  pointer-events: none;
+}
 #webcamPlaceholder {
   position: fixed; inset: 0;
   display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px;
@@ -58,6 +70,44 @@ body {
   opacity: 1;
   transition: opacity 90ms ease-in;
 }
+
+/* ─── Digital zoom: region of interest + pick layer ─── */
+/* the picked region is projected straight onto the live image.  pointer-events
+   none keeps mouse jog (z 10) and every other overlay working underneath.
+   above the cellpose mask (z 4), below the panels (z 50). */
+.zoom-roi-canvas {
+  position: fixed; inset: 0;
+  width: 100%; height: 100%;
+  z-index: 6;
+  pointer-events: none;
+}
+/* full-window drag layer.  it is transparent to the pointer until picking is
+   armed (Select area or Ctrl), so a plain drag on the image still jogs the
+   stage; while armed it sits above the mouse-jog overlay (z 10). */
+.zoom-select-overlay {
+  position: fixed; inset: 0; z-index: 20;
+  background: transparent; cursor: crosshair; user-select: none;
+  touch-action: none; pointer-events: none;
+  transition: box-shadow 0.15s;
+}
+.zoom-select-overlay.armed {
+  pointer-events: auto;
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent-1) 45%, transparent);
+}
+.zoom-select-overlay.dragging {
+  box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--accent-1) 85%, transparent);
+}
+.zoom-select-hint {
+  position: absolute; top: calc(var(--topbar-h) + 44px); left: 50%;
+  transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 6px 14px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--border);
+  backdrop-filter: var(--glass); -webkit-backdrop-filter: var(--glass);
+  font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
+  color: var(--text); white-space: nowrap; pointer-events: none;
+}
+.zoom-select-hint span { font-size: 0.6rem; color: var(--dim); }
 
 /* ─── Toolbar (always visible) ─── */
 .toolbar {
@@ -294,6 +344,137 @@ input[type="range"].toolbar-cam-range::-moz-range-thumb { width: 12px; height: 1
 .panel-jog      { bottom: 16px; left: 16px; top: var(--topbar-h); width: 460px; overflow-y: auto; }
 .panel-minimap  { top: var(--topbar-h); right: 16px; width: 360px; }
 .panel-motors   { bottom: 16px; right: 16px; width: 360px; max-height: calc(100vh - 370px); overflow-y: auto; }
+
+/* ─── Digital zoom magnifier window ─── */
+/* position is inline (left/top), so the window can be dragged by its header */
+.panel-zoom { max-width: calc(100vw - 32px); }
+.panel-zoom .panel-body { padding: 12px; position: relative; }
+.zoom-header { cursor: grab; }
+.panel-zoom.dragging-panel .zoom-header { cursor: grabbing; }
+.panel-zoom.resizing { user-select: none; }
+/* corner grip: drag it to resize the preview window */
+.zoom-resize-handle {
+  position: absolute; right: 3px; bottom: 3px;
+  width: 18px; height: 18px;
+  cursor: nwse-resize; touch-action: none;
+  border-right: 2px solid var(--dim); border-bottom: 2px solid var(--dim);
+  border-radius: 0 0 6px 0; opacity: 0.65;
+}
+.zoom-resize-handle:hover { border-color: var(--accent-1); opacity: 1; }
+.zoom-stage {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 180px; max-width: 100%;
+  background: #000; border: 1px solid var(--border); border-radius: 8px;
+  overflow: hidden;
+  user-select: none; touch-action: none;
+}
+/* once a region is picked, the picture can be grabbed and panned */
+.zoom-stage.pannable { cursor: grab; }
+.zoom-stage.panning { cursor: grabbing; }
+.zoom-mag-canvas { display: block; }
+.zoom-stage-empty {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.65rem;
+  color: var(--dim); text-align: center; pointer-events: none;
+}
+.zoom-readout {
+  display: flex; justify-content: space-between; align-items: center;
+  margin: 8px 0 10px;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.65rem;
+  color: var(--dim); text-transform: uppercase; letter-spacing: 1px;
+}
+.zoom-readout b { color: var(--text); }
+
+/* ─── Record panel (time-lapse) ─── */
+.panel-record {
+  top: var(--topbar-h); left: 16px; width: 392px;
+  max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
+  --card-accent: var(--danger);
+}
+.panel-record-library {
+  top: var(--topbar-h); left: 50%; transform: translateX(-50%); width: 440px;
+  max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
+  --card-accent: var(--danger);
+}
+.record-live {
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, var(--border));
+  border-radius: 8px; padding: 10px;
+  background: color-mix(in srgb, var(--danger) 7%, transparent);
+}
+.record-live-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.record-live-msg { color: var(--dim); font-size: 0.68rem; }
+.record-dot {
+  width: 9px; height: 9px; border-radius: 50%; background: var(--danger);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--danger) 70%, transparent);
+  animation: record-pulse 1.6s ease-in-out infinite;
+}
+.record-dot.pause { background: var(--yellow); animation: none; box-shadow: none; }
+@keyframes record-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+.record-progress {
+  height: 6px; border-radius: 3px; overflow: hidden;
+  background: rgba(255,255,255,0.08);
+}
+.record-progress-bar {
+  height: 100%; background: var(--accent-1);
+  transition: width 0.3s ease-out;
+}
+.record-stats {
+  display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--dim);
+}
+.record-stats b { color: var(--text); }
+.record-readout {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--text);
+  padding: 5px 0;
+}
+.record-check {
+  display: flex; align-items: center; gap: 8px; margin-top: 8px;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: var(--text);
+  cursor: pointer;
+}
+.record-check input[type="checkbox"] { accent-color: var(--accent-1); width: 15px; height: 15px; }
+.record-position {
+  display: flex; align-items: center; gap: 8px; margin-top: 6px;
+  padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px;
+  background: rgba(10,10,12,0.4);
+  font-family: 'JetBrains Mono', monospace; font-size: 0.66rem;
+}
+.record-position-name { flex: 1; color: var(--text); }
+.record-position-pos { color: var(--dim); }
+.record-error { margin-top: 8px; font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; color: var(--danger); }
+.record-warn { margin-top: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; color: var(--yellow); }
+.record-dim { font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; color: var(--dim); }
+.record-path { margin-top: 4px; word-break: break-all; }
+.record-session {
+  border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px;
+}
+.record-session-head { display: flex; gap: 10px; align-items: flex-start; }
+.record-session-thumb {
+  width: 72px; height: 54px; object-fit: cover;
+  border: 1px solid var(--border); border-radius: 6px; background: #000;
+}
+.record-session-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.record-session-title b { font-size: 0.78rem; }
+.record-session-video {
+  width: 100%; margin-top: 8px; border-radius: 6px;
+  background: #000; border: 1px solid var(--border);
+}
+.record-danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+.record-danger:hover { color: #000; background: var(--danger); border-color: var(--danger); }
+.toolbar-record-stop {
+  background: var(--danger); color: #000; border-color: var(--danger);
+  font-weight: 700;
+}
+.toolbar-record-stop:hover { background: var(--danger); color: #000; filter: brightness(1.1); }
+
+/* ─── Video panel (MediaRecorder) ─── */
+.panel-video {
+  top: var(--topbar-h); left: 424px; width: 340px;
+  max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
+  --card-accent: var(--accent-0);
+}
 
 /* ─── Jog settings panel contents ─── */
 .jog-section-header {
@@ -922,8 +1103,7 @@ input[type="range"]::-moz-range-thumb {
   color: var(--dim); margin-top: 8px; text-align: center;
 }
 
-/* Web Serial holds the tty exclusively, so the flash button stays disabled
-   until the port is disconnected — make that state and its escape obvious. */
+/* Setup hints and USB connection actions. */
 .setup-hint--blocked {
   color: var(--accent-0);
 }
@@ -1649,6 +1829,86 @@ input[type="range"]::-moz-range-thumb {
 .btn-autostitch-stop { border-color: var(--danger); color: var(--danger); }
 .btn-autostitch-stop:hover { background: var(--danger); color: #000; }
 .btn-autostitch-reset:hover { border-color: var(--text); }
+
+/* ─── Cell pose panel ─── */
+.panel-cellpose {
+  top: var(--topbar-h); right: 16px; width: 340px;
+  max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
+  --card-accent: var(--accent-2);
+}
+
+.cellpose-field { margin-bottom: 10px; }
+.cellpose-field label {
+  display: block;
+  font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
+  font-weight: 700; color: var(--dim); text-transform: uppercase;
+  letter-spacing: 1px; margin-bottom: 4px;
+}
+.cellpose-field input,
+.cellpose-field select {
+  width: 100%; padding: 6px 10px;
+  background: rgba(10,10,12,0.6); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text);
+  font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+  outline: none;
+}
+.cellpose-field input:focus,
+.cellpose-field select:focus { border-color: var(--accent-2); }
+.cellpose-field input[type="range"] { padding: 0; border: none; background: transparent; }
+
+.cellpose-hint {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.66rem;
+  color: var(--dim); line-height: 1.5; margin-bottom: 10px;
+}
+.cellpose-mono { color: var(--accent-2); }
+
+.cellpose-info { display: flex; align-items: baseline; gap: 6px; margin-bottom: 6px; }
+.cellpose-count {
+  font-family: 'JetBrains Mono', monospace; font-size: 1.4rem;
+  font-weight: 700; color: var(--text);
+}
+.cellpose-label {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--dim);
+}
+
+.cellpose-status {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
+  color: var(--accent-0); text-align: center; margin: 8px 0;
+  overflow-wrap: anywhere;
+}
+
+/* "the stage is moving" notice: it explains why capture is refused / the loop
+   is paused, so it reads as a state, not as an error */
+.cellpose-lock {
+  font-family: 'JetBrains Mono', monospace; font-size: 0.68rem;
+  color: var(--yellow); text-align: center; line-height: 1.5;
+  margin-bottom: 10px; padding: 6px 8px;
+  border: 1px solid var(--yellow); border-radius: 6px;
+  background: color-mix(in srgb, var(--yellow) 8%, transparent);
+}
+
+.btn-cellpose-start,
+.btn-cellpose-stop,
+.btn-cellpose-remove {
+  width: 100%; padding: 10px 16px; border-radius: 8px;
+  border: 1px solid var(--border); background: transparent; color: var(--text);
+  font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; font-weight: 700;
+  cursor: pointer; transition: all 0.2s; text-transform: uppercase; letter-spacing: 1px;
+}
+.btn-cellpose-start { background: var(--accent-2); color: #000; border-color: var(--accent-2); }
+.btn-cellpose-start:hover { filter: brightness(1.1); }
+.btn-cellpose-start:disabled { opacity: 0.5; cursor: not-allowed; filter: none; }
+.btn-cellpose-stop { border-color: var(--danger); color: var(--danger); }
+.btn-cellpose-stop:hover { background: var(--danger); color: #000; }
+/* "Remove mask" is a secondary action: quieter than start/stop, with a gap so
+   it does not read as part of the stop button */
+.btn-cellpose-remove {
+  margin-top: 8px; padding: 7px 12px; font-size: 0.7rem;
+  color: var(--dim); border-color: var(--border);
+}
+.btn-cellpose-remove:hover { color: var(--text); border-color: var(--text); }
+
+.cellpose-log-wrap { margin-top: 10px; }
 
 /* ─── Macro panel ─── */
 .panel-macro {

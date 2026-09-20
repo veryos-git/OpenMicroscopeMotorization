@@ -1,4 +1,4 @@
-import { o_state, f_send_esp_move_step, f_send_esp_stop, f_send_esp_stop_all, f_send_esp_circle_start, f_save_setting__debounced } from './index.js';
+import { f_n_motor__axis, o_state, f_send_esp_move_step, f_send_esp_stop, f_send_esp_stop_all, f_send_esp_circle_start, f_save_setting__debounced } from './index.js';
 
 let N_MS__MOVE_TIMEOUT = 30000;
 
@@ -230,28 +230,33 @@ let o_component__auto_move = {
 
             // +X
             o_self.s_status__detail = 'Moving +X...';
-            await o_self.f_move_motor_n_step(0, o_self.n_step__x);
+            await o_self.f_move_motor_n_step(f_n_motor__axis('x'), o_self.n_step__x);
             if (o_self.b_stop_requested) return;
 
             // +Y
             o_self.s_status__detail = 'Moving +Y...';
-            await o_self.f_move_motor_n_step(1, o_self.n_step__y);
+            await o_self.f_move_motor_n_step(f_n_motor__axis('y'), o_self.n_step__y);
             if (o_self.b_stop_requested) return;
 
             // -X
             o_self.s_status__detail = 'Moving -X...';
-            await o_self.f_move_motor_n_step(0, -o_self.n_step__x);
+            await o_self.f_move_motor_n_step(f_n_motor__axis('x'), -o_self.n_step__x);
             if (o_self.b_stop_requested) return;
 
             // -Y
             o_self.s_status__detail = 'Moving -Y...';
-            await o_self.f_move_motor_n_step(1, -o_self.n_step__y);
+            await o_self.f_move_motor_n_step(f_n_motor__axis('y'), -o_self.n_step__y);
         },
 
         // ── Main execution ───────────────────────────────────────────
 
         f_run: async function(b_loop) {
             let o_self = this;
+            if(o_self.s_mode === 'circle' && !o_state.b_axis_assignment__circle &&
+                (f_n_motor__axis('x') !== 0 || f_n_motor__axis('y') !== 1)){
+                o_self.s_status__detail = 'Update ESP32 firmware from Setup to use circle motion with these axis assignments.';
+                return;
+            }
             o_self.b_running = true;
             o_self.b_loop = b_loop;
             o_self.b_stop_requested = false;

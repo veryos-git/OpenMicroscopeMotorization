@@ -76,9 +76,9 @@ let o_component__focus = {
                     <div class="focus-field">
                         <label>Focus motor</label>
                         <select v-model="o_config.s_motor" @change="f_save_config">
-                            <option value="0">M0</option>
-                            <option value="1">M1</option>
-                            <option value="2">M2</option>
+                            <option value="0">Motor 1</option>
+                            <option value="1">Motor 2</option>
+                            <option value="2">Motor 3</option>
                         </select>
                     </div>
                     <div class="focus-field">

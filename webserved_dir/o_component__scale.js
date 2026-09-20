@@ -1,4 +1,4 @@
-import { o_state, f_save_calibration, f_save_setting__debounced } from './index.js';
+import { f_n_motor__axis, o_state, f_save_calibration, f_save_setting__debounced } from './index.js';
 import { f_o_frame__imagedata } from './o_capture.module.js';
 
 // scale (µm / pixel) calibration: freeze a frame of a stage micrometer (or any
@@ -116,13 +116,13 @@ let o_component__scale = {
         },
         n_um__per_step__x: function() {
             let n_um__per_px = o_state.o_calibration.n_um__per_px;
-            let n_step__per_px = (o_state.a_n_step__per_px && o_state.a_n_step__per_px[0]) || 0;
+            let n_step__per_px = (o_state.a_n_step__per_px && o_state.a_n_step__per_px[f_n_motor__axis('x')]) || 0;
             if(!n_um__per_px || !n_step__per_px) return 0;
             return n_um__per_px / n_step__per_px;
         },
         n_um__per_step__y: function() {
             let n_um__per_px = o_state.o_calibration.n_um__per_px;
-            let n_step__per_px = (o_state.a_n_step__per_px && o_state.a_n_step__per_px[1]) || 0;
+            let n_step__per_px = (o_state.a_n_step__per_px && o_state.a_n_step__per_px[f_n_motor__axis('y')]) || 0;
             if(!n_um__per_px || !n_step__per_px) return 0;
             return n_um__per_px / n_step__per_px;
         },

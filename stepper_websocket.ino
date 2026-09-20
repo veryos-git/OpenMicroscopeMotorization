@@ -9,7 +9,7 @@
  * Wiring (ULN2003 driver boards, external 5 V supply):
  *   Motor 0: GPIO4, GPIO5, GPIO6, GPIO7
  *   Motor 1: GPIO15, GPIO16, GPIO17, GPIO18
- *   Motor 2: GPIO8, GPIO9, GPIO10, GPIO11
+ *   Motor 2: { s_name: 'Motor 3', n_pin1: 8, n_pin2: 3, n_pin3: 46, n_pin4: 9 },
  *
  * WebSocket endpoint: ws://<ESP_IP>/ws
  * USB Serial endpoint: 115200 baud, one JSON command per line (newline-terminated)
@@ -37,6 +37,15 @@
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
+#include <HWCDC.h>
+
+// Serve both the USB-to-UART bridge and the native ESP32-S3 USB port.
+// The default Arduino board profile maps Serial to UART0 only.
+#if ARDUINO_USB_CDC_ON_BOOT
+#define MotorUSBSerial Serial
+#else
+HWCDC MotorUSBSerial;
+#endif
 
 // ─── WiFi credentials ───────────────────────────────────────────────
 const char* WIFI_SSID = "{{wifi_ssid}}";
@@ -121,6 +130,8 @@ int n_cnt__move_event = 0;
 // While active, external motor commands are blocked.
 
 struct CircleState {
+    int n_motor__x = 0;
+    int n_motor__y = 1;
     bool  b_active;
     bool  b_loop;
     long  n_step__radius;
@@ -152,7 +163,9 @@ enum Transport { TR_WS, TR_SERIAL };
 Transport g_transport = TR_SERIAL;
 
 bool b_wifi_reported = false;
-String s_serial_buffer = "";
+String s_serial_buffer__uart = "";
+String s_serial_buffer__usb = "";
+Stream* o_serial__reply = &Serial0;
 
 void handleCommand(const uint8_t *data, size_t len);
 
@@ -161,7 +174,7 @@ void sendJson(JsonDocument &doc) {
     String json;
     serializeJson(doc, json);
     if (g_transport == TR_SERIAL) {
-        Serial.println(json);
+        o_serial__reply->println(json);
     } else {
         ws.textAll(json);
     }
@@ -175,12 +188,13 @@ void sendJsonError(const char* s_error) {
 
 // Read complete newline-terminated JSON commands from USB Serial and dispatch
 // them exactly like WebSocket frames.
-void handleSerial() {
-    while (Serial.available()) {
-        char c = (char)Serial.read();
+void handleSerialPort(Stream &port, String &s_serial_buffer) {
+    while (port.available()) {
+        char c = (char)port.read();
         if (c == '\n' || c == '\r') {
             if (s_serial_buffer.length() > 0) {
                 g_transport = TR_SERIAL;
+                o_serial__reply = &port;
                 handleCommand((const uint8_t*)s_serial_buffer.c_str(), s_serial_buffer.length());
                 s_serial_buffer = "";
             }
@@ -189,6 +203,11 @@ void handleSerial() {
             if (s_serial_buffer.length() > 512) s_serial_buffer = "";  // discard runaway line
         }
     }
+}
+
+void handleSerial() {
+    handleSerialPort(Serial0, s_serial_buffer__uart);
+    handleSerialPort(MotorUSBSerial, s_serial_buffer__usb);
 }
 
 // ─── Motor helpers ──────────────────────────────────────────────────
@@ -362,9 +381,11 @@ void circleInit() {
     circle.n_us__revolution    = 0;
 }
 
-void circleStart(long n_radius, float n_rpm, bool b_loop) {
-    motorStop(0);
-    motorStop(1);
+void circleStart(long n_radius, float n_rpm, bool b_loop, int n_motor__x, int n_motor__y) {
+    circle.n_motor__x = n_motor__x;
+    circle.n_motor__y = n_motor__y;
+    motorStop(circle.n_motor__x);
+    motorStop(circle.n_motor__y);
 
     circle.b_active          = true;
     circle.b_loop            = b_loop;
@@ -372,8 +393,8 @@ void circleStart(long n_radius, float n_rpm, bool b_loop) {
     circle.n_rpm             = n_rpm;
     circle.n_phase           = 0;
     circle.b_segment_started = false;
-    circle.n_pos_x__center   = motors[0].n_position;
-    circle.n_pos_y__center   = motors[1].n_position;
+    circle.n_pos_x__center   = motors[circle.n_motor__x].n_position;
+    circle.n_pos_y__center   = motors[circle.n_motor__y].n_position;
 
     // time for one revolution (microseconds)
     // circumference = 2*PI*R steps, tangential speed = RPM * 4096 / 60 steps/sec
@@ -385,8 +406,8 @@ void circleStart(long n_radius, float n_rpm, bool b_loop) {
 
 void circleStop() {
     if (!circle.b_active) return;
-    motorStop(0);
-    motorStop(1);
+    motorStop(circle.n_motor__x);
+    motorStop(circle.n_motor__y);
     circle.b_active = false;
     circleSendEvent("circleStopped");
 }
@@ -398,7 +419,7 @@ void circleUpdate() {
     // ── Phase 0: move from center to start (R, 0) via motorMoveSteps ──
     if (circle.n_phase == 0) {
         if (circle.b_segment_started) {
-            if (motors[0].b_running || motors[1].b_running) return;
+            if (motors[circle.n_motor__x].b_running || motors[circle.n_motor__y].b_running) return;
             // move-to-start complete → begin tracing
             circle.b_segment_started = false;
             circle.n_phase = 1;
@@ -406,7 +427,7 @@ void circleUpdate() {
             return;
         }
         // issue the move
-        motorMoveSteps(0, circle.n_step__radius, circle.n_rpm);
+        motorMoveSteps(circle.n_motor__x, circle.n_step__radius, circle.n_rpm);
         circle.b_segment_started = true;
         return;
     }
@@ -419,14 +440,14 @@ void circleUpdate() {
 
         // check for revolution complete
         if (!circle.b_loop && n_angle >= 2.0 * PI) {
-            motorStop(0);
-            motorStop(1);
+            motorStop(circle.n_motor__x);
+            motorStop(circle.n_motor__y);
             // return to exact center position
             circle.n_phase = 2;
-            long n_dx = circle.n_pos_x__center - motors[0].n_position;
-            long n_dy = circle.n_pos_y__center - motors[1].n_position;
-            if (n_dx != 0) motorMoveSteps(0, n_dx, circle.n_rpm);
-            if (n_dy != 0) motorMoveSteps(1, n_dy, circle.n_rpm);
+            long n_dx = circle.n_pos_x__center - motors[circle.n_motor__x].n_position;
+            long n_dy = circle.n_pos_y__center - motors[circle.n_motor__y].n_position;
+            if (n_dx != 0) motorMoveSteps(circle.n_motor__x, n_dx, circle.n_rpm);
+            if (n_dy != 0) motorMoveSteps(circle.n_motor__y, n_dy, circle.n_rpm);
             circle.b_segment_started = (n_dx != 0 || n_dy != 0);
             return;
         }
@@ -452,27 +473,27 @@ void circleUpdate() {
 
         // update motor X
         if (n_rpm_x < N_RPM_MIN) {
-            motors[0].n_us__step_delay = 0;   // pause stepping, keep coils held
+            motors[circle.n_motor__x].n_us__step_delay = 0;   // pause stepping, keep coils held
         } else {
-            motors[0].n_direction = n_dir_x;
-            motorSetRPM(0, n_rpm_x);
-            if (!motors[0].b_running) {
-                motors[0].mode = MODE_CONTINUOUS;
-                motors[0].b_running = true;
-                motors[0].n_us__last_step = n_now;
+            motors[circle.n_motor__x].n_direction = n_dir_x;
+            motorSetRPM(circle.n_motor__x, n_rpm_x);
+            if (!motors[circle.n_motor__x].b_running) {
+                motors[circle.n_motor__x].mode = MODE_CONTINUOUS;
+                motors[circle.n_motor__x].b_running = true;
+                motors[circle.n_motor__x].n_us__last_step = n_now;
             }
         }
 
         // update motor Y
         if (n_rpm_y < N_RPM_MIN) {
-            motors[1].n_us__step_delay = 0;
+            motors[circle.n_motor__y].n_us__step_delay = 0;
         } else {
-            motors[1].n_direction = n_dir_y;
-            motorSetRPM(1, n_rpm_y);
-            if (!motors[1].b_running) {
-                motors[1].mode = MODE_CONTINUOUS;
-                motors[1].b_running = true;
-                motors[1].n_us__last_step = n_now;
+            motors[circle.n_motor__y].n_direction = n_dir_y;
+            motorSetRPM(circle.n_motor__y, n_rpm_y);
+            if (!motors[circle.n_motor__y].b_running) {
+                motors[circle.n_motor__y].mode = MODE_CONTINUOUS;
+                motors[circle.n_motor__y].b_running = true;
+                motors[circle.n_motor__y].n_us__last_step = n_now;
             }
         }
         return;
@@ -481,7 +502,7 @@ void circleUpdate() {
     // ── Phase 2: return to center via motorMoveSteps ──────────────────
     if (circle.n_phase == 2) {
         if (circle.b_segment_started) {
-            if (motors[0].b_running || motors[1].b_running) return;
+            if (motors[circle.n_motor__x].b_running || motors[circle.n_motor__y].b_running) return;
             circle.b_segment_started = false;
         }
         circle.b_active = false;
@@ -551,6 +572,7 @@ void motorsUpdate() {
 void sendStatus(AsyncWebSocketClient *client = nullptr) {
     JsonDocument doc;
     doc["type"] = "status";
+    doc["b_axis_assignment__circle"] = true;
     JsonArray arr = doc["a_o_motor"].to<JsonArray>();
     for (int i = 0; i < NUM_MOTORS; i++) {
         JsonObject mo = arr.add<JsonObject>();
@@ -586,7 +608,7 @@ void sendStatus(AsyncWebSocketClient *client = nullptr) {
     if (client != nullptr && g_transport == TR_WS) {
         client->text(json);
     } else {
-        if (g_transport == TR_SERIAL) Serial.println(json);
+        if (g_transport == TR_SERIAL) o_serial__reply->println(json);
         else                          ws.textAll(json);
     }
 }
@@ -621,7 +643,15 @@ void handleCommand(const uint8_t *data, size_t len) {
             float n_rpm    = doc["n_rpm"]           | 8.0f;
             bool  b_loop   = doc["b_loop"]          | false;
             if (n_radius < 1) n_radius = 1;
-            circleStart(n_radius, n_rpm, b_loop);
+            int n_motor__x = doc["n_motor__x"] | 0;
+            int n_motor__y = doc["n_motor__y"] | 1;
+            if (n_motor__x < 0 || n_motor__x >= NUM_MOTORS ||
+                n_motor__y < 0 || n_motor__y >= NUM_MOTORS || n_motor__x == n_motor__y) {
+                sendJsonError("invalid circle axis assignment");
+                return;
+            }
+            if (circle.b_active) circleStop();
+            circleStart(n_radius, n_rpm, b_loop, n_motor__x, n_motor__y);
             sendStatus(); return;
         }
 
@@ -712,7 +742,8 @@ void onWsEvent(AsyncWebSocket *srv, AsyncWebSocketClient *client,
 // ─── Setup ──────────────────────────────────────────────────────────
 
 void setup() {
-    Serial.begin(115200);
+    Serial0.begin(115200);
+    MotorUSBSerial.begin(115200);
     delay(500);
     Serial.println("\n=== Stepper Serial + WebSocket API ===\n");
 

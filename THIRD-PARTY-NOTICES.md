@@ -33,7 +33,8 @@ Deno itself (the runtime, not distributed here) is MIT licensed.
 
 ## Python
 
-Installed into `./venv` by `deno task install`.
+Installed into `./venv` by `deno task install` (Cellpose additionally gets its
+own `./venv_cellpose`, see below).
 
 | component | use | licence |
 | --- | --- | --- |
@@ -44,9 +45,31 @@ Installed into `./venv` by `deno task install`.
 | [Kornia](https://github.com/kornia/kornia) | LoFTR rescue matcher and image ops | Apache-2.0 |
 | [Matplotlib](https://matplotlib.org/) | plots in the focus/backlash panels | PSF-based, BSD-compatible |
 | [Pillow](https://python-pillow.org/) | image I/O | MIT-CMU |
-| NetworkX, SymPy, Jinja2, MarkupSafe, ContourPy, cycler, fontTools, kiwisolver, mpmath, fsspec, filelock, packaging, pyparsing, python-dateutil, six, typing_extensions, Triton | transitive dependencies of the above | BSD / MIT / Apache-2.0 |
-| NVIDIA CUDA wheels (`nvidia-*`) | optional GPU runtime pulled in by PyTorch | NVIDIA proprietary, separately licensed; not part of this repository |
+| NetworkX, SymPy, Jinja2, MarkupSafe, ContourPy, cycler, fontTools, kiwisolver, mpmath, fsspec, filelock, packaging, pyparsing, python-dateutil, six, typing_extensions, Triton, natsort, tifffile, imagecodecs, roifile, fastremap, fill_voids, llvmlite, numba, segment_anything | transitive dependencies of the above and of Cellpose | BSD / MIT / Apache-2.0 |
+| NVIDIA CUDA wheels (`nvidia-*`, `cuda-*`), Triton | GPU runtime pulled in by the CUDA build of PyTorch, which is what `deno task install` picks whenever the machine has an NVIDIA card (use `--cpu` for the CPU-only build) | NVIDIA proprietary / BSD-3-Clause (Triton); separately licensed, not part of this repository |
 | `m2stitch` | optional, only used by the `test_m2stitch.py` comparison script | see the package metadata |
+
+### Cellpose (the `Cell pose` panel)
+
+Installed into its own `./venv_cellpose` by `deno task install`; the panel is
+optional and skipped entirely with `--skip-cellpose`.
+
+| component | use | licence |
+| --- | --- | --- |
+| [Cellpose](https://github.com/MouseLand/cellpose) (`cellpose`, `cellpose_worker.py`) | cell / nucleus segmentation of the camera feed | BSD-3-Clause (Copyright © 2020 Howard Hughes Medical Institute) |
+
+**The pretrained Cellpose models are not BSD.** Every model Cellpose downloads
+(`cpsam_v2`, `cyto3`, …) is trained on datasets released under **CC-BY-NC**, so
+the weights — and the segmentations produced with them — are for
+**non-commercial use only**. They are fetched at runtime into
+`./weights/cellpose/` (about 1.2 GB for `cpsam`, 25 MB for `cyto3`) by the
+dependency, not redistributed in this repository, in the same way the LightGlue
+SuperPoint weights are handled above. If you need a segmentation model for
+commercial use, train one on your own data (Cellpose supports this) or use a
+permissively licensed model.
+
+The BSD-3-Clause Cellpose *code* is compatible with this project's GPL-3.0
+licence; the CC-BY-NC model weights are a separate, non-commercial asset.
 
 Note: LightGlue downloads the pretrained **SuperPoint** weights at runtime into
 PyTorch's cache. Those weights originate from Magic Leap's SuperPoint release;
@@ -77,3 +100,11 @@ LGPL-3.0 is compatible with this project's GPL-3.0 licence.
 | --- | --- | --- |
 | [arduino-cli](https://github.com/arduino/arduino-cli) | compiles and uploads the firmware; downloaded at install time and invoked as a separate program | GPL-3.0 |
 | `esptool` | bundled with the ESP32 core, used by `arduino-cli upload` | GPL-2.0 |
+
+## Browser firmware flashing
+
+`webserved_dir/vendor/esptool-js-0.6.1.js` is the unmodified npm bundle from
+[Espressif esptool-js 0.6.1](https://github.com/espressif/esptool-js), licensed
+under Apache-2.0. Its license is included in `webserved_dir/vendor/esptool-js-LICENSE`.
+The bundle includes pako (MIT/Zlib), tslib (0BSD), and atob-lite (MIT);
+their licenses are included alongside the bundle.
