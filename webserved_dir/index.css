@@ -341,9 +341,7 @@ input[type="range"].toolbar-cam-range::-moz-range-thumb { width: 12px; height: 1
 .panel-body { padding: 16px; }
 
 /* Panel positions */
-.panel-jog      { bottom: 16px; left: 16px; top: var(--topbar-h); width: 460px; overflow-y: auto; }
 .panel-minimap  { top: var(--topbar-h); right: 16px; width: 360px; }
-.panel-motors   { bottom: 16px; right: 16px; width: 360px; max-height: calc(100vh - 370px); overflow-y: auto; }
 
 /* ─── Digital zoom magnifier window ─── */
 /* position is inline (left/top), so the window can be dragged by its header */
@@ -953,27 +951,13 @@ input[type="range"]::-moz-range-thumb {
 .o_toast.error { border-color: var(--danger); }
 .o_toast.expired { opacity: 0; }
 
-/* ─── Setup page ─── */
-.page-setup {
-  min-height: 100vh;
-  display: flex; align-items: center; justify-content: center;
-  padding: 24px;
-  background: var(--bg);
+/* ─── Hardware setup overlay ─── */
+.panel-setup {
+  top: var(--topbar-h); left: 16px;
+  width: 600px; max-width: calc(100vw - 32px);
+  max-height: calc(100vh - var(--topbar-h) - 16px);
   overflow-y: auto;
-}
-
-.setup-card {
-  width: 100%; max-width: 600px;
-  background: var(--surface);
-  backdrop-filter: var(--glass); -webkit-backdrop-filter: var(--glass);
-  border: 1px solid var(--border); border-radius: 16px;
-  padding: 32px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
-}
-
-.setup-title {
-  font-size: 1.6rem; font-weight: 700; letter-spacing: -0.5px;
-  margin-bottom: 4px;
+  z-index: 60;
 }
 
 .setup-subtitle {
@@ -1374,11 +1358,6 @@ input[type="range"]::-moz-range-thumb {
   max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
   --card-accent: var(--accent-2);
 }
-.panel-calibration {
-  top: var(--topbar-h); right: 16px; width: 360px;
-  max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
-  --card-accent: var(--accent-1);
-}
 .panel-scale {
   bottom: 16px; left: 50%; transform: translateX(-50%); width: 640px;
   max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
@@ -1569,11 +1548,6 @@ input[type="range"]::-moz-range-thumb {
 }
 
 /* ─── Backlash calibration panel ─── */
-.panel-backlash {
-  top: var(--topbar-h); left: 492px; width: 360px;
-  max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
-  --card-accent: var(--yellow);
-}
 .backlash-explain {
   font-family: 'JetBrains Mono', monospace; font-size: 0.62rem;
   color: var(--dim); line-height: 1.6; margin-bottom: 12px;
@@ -2167,8 +2141,89 @@ input[type="range"]::-moz-range-thumb {
   .toolbar-title { display: none; }
   .toolbar-sep:first-of-type { display: none; }
   .overlay-panel { width: calc(100vw - 32px) !important; left: 16px !important; right: 16px !important; }
-  .panel-motors { max-height: 50vh; }
-  .setup-card { padding: 20px; }
   .pin-config-header, .pin-config-row { grid-template-columns: 80px repeat(4, 1fr); gap: 4px; }
   .setup-input-row.inline { flex-direction: column; }
 }
+
+.setup-input-row select {
+  flex: 1; min-width: 0; padding: 8px 10px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--text);
+}
+
+/* One card per physical motor, including live controller feedback. */
+.hardware-motors { display: grid; gap: 12px; }
+.hardware-motor { padding: 14px; border: 1px solid var(--border); border-radius: 10px; background: rgba(0,0,0,0.16); }
+.hardware-motor.moving { border-color: var(--accent-1); box-shadow: inset 3px 0 var(--accent-1); }
+.hardware-motor-heading, .hardware-motor-assignment, .hardware-motor-actions { display: flex; align-items: center; gap: 10px; }
+.hardware-motor-heading h3 { font-size: 0.95rem; margin: 0; }
+.motor-motion-status { margin-left: auto; color: var(--dim); font-size: 0.75rem; }
+.hardware-motor.moving .motor-motion-status { color: var(--accent-1); }
+.motor-rotor { display: inline-block; font-size: 1.7rem; line-height: 1; color: var(--dim); }
+.motor-rotor.spinning { color: var(--accent-1); animation: hardware-motor-turn 2s linear infinite; }
+.motor-rotor.reverse { animation-direction: reverse; }
+@keyframes hardware-motor-turn { to { transform: rotate(360deg); } }
+.hardware-motor-assignment { margin-top: 12px; }
+.hardware-motor-assignment select { flex: 1; min-width: 0; }
+.hardware-motor-readout { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 12px 0; font-size: 0.8rem; color: var(--dim); }
+.hardware-motor-readout strong { color: var(--text); }
+.hardware-motor-actions { flex-wrap: wrap; }
+.hardware-motor-actions .btn-small { margin: 0; }
+.hardware-step-count { width: 80px; }
+.hardware-wiring { margin-top: 12px; }
+.hardware-wiring summary, .hardware-inputs summary, .hardware-controller summary { cursor: pointer; color: var(--dim); padding: 8px 0; }
+.hardware-pin-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; margin: 8px 0; }
+.hardware-pin-grid input { width: 100%; }
+.hardware-backlash { display: flex; gap: 10px; align-items: center; }
+.hardware-backlash input { width: 90px; }
+.hardware-pin-grid label, .hardware-backlash { font-size: 0.75rem; color: var(--dim); }
+.hardware-inputs, .hardware-controller { margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border); }
+.hardware-inputs h3 { font-size: 0.9rem; margin-bottom: 12px; }
+.hardware-motors input, .hardware-motors select, .hardware-inputs select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px; }
+.hardware-motors .setup-hint, .hardware-inputs .setup-hint { text-align: left; margin: 6px 0 10px; }
+@media (prefers-reduced-motion: reduce) { .motor-rotor.spinning { animation: none; } }
+
+/* PlayStation-style live gamepad display */
+.panel-gamepad { top: 70px; left: 50%; transform: translateX(-50%); width: 460px; max-width: calc(100vw - 32px); }
+.panel-gamepad .panel-body { max-height: calc(100dvh - 150px); overflow-y: auto; }
+.panel-gamepad select { width: 100%; margin-top: 8px; }
+.gamepad-layout { display: flex; gap: 24px; padding: 20px 12px; margin: 16px 0; border-radius: 36px; background: var(--bg-secondary, #20252c); border: 1px solid #586170; }
+.gamepad-layout.disconnected { opacity: .45; }
+.gamepad-half { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.gamepad-half b, .gamepad-half small { text-align: center; font-size: 12px; }
+.gamepad-trigger, .gamepad-shoulder { width: 100%; max-width: 125px; text-align: center; background: #333c49; border: 1px solid #6e7b8e; border-radius: 12px; padding: 7px; }
+.gamepad-trigger { min-height: 60px; display: flex; flex-direction: column; justify-content: space-around; }
+.gamepad-trigger meter { width: 100%; }
+.gamepad-cluster { display: grid; grid-template: repeat(3, 32px) / repeat(3, 32px); gap: 3px; }
+.gamepad-button { display: grid; place-items: center; border-radius: 50%; background: #333c49; border: 1px solid #6e7b8e; font-size: 22px; }
+.gamepad-button.position-0 { grid-area: 1 / 2; }
+.gamepad-button.position-1 { grid-area: 2 / 1; }
+.gamepad-button.position-2 { grid-area: 2 / 3; }
+.gamepad-button.position-3 { grid-area: 3 / 2; }
+.gamepad-stick { width: 94px; height: 94px; border-radius: 50%; background: #121820; border: 1px solid #6e7b8e; display: grid; place-items: center; }
+.gamepad-stick span { width: 32px; height: 32px; border-radius: 50%; background: #9cb1cc; border: 2px solid #d9e7fa; }
+.gamepad-layout .pressed { background: #247b66; color: #fff; border-color: #66efba; }
+.gamepad-enable { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
+.gamepad-status { font-size: 12px; color: #9cddca; }
+@media (max-width: 600px) { .panel-gamepad { transform: none; } }
+
+/* Action search and per-profile keymap editor. */
+.action-backdrop { position: fixed; inset: 0; z-index: 10000; background: #0009; display: flex; justify-content: center; align-items: flex-start; padding: 7vh 1rem; }
+.action-dialog { background: var(--bg, #181b22); color: var(--text, #eee); border: 1px solid var(--dim, #666); border-radius: 10px; padding: 1rem; width: 760px; max-width: 100%; max-height: 85vh; overflow: auto; }
+.action-dialog input, .action-dialog select, .action-dialog button { padding: .4rem; margin: .2rem; color: inherit; background: var(--bg, #181b22); border: 1px solid var(--dim, #666); border-radius: 4px; }
+.action-dialog input[aria-label="Search actions"] { width: 95%; }
+.action-results { max-height: 36vh; overflow: auto; margin: .6rem 0; }
+.action-results button { display: grid; width: 98%; text-align: left; gap: .3rem; cursor: pointer; }
+.action-results button.selected { border-color: #62b4ff; background: #24415b; }
+.action-results small { opacity: .8; }
+.action-dialog form label { display: inline-flex; align-items: center; }
+.action-dialog input[type="number"] { width: 6rem; }
+.action-error { position: fixed; right: 1rem; bottom: 1rem; z-index: 11000; padding: 1rem; background: #742e2e; color: white; max-width: 80vw; }
+.action-dialog input[aria-label="Search actions"] { display: block; width: calc(100% - .4rem); box-sizing: border-box; }
+.action-dialog > label { display: inline-flex; align-items: center; white-space: nowrap; }
+
+.hardware-calibration { margin: 10px 0; --card-accent: var(--yellow); }
+.hardware-calibration-controls { display: flex; align-items: center; gap: 10px; }
+.hardware-calibration-status { font-size: .75rem; color: var(--dim); overflow-wrap: anywhere; }
+.hardware-calibration-advanced > summary, .hardware-calibration-checklist > summary { cursor: pointer; padding: 8px 0; font-size: .78rem; }
+.hardware-calibration-advanced .focus-config { border: 0; padding: 0; min-width: 0; }
+.hardware-calibration-checklist-body { padding: 8px 0; }

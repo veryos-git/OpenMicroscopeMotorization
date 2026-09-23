@@ -162,7 +162,7 @@ let o_component__scan = {
                     <div class="scan-section">
                         <div class="scan-label">Focus</div>
                         <label class="scan-toggle">
-                            <input type="checkbox" v-model="b_focus__before_tile" @change="f_save_config" />
+                            <input type="checkbox" v-model="b_focus__before_tile" :disabled="o_state.o_motor__axis.z === null" @change="f_save_config" />
                             <span>Find focus before every image</span>
                         </label>
                         <div class="scan-hint">
@@ -173,13 +173,9 @@ let o_component__scan = {
                             per tile and keeps a tilted slide sharp all the way across.
                         </div>
 
-                        <div class="scan-field" v-if="b_focus__before_tile">
+                        <div class="scan-field">
                             <label>Focus motor</label>
-                            <select v-model="s_motor__focus" @change="f_save_config">
-                                <option value="0">Motor 1</option>
-                                <option value="1">Motor 2</option>
-                                <option value="2">Motor 3</option>
-                            </select>
+                            <span>{{ s_motor__focus_label }}</span>
                         </div>
                         <div class="scan-field" v-if="b_focus__before_tile">
                             <label>Search step</label>
@@ -379,7 +375,7 @@ let o_component__scan = {
 
             // per-tile focus
             b_focus__before_tile: false,
-            s_motor__focus: '2',
+
             n_step__focus: 20,
             n_step__focus_max: 120,
             n_ms__focus_settle: 250,
@@ -425,6 +421,10 @@ let o_component__scan = {
     },
 
     computed: {
+        s_motor__focus_label: function() {
+            let n_motor = f_n_motor__axis('z');
+            return n_motor === null ? 'No focus motor — configure Z in Setup → motor cards.' : 'Motor ' + (n_motor + 1) + ' (Z axis, set in Setup)';
+        },
         // the preview is only written for big mosaics, otherwise show the mosaic
         s_path__preview__shown: function() {
             return this.s_path__preview__stitch || this.s_path__stitched_image;
@@ -495,7 +495,6 @@ let o_component__scan = {
                     if (o_config.n_score__min) o_self.n_score__min = o_config.n_score__min;
                     if (typeof o_config.n_dim__max === 'number') o_self.n_dim__max = o_config.n_dim__max;
                     if (typeof o_config.b_focus__before_tile === 'boolean') o_self.b_focus__before_tile = o_config.b_focus__before_tile;
-                    if (o_config.s_motor__focus) o_self.s_motor__focus = o_config.s_motor__focus;
                     if (o_config.n_step__focus) o_self.n_step__focus = o_config.n_step__focus;
                     if (o_config.n_step__focus_max) o_self.n_step__focus_max = o_config.n_step__focus_max;
                     if (typeof o_config.n_ms__focus_settle === 'number') o_self.n_ms__focus_settle = o_config.n_ms__focus_settle;
@@ -516,7 +515,6 @@ let o_component__scan = {
                 n_tile_y: this.n_tile_y,
                 n_overlap__pct: this.n_overlap__pct,
                 b_focus__before_tile: this.b_focus__before_tile,
-                s_motor__focus: this.s_motor__focus,
                 n_step__focus: this.n_step__focus,
                 n_step__focus_max: this.n_step__focus_max,
                 n_ms__focus_settle: this.n_ms__focus_settle,
@@ -573,7 +571,7 @@ let o_component__scan = {
 
         f_o_focus: function() {
             let o_self = this;
-            let n_motor = parseInt(o_self.s_motor__focus, 10);
+            let n_motor = f_n_motor__axis('z');
             if(!o_self._o_cache__focus) o_self._o_cache__focus = {};
 
             return f_o_focus__fast({
@@ -820,7 +818,7 @@ let o_component__scan = {
 
                 // sharpen this tile before it is taken: a slide is never
                 // perfectly level, so the focus drifts across the grid
-                if (o_self.b_focus__before_tile) {
+                if (o_self.b_focus__before_tile && f_n_motor__axis('z') !== null) {
                     o_self.s_status__detail = 'Focusing...';
                     try {
                         let o_focus = await o_self.f_o_focus();

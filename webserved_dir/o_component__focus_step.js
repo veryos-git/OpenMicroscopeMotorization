@@ -1,4 +1,4 @@
-import { o_state, f_send_esp_move_step, f_send_esp_stop, f_save_setting__debounced, f_save_calibration } from './index.js';
+import { f_n_motor__axis, o_state, f_send_esp_move_step, f_send_esp_stop, f_save_setting__debounced, f_save_calibration } from './index.js';
 import { f_n_score__video, f_o_focus__fast } from './focus_search.module.js';
 
 // focus step / depth-of-field calibration.
@@ -82,11 +82,7 @@ let o_component__focus_step = {
                 <div class="focus-config">
                     <div class="focus-field">
                         <label>Focus motor</label>
-                        <select v-model="o_config.s_motor" @change="f_save_config">
-                            <option value="0">Motor 1</option>
-                            <option value="1">Motor 2</option>
-                            <option value="2">Motor 3</option>
-                        </select>
+                        <span>{{ s_motor__focus_label }}</span>
                     </div>
                     <div class="focus-field">
                         <label>Probe step</label>
@@ -163,7 +159,7 @@ let o_component__focus_step = {
             a_o_sample: [],
             o_result: null,
             o_config: {
-                s_motor: '2',
+
                 n_step__probe: 10,
                 n_its__sweep: 8,
                 n_ms__settle: 350,
@@ -173,8 +169,12 @@ let o_component__focus_step = {
         };
     },
     computed: {
+        s_motor__focus_label: function() {
+            let n_motor = f_n_motor__axis('z');
+            return n_motor === null ? 'No focus motor — configure Z in Setup → motor cards.' : 'Motor ' + (n_motor + 1) + ' (Z axis, set in Setup)';
+        },
         b_ready: function() {
-            return o_state.b_connected__esp && o_state.b_streaming__webcam && !o_state.b_scanning;
+            return f_n_motor__axis('z') !== null && o_state.b_connected__esp && o_state.b_streaming__webcam && !o_state.b_scanning;
         },
         o_sample__best: function() {
             let o_self = this;
@@ -207,6 +207,7 @@ let o_component__focus_step = {
             if(!o_setting || !o_setting.s_value) return;
             try {
                 Object.assign(o_self.o_config, JSON.parse(o_setting.s_value));
+                delete o_self.o_config.s_motor;
             } catch(e) { /* ignore parse errors */ }
         },
 
@@ -237,7 +238,7 @@ let o_component__focus_step = {
         f_move: async function(n_step) {
             let o_self = this;
             if(n_step === 0) return;
-            let n_motor = parseInt(o_self.o_config.s_motor, 10);
+            let n_motor = f_n_motor__axis('z');
             let o_promise__move = f_send_esp_move_step(n_motor, n_step, N_RPM__MOVE);
             let o_promise__timeout = new Promise(function(resolve){
                 setTimeout(function(){ resolve('timeout'); }, N_MS__MOVE_TIMEOUT);
@@ -367,7 +368,7 @@ let o_component__focus_step = {
         f_stop: function() {
             let o_self = this;
             o_self.b_stop_requested = true;
-            f_send_esp_stop(parseInt(o_self.o_config.s_motor, 10));
+            f_send_esp_stop(f_n_motor__axis('z'));
         },
     },
     mounted: function() {

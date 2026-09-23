@@ -130,6 +130,9 @@ let f_o_recording_preflight = async function(o_config) {
     if(!o_state.b_streaming__webcam) a_s_error.push('no camera stream');
     if(!(o_config.n_sec__interval > 0)) a_s_error.push('interval must be > 0');
     if(!(o_config.n_its__frame >= 1)) a_s_error.push('frame count must be >= 1');
+    if(o_config.b_autofocus && f_n_motor__axis('z') === null){
+        a_s_error.push('autofocus needs a Z motor assigned in Setup');
+    }
     if(o_config.b_autofocus && !o_state.b_connected__esp){
         a_s_error.push('autofocus needs the stage connected');
     }
@@ -219,6 +222,7 @@ let f_o_frame__check = function(o_signature, o_signature__prev) {
 
 let f_o_move__axis = async function(s_axis, n_target) {
     let n_motor = f_n_motor__axis(s_axis);
+    if(n_motor === null) return;
     let n_step = Math.round(n_target - o_state.a_o_motor[n_motor].n_position);
     if(n_step === 0) return;
     let o_move = f_send_esp_move_step(n_motor, n_step, N_RPM__RECORDING);
@@ -537,7 +541,7 @@ let f_run_session = async function(o_run__session) {
                         s_label__position: o_position.s_label,
                         n_x__stage: o_state.a_o_motor[f_n_motor__axis('x')].n_position,
                         n_y__stage: o_state.a_o_motor[f_n_motor__axis('y')].n_position,
-                        n_z__stage: o_state.a_o_motor[f_n_motor__axis('z')].n_position,
+                        n_z__stage: o_state.a_o_motor[f_n_motor__axis('z')]?.n_position ?? null,
                         n_score__focus: o_focus.n_score,
                         n_scl_x: o_cap.n_scl_x,
                         n_scl_y: o_cap.n_scl_y,
@@ -664,7 +668,7 @@ let f_o_position__current = function(s_label) {
         s_label: s_label || 'current',
         n_x__stage: o_state.a_o_motor[f_n_motor__axis('x')].n_position,
         n_y__stage: o_state.a_o_motor[f_n_motor__axis('y')].n_position,
-        n_z__stage: o_state.a_o_motor[f_n_motor__axis('z')].n_position,
+        n_z__stage: o_state.a_o_motor[f_n_motor__axis('z')]?.n_position ?? null,
     };
 };
 

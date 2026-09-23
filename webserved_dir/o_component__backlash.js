@@ -1,5 +1,6 @@
 import {
     o_state,
+    f_n_motor__axis,
     f_send_esp_move_step,
     f_send_esp_stop,
     f_send_esp_set_backlash,
@@ -23,14 +24,21 @@ let N_PCT__RAMP_TARGET = 25;
 
 let o_component__backlash = {
     name: 'component-backlash',
+    props: { n_motor: { type: Number, default: null }, b_busy: { type: Boolean, default: false } },
     template: `
-        <div class="overlay-panel panel-backlash" :class="{ visible: o_state.o_panel_visibility.backlash }">
-            <div class="panel-header">
-                <h2>Backlash Calibration</h2>
-                <button class="panel-close" @click="f_close" :disabled="b_running">&times;</button>
+        <section class="hardware-calibration" :aria-label="'Calibration for motor ' + (f_n_motor() + 1)">
+            <div class="hardware-calibration-controls">
+                <button v-if="!b_running" class="btn-small" @click="f_run" :disabled="!b_ready">Calibrate</button>
+                <button v-else class="btn-small" @click="f_stop">Stop calibration</button>
+                <span class="hardware-calibration-status" role="status">{{ s_status }}</span>
             </div>
-            <div class="panel-body">
-
+            <p class="setup-hint" v-if="!o_state.b_connected__esp">Connect the motors to calibrate.</p>
+            <p class="setup-hint" v-else-if="!o_state.b_streaming__webcam">Start a camera to calibrate.</p>
+            <p class="setup-hint" v-else-if="o_config.s_signal === 'sharpness'">Focus calibration: start clearly off focus, on one side of the sharpness peak.</p>
+            <p class="setup-hint" v-else>Use a textured sample and manual exposure.</p>
+            <p class="backlash-applied" v-if="s_note__applied">{{ s_note__applied }}</p>
+            <details class="hardware-calibration-advanced">
+                <summary>Advanced calibration settings &amp; results</summary>
                 <div class="backlash-explain">
                     the stage is driven well past the slack in one direction, then
                     stepped back bit by bit. while the gears are still loose the image
@@ -88,34 +96,17 @@ let o_component__backlash = {
                     <div class="backlash-apply-value">
                         {{ n_step__result }} <span>steps</span>
                     </div>
-                    <button class="btn-small" @click="f_apply" :disabled="b_running">
-                        re-apply to M{{ o_config.s_motor }}
+                    <button class="btn-small" @click="f_apply" :disabled="b_running || b_axis_unassigned || o_state.b_scanning || o_state.b_flashing">
+                        Re-apply to motor {{ f_n_motor() + 1 }}
                     </button>
                 </div>
-                <div class="backlash-applied" v-if="s_note__applied">&check; {{ s_note__applied }}</div>
-
-                <button
-                    v-if="!b_running"
-                    class="btn-scan-start"
-                    @click="f_run"
-                    :disabled="!b_ready"
-                >Calibrate</button>
-                <button v-else class="btn-scan-stop" @click="f_stop">Stop</button>
-
-                <div class="focus-note" v-if="!o_state.b_connected__esp">connect the ESP32 first</div>
-                <div class="focus-note" v-else-if="!o_state.b_streaming__webcam">start a camera first</div>
-                <div class="focus-note" v-else>
-                    put something with texture in the field of view and use manual
-                    exposure — the measurement follows the image content.
-                </div>
-
-                <div class="focus-config">
-                    <div class="focus-field">
-                        <label>Motor</label>
-                        <select v-model="o_config.s_motor" @change="f_save_config">
-                            <option value="0">Motor 1</option>
-                            <option value="1">Motor 2</option>
-                            <option value="2">Motor 3</option>
+                <fieldset class="focus-config" :disabled="b_running || o_state.b_scanning || o_state.b_flashing">
+                    <div class="focus-field" v-if="n_motor === null">
+                        <label>Axis</label>
+                        <select v-model="o_config.s_axis" @change="f_on_axis_change" :disabled="b_running">
+                            <option value="x">X axis</option>
+                            <option value="y">Y axis</option>
+                            <option value="z">Z axis</option>
                         </select>
                     </div>
                     <div class="focus-field">
@@ -127,7 +118,7 @@ let o_component__backlash = {
                     </div>
                     <div class="focus-field">
                         <label>Signal</label>
-                        <select v-model="o_config.s_signal" @change="f_save_config">
+                        <select v-model="o_config.s_signal" @change="f_save_config" :disabled="b_running">
                             <option value="shift">image shift (x / y)</option>
                             <option value="sharpness">sharpness (focus)</option>
                         </select>
@@ -156,14 +147,14 @@ let o_component__backlash = {
                         <label>Both directions</label>
                         <input type="checkbox" v-model="o_config.b_both_direction" @change="f_save_config">
                     </div>
-                </div>
+                </fieldset>
                 <div class="focus-note">
                     for the focus motor pick the sharpness signal and park the stage
                     clearly off focus first — it only works on one side of the peak,
                     where sharpness still rises and falls with the movement.
                 </div>
-            </div>
-        </div>
+            </details>
+        </section>
     `,
     data: function() {
         return {
@@ -179,7 +170,7 @@ let o_component__backlash = {
             // one entry per finished round
             a_o_round: [],
             o_config: {
-                s_motor: '0',
+                s_axis: 'x',
                 s_apply: 'onset',
                 s_signal: 'shift',
                 n_step__probe: 5,
@@ -192,8 +183,9 @@ let o_component__backlash = {
         };
     },
     computed: {
+        b_axis_unassigned: function() { return this.f_n_motor() === null; },
         b_ready: function() {
-            return o_state.b_connected__esp && o_state.b_streaming__webcam && !o_state.b_scanning;
+            return o_state.b_connected__esp && o_state.b_streaming__webcam && !o_state.b_scanning && !o_state.b_flashing && !this.b_busy && !(o_state.a_o_motor || []).some(o => o.b_running) && this.f_n_motor() !== null;
         },
         s_label__signal: function() {
             return this.o_config.s_signal === 'sharpness' ? 'sharpness change' : 'image shift (px)';
@@ -260,32 +252,53 @@ let o_component__backlash = {
         },
     },
     methods: {
-        f_close: function() {
-            o_state.o_panel_visibility.backlash = false;
-            f_save_setting__debounced('o_panel_visibility', o_state.o_panel_visibility);
+        f_n_motor: function() {
+            return Number.isInteger(this.n_motor) && this.n_motor >= 0 && this.n_motor < 3 ? this.n_motor : f_n_motor__axis(this.o_config.s_axis);
+        },
+        f_sync_axis: function() {
+            if(!Number.isInteger(this.n_motor)) return;
+            let s_axis = Object.keys(o_state.o_motor__axis).find(s => o_state.o_motor__axis[s] === this.n_motor) || 'none';
+            if(s_axis !== this.o_config.s_axis) { this.o_config.s_axis = s_axis; this.f_on_axis_change(); }
+        },
+        f_on_axis_change: function() {
+            this.o_config.s_signal = this.o_config.s_axis === 'z' ? 'sharpness' : 'shift';
+            // Results belong to the previous axis and must not be applied to this one.
+            this.a_o_round = [];
+            this.a_o_sample = [];
+            this.o_fit = null;
+            this.o_onset = null;
+            this.s_note__applied = '';
+            this.s_status = 'idle';
+            this.f_save_config();
         },
         f_save_config: function() {
-            f_save_setting__debounced('o_config__backlash', this.o_config);
+            f_save_setting__debounced(Number.isInteger(this.n_motor) ? 'o_config__backlash_motor_' + this.n_motor : 'o_config__backlash', this.o_config);
         },
         f_load_config: function() {
             let o_self = this;
-            let o_setting = o_state.a_o_setting.find(function(o){
-                return o.s_key === 'o_config__backlash';
-            });
+            let s_key = Number.isInteger(this.n_motor) ? 'o_config__backlash_motor_' + this.n_motor : 'o_config__backlash';
+            let o_setting = o_state.a_o_setting.find(o => o.s_key === s_key) || o_state.a_o_setting.find(o => o.s_key === 'o_config__backlash');
             if(!o_setting || !o_setting.s_value) return;
             try {
-                Object.assign(o_self.o_config, JSON.parse(o_setting.s_value));
+                const saved = JSON.parse(o_setting.s_value);
+                if(!['x', 'y', 'z'].includes(saved.s_axis) && !(Number.isInteger(this.n_motor) && saved.s_axis === 'none')) {
+                    saved.s_axis = ['x', 'y', 'z'].find(axis => f_n_motor__axis(axis) === Number(saved.s_motor)) || 'x';
+                }
+                delete saved.s_motor;
+                Object.assign(o_self.o_config, saved);
+                if((!Number.isInteger(this.n_motor) || o_setting.s_key === 'o_config__backlash') && o_self.o_config.s_axis === 'z') o_self.o_config.s_signal = 'sharpness';
             } catch(e) { /* ignore parse errors */ }
         },
         f_apply: function() {
             let o_self = this;
             if(!o_self.b_result) return;
-            let n_motor = parseInt(o_self.o_config.s_motor, 10);
+            let n_motor = o_self.f_n_motor();
+            if(n_motor === null) return;
             let n_step__before = o_state.a_n_step__backlash[n_motor];
             o_state.a_n_step__backlash[n_motor] = o_self.n_step__result;
             f_save_setting__debounced('a_n_step__backlash', o_state.a_n_step__backlash);
             f_send_esp_set_backlash(n_motor, o_self.n_step__result);
-            o_self.s_note__applied = `M${n_motor} backlash set to ${o_self.n_step__result} steps`
+            o_self.s_note__applied = `Motor ${n_motor + 1} backlash set to ${o_self.n_step__result} steps`
                 + (n_step__before !== o_self.n_step__result ? ` (was ${n_step__before})` : '');
         },
         // persist the measured scale (steps per pixel) for this motor, so the
@@ -296,13 +309,14 @@ let o_component__backlash = {
             let a_n_per_px = o_self.a_o_summary
                 .map(function(o){ return o.n_step__per_unit; })
                 .filter(function(n){ return n > 0; });
-            if(!a_n_per_px.length) return;
+            if(o_self.o_config.s_signal === 'sharpness' || !a_n_per_px.length) return;
             let n_mean = a_n_per_px.reduce(function(n_sum, n){ return n_sum + n; }, 0) / a_n_per_px.length;
             let el_video = document.getElementById('webcamVideo');
             let n_scl_x__video = el_video ? el_video.videoWidth : 0;
             if(!n_scl_x__video) return;
             let n_step__per_px__full = n_mean * (Math.min(N_SCL_X__MEASURE, n_scl_x__video) / n_scl_x__video);
-            let n_motor = parseInt(o_self.o_config.s_motor, 10);
+            let n_motor = o_self.f_n_motor();
+            if(n_motor === null) return;
             o_state.a_n_step__per_px[n_motor] = n_step__per_px__full;
             f_save_setting__debounced('a_n_step__per_px', o_state.a_n_step__per_px);
         },
@@ -370,8 +384,9 @@ let o_component__backlash = {
         },
         f_move: async function(n_step) {
             let o_self = this;
-            if(n_step === 0) return;
-            let n_motor = parseInt(o_self.o_config.s_motor, 10);
+            if(n_step === 0 || this.b_stop_requested) return;
+            let n_motor = o_self.f_n_motor();
+            if(n_motor === null) return;
             let o_promise__move = f_send_esp_move_step(n_motor, n_step, N_RPM__PROBE);
             let o_promise__timeout = new Promise(function(resolve){
                 setTimeout(function(){ resolve('timeout'); }, N_MS__MOVE_TIMEOUT);
@@ -478,6 +493,8 @@ let o_component__backlash = {
         f_run: async function() {
             let o_self = this;
             if(o_self.b_running || !o_self.b_ready) return;
+            let n_motor = o_self.f_n_motor();
+            if(n_motor === null) return;
 
             o_self.b_running = true;
             o_self.b_stop_requested = false;
@@ -491,7 +508,6 @@ let o_component__backlash = {
             // Measuring with it enabled would report almost no slack and then
             // overwrite a good value with zero, so it is switched off first and
             // restored (or replaced by the new value) at the end.
-            let n_motor = parseInt(o_self.o_config.s_motor, 10);
             let n_step__backlash__before = o_state.a_n_step__backlash[n_motor] || 0;
             let b_applied = false;
             if(n_step__backlash__before) f_send_esp_set_backlash(n_motor, 0);
@@ -543,11 +559,17 @@ let o_component__backlash = {
             let o_self = this;
             o_self.b_stop_requested = true;
             o_self.s_status = 'stopping';
-            f_send_esp_stop(parseInt(o_self.o_config.s_motor, 10));
+            f_send_esp_stop(o_self.f_n_motor());
         },
+    },
+    watch: {
+        'o_state.o_motor__axis': { deep: true, handler() { this.f_sync_axis(); } },
+        'o_state.n_cnt__stop_all'() { if(this.b_running) this.f_stop(); },
+        'o_state.b_connected__esp'(b_connected) { if(!b_connected && this.b_running) this.f_stop(); },
     },
     mounted: function() {
         this.f_load_config();
+        this.f_sync_axis();
     },
     beforeUnmount: function() {
         if(this.b_running) this.f_stop();

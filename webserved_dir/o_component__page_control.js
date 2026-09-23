@@ -6,15 +6,14 @@ let o_component__page_control = {
         <o_component__webcam />
         <o_component__filter />
         <o_component__flat_field />
-        <o_component__calibration />
         <o_component__scale />
         <o_component__focus_step />
         <o_component__toolbar />
-        <o_component__jog />
+        <o_component__setup />
         <o_component__map />
         <o_component__motion />
+        <o_component__gamepad />
         <o_component__optics />
-        <o_component__motor />
         <o_component__stats />
         <o_component__scan />
         <o_component__camera_setting />
@@ -29,8 +28,8 @@ let o_component__page_control = {
         <o_component__record />
         <o_component__recording_library />
         <o_component__video />
-        <o_component__backlash />
         <o_component__slide_library />
+        <o_component__actions />
     `,
     data: function() {
         return {

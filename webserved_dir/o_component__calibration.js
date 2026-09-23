@@ -11,13 +11,7 @@ import { f_o_camera_snapshot } from './o_camera.module.js';
 let o_component__calibration = {
     name: 'component-calibration',
     template: `
-        <div class="overlay-panel panel-calibration" :class="{ visible: o_state.o_panel_visibility.calibration }">
-            <div class="panel-header">
-                <h2>Calibration</h2>
-                <button class="panel-close" @click="f_close">&times;</button>
-            </div>
-            <div class="panel-body">
-
+        <section class="hardware-calibration-checklist-body">
                 <div class="focus-note">
                     run these in order. every result only stays valid while the
                     optics stay fixed — re-run when you change objective, camera,
@@ -42,8 +36,7 @@ let o_component__calibration = {
                     </div>
                 </div>
 
-            </div>
-        </div>
+        </section>
     `,
     data: function() {
         return {
@@ -73,7 +66,7 @@ let o_component__calibration = {
                     s_desc: 'motor slack and steps-per-pixel for X and Y — the scan grid depends on this.',
                     s_status: o_self.s_status__backlash,
                     s_detail: o_self.s_detail__backlash,
-                    s_action: 'open Backlash',
+                    s_action: 'show motor calibration',
                     f_action: function(){ o_self.f_open('backlash'); },
                     b_disabled: false,
                 },
@@ -171,13 +164,12 @@ let o_component__calibration = {
         },
     },
     methods: {
-        f_close: function() {
-            o_state.o_panel_visibility.calibration = false;
-            f_save_setting__debounced('o_panel_visibility', o_state.o_panel_visibility);
-        },
         f_open: function(s_key) {
-            // close this hub and hand off to the tool that does the work
-            o_state.o_panel_visibility.calibration = false;
+            if(s_key === 'backlash') {
+                let el = document.querySelector('.panel-setup .hardware-calibration-advanced');
+                if(el) { el.open = true; el.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+                return;
+            }
             o_state.o_panel_visibility[s_key] = true;
             f_save_setting__debounced('o_panel_visibility', o_state.o_panel_visibility);
         },

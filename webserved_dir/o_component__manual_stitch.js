@@ -1,3 +1,4 @@
+import { o_actions, f_action } from './o_actions.js';
 import { o_state, f_send_wsmsg_with_response, f_save_setting__debounced } from './index.js';
 import { f_o_wsmsg } from './constructors.module.js';
 import { f_o_capture__frame, f_save_image } from './o_capture.module.js';
@@ -18,10 +19,10 @@ let o_component__manual_stitch = {
                     <div class="manual-stitch-label">image{{ n_cnt__image === 1 ? '' : 's' }} captured</div>
 
                     <div class="manual-stitch-hint">
-                        Press <span class="manual-stitch-key">F</span> to capture
+                        <button @click="f_action_capture">Capture stitch image</button>
                     </div>
                     <div class="manual-stitch-hint">
-                        Press <span class="manual-stitch-key">R</span> to stitch
+                        <button @click="f_action_stitch">Stitch images</button>
                     </div>
 
                     <div v-if="s_status__detail" class="manual-stitch-status">{{ s_status__detail }}</div>
@@ -63,7 +64,8 @@ let o_component__manual_stitch = {
         o_self._f_on_keydown = function(o_evt) {
             o_self.f_on_keydown(o_evt);
         };
-        window.addEventListener('keydown', o_self._f_on_keydown);
+        f_action({ id: 'stitch.capture', name: 'Capture Stitch Image', description: 'Add a camera frame to the manual stitch session', category: 'Image', bindings: [{ source: 'keyboard', keys: ['Ctrl', 'Shift', 'F'] }] }, () => { o_state.o_panel_visibility.manual_stitch = true; return o_self.f_capture(); });
+        f_action({ id: 'stitch.run', name: 'Stitch Images', description: 'Combine the manual stitch session', category: 'Image', bindings: [{ source: 'keyboard', keys: ['R'] }] }, () => { o_state.o_panel_visibility.manual_stitch = true; return o_self.f_run_stitch(); });
     },
 
     beforeUnmount: function() {
@@ -74,6 +76,8 @@ let o_component__manual_stitch = {
     },
 
     methods: {
+        f_action_capture() { o_actions.f_invoke('stitch.capture'); },
+        f_action_stitch() { o_actions.f_invoke('stitch.run'); },
 
         f_close: function() {
             if(this.b_stitching) return;

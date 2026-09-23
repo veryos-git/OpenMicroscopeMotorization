@@ -224,6 +224,7 @@ let o_component__slide_library = {
             let a_n_target = [o_slide.n_x__stage, o_slide.n_y__stage, o_slide.n_z__stage];
             for(let n_axis = 0; n_axis < 3; n_axis++){
                 let n_motor = f_n_motor__axis(['x', 'y', 'z'][n_axis]);
+                if(n_motor === null) continue;
                 let n_target = a_n_target[n_axis];
                 if(typeof n_target !== 'number') continue;
                 let o_motor = o_state.a_o_motor[n_motor];

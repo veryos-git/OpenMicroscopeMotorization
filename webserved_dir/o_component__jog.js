@@ -1,4 +1,5 @@
-import { o_state, f_send_esp_run_continuous, f_send_esp_stop, f_send_esp_stop_all, f_save_setting, f_save_setting__debounced, f_set_mouse_jog, f_toggle_mouse_jog } from './index.js';
+import { o_actions } from './o_actions.js';
+import { f_n_motor__axis, o_state, f_send_esp_run_continuous, f_send_esp_stop, f_send_esp_stop_all, f_save_setting, f_save_setting__debounced, f_set_mouse_jog, f_toggle_mouse_jog } from './index.js';
 
 // ─── Gamepad constants ──────────────────────────────────────────────
 
@@ -18,161 +19,28 @@ let N_RPM__RESEND_DELTA = 0.05;
 let o_component__jog = {
     name: 'component-jog',
     template: `
-        <div class="overlay-panel panel-jog" :class="{ visible: o_state.o_panel_visibility.jog }">
-            <div class="panel-header">
-                <h2>Jog Settings</h2>
-                <button class="panel-close" @click="f_close">&times;</button>
+        <section class="hardware-inputs">
+            <h3>Manual movement</h3>
+            <div class="setup-input-row">
+                <label for="hardware-jog-speed">Speed (RPM) · buttons, keyboard, mouse &amp; gamepad</label>
+                <input id="hardware-jog-speed" type="number" min="0.05" max="15" step="0.05" v-model.number="o_state.n_rpm__jog" @change="f_on_rpm_change" />
             </div>
-            <div class="panel-body">
-                <div class="jog-section-header">Axis assignments</div>
-                <p>Choose the motor for each axis. Selecting an occupied motor swaps the assignments.</p>
-                <div class="mapping-row" v-for="s_axis in ['x', 'y', 'z']" :key="s_axis">
-                    <label :for="'axis-motor-' + s_axis">{{ s_axis.toUpperCase() }}</label>
-                    <select :id="'axis-motor-' + s_axis" :value="o_state.o_motor__axis[s_axis]"
-                        :disabled="o_state.b_scanning || o_state.a_o_motor.some(o_motor => o_motor.b_running)"
-                        @change="f_assign_axis(s_axis, Number($event.target.value))">
-                        <option v-for="n_motor in [0, 1, 2]" :value="n_motor">Motor {{ n_motor + 1 }}</option>
+            <p class="setup-hint">Default keys: A / D: X · W / S: Y · Q / E: focus. Hold to move; release to stop. Customize in Actions.</p>
+            <button class="toolbar-toggle" :class="{ active: o_state.b_enabled__mouse_jog }" @click="f_toggle_mouse_jog">Mouse movement {{ o_state.b_enabled__mouse_jog ? 'on' : 'off' }}</button>
+            <p class="setup-hint">On the camera image, hold the left mouse button for X/Y or the right button for focus.</p>
+            <details>
+                <summary>Input directions &amp; gamepad</summary>
+                <div class="mapping-row header"><span>Input</span><span>Axis</span><span>Direction</span></div>
+                <div class="mapping-row" v-for="s_key in ['a', 'd', 'w', 's', 'q', 'e', 'mouse_right']" :key="s_key">
+                    <span>{{ s_key === 'mouse_right' ? 'Mouse ↑' : s_key.toUpperCase() }}</span>
+                    <span>{{ { a: 'X', d: 'X', w: 'Y', s: 'Y', q: 'Z', e: 'Z', mouse_right: 'Z' }[s_key] }}</span>
+                    <select v-model="f_o_mapping(s_key).s_dir" @change="f_on_mapping_change(s_key)">
+                        <option value="cw">CW</option><option value="ccw">CCW</option>
                     </select>
                 </div>
-                <div class="jog-section-header">Keyboard</div>
-                <div class="keybind-body">
-                    <div>
-                        <div class="wasd-visual">
-                            <div class="wasd-row">
-                                <div class="key-cap" :class="{ pressed: o_state.o_key_held['q'] }">Q</div>
-                                <div class="key-cap" :class="{ pressed: o_state.o_key_held['w'] }">W</div>
-                                <div class="key-cap" :class="{ pressed: o_state.o_key_held['e'] }">E</div>
-                            </div>
-                            <div class="wasd-row">
-                                <div class="key-cap" :class="{ pressed: o_state.o_key_held['a'] }">A</div>
-                                <div class="key-cap" :class="{ pressed: o_state.o_key_held['s'] }">S</div>
-                                <div class="key-cap" :class="{ pressed: o_state.o_key_held['d'] }">D</div>
-                            </div>
-                        </div>
-                        <div class="jog-speed-group" style="margin-top: 12px;">
-                            <label>Jog RPM <span class="speed-value">{{ o_state.n_rpm__jog.toFixed(1) }}</span></label>
-                            <input
-                                type="range"
-                                min="0.05" max="15" step="0.05"
-                                v-model.number="o_state.n_rpm__jog"
-                                @input="f_on_rpm_change"
-                            >
-                            <input
-                                type="number"
-                                min="0.05" max="15" step="0.05"
-                                v-model.number="o_state.n_rpm__jog"
-                                @input="f_on_rpm_change"
-                                style="width:62px; margin-top:4px; background:rgba(10,10,12,0.6); border:1px solid var(--border); border-radius:6px; padding:4px 6px; color:var(--text); font-family:'JetBrains Mono',monospace; font-size:0.7rem; text-align:center; outline:none;"
-                            >
-                        </div>
-                    </div>
-                    <div class="mapping-grid">
-                        <div class="mapping-row header">
-                            <span>Key</span>
-                            <span>Motor</span>
-                            <span>Dir</span>
-                        </div>
-                        <div class="mapping-row" v-for="s_key in ['w','s','a','d','q','e']" :key="s_key">
-                            <span class="key-label">{{ s_key.toUpperCase() }}</span>
-                            <select
-                                v-model="f_o_mapping(s_key).s_motor"
-                                @change="f_on_mapping_change(s_key)"
-                            >
-                                <option value="none">&mdash;</option>
-                                <option value="0">Motor 1</option>
-                                <option value="1">Motor 2</option>
-                                <option value="2">Motor 3</option>
-                            </select>
-                            <select
-                                v-model="f_o_mapping(s_key).s_dir"
-                                @change="f_on_mapping_change(s_key)"
-                            >
-                                <option value="cw">CW</option>
-                                <option value="ccw">CCW</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Mouse jog section -->
-                <div class="mouse-jog-section">
-                    <div class="mouse-jog-header">
-                        <span>Mouse Jog</span>
-                        <button
-                            class="toolbar-toggle"
-                            :class="{ active: o_state.b_enabled__mouse_jog }"
-                            @click="f_toggle_mouse_jog"
-                        >{{ o_state.b_enabled__mouse_jog ? 'active' : 'off' }}</button>
-                    </div>
-
-                    <div class="mouse-button-row" :class="{ down: b_down__mouse }">
-                        <span class="mouse-button-tag">LEFT</span>
-                        <span class="mouse-button-text">
-                            X / Y &mdash; the further the cursor sits from the image center,
-                            the faster. Uses the A/D and W/S mappings above.
-                        </span>
-                    </div>
-
-                    <div class="mouse-button-row" :class="{ down: b_down__mouse_right }">
-                        <span class="mouse-button-tag tag-z">RIGHT</span>
-                        <span class="mouse-button-text">
-                            Z &mdash; only the height of the cursor counts: above the center it
-                            turns one way, below it the other.
-                        </span>
-                    </div>
-
-                    <div class="mapping-grid" style="margin-top: 10px;">
-                        <div class="mapping-row header">
-                            <span>Btn</span>
-                            <span>Motor</span>
-                            <span>Above</span>
-                        </div>
-                        <div class="mapping-row">
-                            <span class="key-label">R</span>
-                            <select
-                                v-model="o_state.o_mapping__mouse_right.s_motor"
-                                @change="f_on_mapping_change__mouse_right"
-                            >
-                                <option value="none">&mdash;</option>
-                                <option value="0">Motor 1</option>
-                                <option value="1">Motor 2</option>
-                                <option value="2">Motor 3</option>
-                            </select>
-                            <select
-                                v-model="o_state.o_mapping__mouse_right.s_dir"
-                                @change="f_on_mapping_change__mouse_right"
-                            >
-                                <option value="cw">CW</option>
-                                <option value="ccw">CCW</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div class="mouse-jog-hint">
-                        release the button to stop. The button in the center of the image
-                        deactivates the mode, &laquo;Mouse Jog&raquo; in the top bar switches
-                        it on again.
-                    </div>
-                    <div class="mouse-readout">
-                        <span>X <b>{{ f_n_rpm__axis('x').toFixed(2) }}</b> rpm</span>
-                        <span>Y <b>{{ f_n_rpm__axis('y').toFixed(2) }}</b> rpm</span>
-                        <span>Z <b>{{ f_n_rpm__axis('z').toFixed(2) }}</b> rpm</span>
-                    </div>
-                </div>
-
-                <!-- Gamepad section -->
-                <div class="gamepad-section">
-                    <div class="gamepad-header">Gamepad</div>
-                    <div
-                        class="gamepad-status"
-                        :class="{ connected: o_state.b_connected__gamepad }"
-                    >
-                        <span class="gamepad-dot"></span>
-                        <span>{{ o_state.b_connected__gamepad ? o_state.s_name__gamepad : 'connect a USB gamepad as a controller' }}</span>
-                    </div>
-                </div>
-            </div>
-        </div>
+                <p class="setup-hint">{{ o_state.b_connected__gamepad ? o_state.s_name__gamepad : 'Open Gamepad to select a controller: right stick X/Y, left stick focus.' }}</p>
+            </details>
+        </section>
 
         <!-- transparent mouse jog overlay on top of the webcam image -->
         <teleport to="body">
@@ -244,8 +112,8 @@ let o_component__jog = {
         return {
             o_state: o_state,
             n_id__gamepad_interval: 0,
-            n_axis_x__prev: 0,
-            n_axis_y__prev: 0,
+            o_sent__gamepad: {},
+            s_selected__gamepad: '',
 
             // mouse jog
             n_id__mouse_interval: 0,
@@ -293,30 +161,12 @@ let o_component__jog = {
         },
     },
     methods: {
-        f_assign_axis: function(s_axis, n_motor) {
-            this.f_on_blur();
-            f_send_esp_stop_all();
-            let o_axes = { ...o_state.o_motor__axis };
-            let s_other = Object.keys(o_axes).find(s_key => o_axes[s_key] === n_motor);
-            if(s_other) o_axes[s_other] = o_axes[s_axis];
-            o_axes[s_axis] = n_motor;
-            o_state.o_motor__axis = o_axes;
-            f_save_setting('o_motor__axis', o_axes);
-            for(let [s_name, a_s_key] of Object.entries({ x: ['a', 'd'], y: ['w', 's'], z: ['q', 'e', 'mouse_right'] })){
-                for(let s_key of a_s_key){
-                    o_state['o_mapping__' + s_key].s_motor = String(o_axes[s_name]);
-                    f_save_setting('o_mapping__' + s_key, o_state['o_mapping__' + s_key]);
-                }
-            }
-        },
         f_o_mapping: function(s_key) {
             return o_state['o_mapping__' + s_key];
         },
-        f_close: function() {
-            o_state.o_panel_visibility.jog = false;
-            f_save_setting__debounced('o_panel_visibility', o_state.o_panel_visibility);
-        },
         f_on_rpm_change: function() {
+            let n_rpm = Number(o_state.n_rpm__jog);
+            o_state.n_rpm__jog = Number.isFinite(n_rpm) ? Math.min(15, Math.max(0.05, n_rpm)) : 5;
             f_save_setting__debounced('n_rpm__jog', String(o_state.n_rpm__jog));
         },
         f_on_mapping_change: function(s_key) {
@@ -331,14 +181,16 @@ let o_component__jog = {
 
         f_get_mapping: function(s_key) {
             let o_map = o_state['o_mapping__' + s_key];
-            if(!o_map || o_map.s_motor === 'none') return null;
-            return { motor: parseInt(o_map.s_motor, 10), direction: o_map.s_dir };
+            let n_motor = f_n_motor__axis({ a: 'x', d: 'x', w: 'y', s: 'y', q: 'z', e: 'z' }[s_key]);
+            if(!o_map || n_motor === null) return null;
+            return { motor: n_motor, direction: o_map.s_dir };
         },
         f_on_keydown: function(o_evt) {
             let o_self = this;
             let s_key = o_evt.key.toLowerCase();
             if(!A_S_KEY__JOG.includes(s_key)) return;
-            if(o_state.b_scanning) return;
+            if(o_evt.ctrlKey || o_evt.altKey || o_evt.metaKey || o_evt.target?.closest?.('input, select, textarea, [contenteditable]')) return;
+            if(o_state.b_scanning || o_state.b_flashing || !o_state.b_connected__esp) return;
             if(o_state.o_key_held[s_key]) return;
             o_state.o_key_held[s_key] = true;
 
@@ -351,7 +203,7 @@ let o_component__jog = {
             let o_self = this;
             let s_key = o_evt.key.toLowerCase();
             if(!A_S_KEY__JOG.includes(s_key)) return;
-            if(o_state.b_scanning) return;
+            if(!o_state.o_key_held[s_key]) return;
             o_state.o_key_held[s_key] = false;
 
             let o_mapping = o_self.f_get_mapping(s_key);
@@ -370,6 +222,7 @@ let o_component__jog = {
             f_send_esp_stop(o_mapping.motor);
         },
         f_on_blur: function() {
+            this.f_stop_gamepad();
             this.b_inside__mouse_overlay = false;
             this.b_down__mouse = false;
             this.b_down__mouse_right = false;
@@ -389,108 +242,102 @@ let o_component__jog = {
 
         // ─── Gamepad ────────────────────────────────────────────────
 
-        f_on_gamepad_connected: function(o_evt) {
-            let o_self = this;
-            o_state.b_connected__gamepad = true;
-            o_state.s_name__gamepad = o_evt.gamepad.id;
-            console.log('Gamepad connected:', o_evt.gamepad.id);
-            if(!o_self.n_id__gamepad_interval){
-                o_self.n_id__gamepad_interval = setInterval(function(){ o_self.f_poll_gamepad(); }, N_MS__GAMEPAD_POLL);
-            }
+        f_on_gamepad_connected: function() { this.f_poll_gamepad(); },
+        f_on_gamepad_disconnected: function(e) {
+            if(e.gamepad.index === o_state.n_index__gamepad) this.f_stop_gamepad();
+            this.f_poll_gamepad();
         },
-        f_on_gamepad_disconnected: function(o_evt) {
-            let o_self = this;
-            console.log('Gamepad disconnected:', o_evt.gamepad.id);
-            o_self.f_gamepad_stop_axis('x');
-            o_self.f_gamepad_stop_axis('y');
-            o_self.n_axis_x__prev = 0;
-            o_self.n_axis_y__prev = 0;
-
-            let a_o_gamepad = navigator.getGamepads();
-            let b_any = false;
-            let s_name__remaining = '';
-            for(let o_gp of a_o_gamepad){
-                if(o_gp){ b_any = true; s_name__remaining = o_gp.id; break; }
-            }
-            if(!b_any){
-                clearInterval(o_self.n_id__gamepad_interval);
-                o_self.n_id__gamepad_interval = 0;
-                o_state.b_connected__gamepad = false;
-                o_state.s_name__gamepad = '';
-            } else {
-                o_state.s_name__gamepad = s_name__remaining;
-            }
+        f_stop_gamepad: function() {
+            for(const sent of Object.values(this.o_sent__gamepad)) f_send_esp_stop(sent.motor);
+            this.o_sent__gamepad = {};
+            o_state.b_armed__gamepad = false;
         },
-        f_apply_deadzone: function(n_val) {
-            if(Math.abs(n_val) < N_DEADZONE) return 0;
-            let n_sign = n_val > 0 ? 1 : -1;
-            return n_sign * (Math.abs(n_val) - N_DEADZONE) / (1 - N_DEADZONE);
-        },
-        f_gamepad_stop_axis: function(s_axis) {
-            let o_self = this;
-            if(s_axis === 'x'){
-                let o_map = o_self.f_get_mapping('a') || o_self.f_get_mapping('d');
-                if(o_map) f_send_esp_stop(o_map.motor);
-            } else {
-                let o_map = o_self.f_get_mapping('w') || o_self.f_get_mapping('s');
-                if(o_map) f_send_esp_stop(o_map.motor);
-            }
-        },
-        f_gamepad_drive_axis: function(s_axis, n_val) {
-            let o_self = this;
-            let s_key_neg, s_key_pos;
-            if(s_axis === 'x'){ s_key_neg = 'a'; s_key_pos = 'd'; }
-            else { s_key_neg = 'w'; s_key_pos = 's'; }
-
-            let s_key = n_val < 0 ? s_key_neg : s_key_pos;
-            let o_mapping = o_self.f_get_mapping(s_key);
-            if(!o_mapping) return;
-
-            let n_rpm = Math.abs(n_val) * o_state.n_rpm__jog;
-            if(n_rpm < N_RPM__MIN) return;
-
-            f_send_esp_run_continuous(o_mapping.motor, n_rpm, o_mapping.direction);
+        f_apply_deadzone: function(value) {
+            if(!Number.isFinite(value) || Math.abs(value) <= N_DEADZONE) return 0;
+            // Ignore center drift without rescaling the displayed stick value.
+            return Math.max(-1, Math.min(1, value));
         },
         f_poll_gamepad: function() {
-            let o_self = this;
-            if(o_state.b_scanning) return;
-            let a_o_gamepad = navigator.getGamepads();
-            let o_gamepad = null;
-            for(let o_gp of a_o_gamepad){
-                if(o_gp){ o_gamepad = o_gp; break; }
+            let pads;
+            try {
+                if(!navigator.getGamepads) throw new Error('Gamepad input is unavailable in this browser. Use localhost or HTTPS in a supported browser.');
+                pads = Array.from(navigator.getGamepads()).filter(p => p && p.connected);
+                o_state.s_error__gamepad = '';
+            } catch(e) {
+                o_state.s_error__gamepad = e.message;
+                pads = [];
             }
-            if(!o_gamepad) return;
-
-            let n_axis_x = o_self.f_apply_deadzone(o_gamepad.axes[0] ?? 0);
-            let n_axis_y = o_self.f_apply_deadzone(o_gamepad.axes[1] ?? 0);
-
-            let b_keyboard_x = o_state.o_key_held['a'] || o_state.o_key_held['d'];
-            let b_keyboard_y = o_state.o_key_held['w'] || o_state.o_key_held['s'];
-
-            // X axis
-            if(!b_keyboard_x){
-                let b_was_active = o_self.n_axis_x__prev !== 0;
-                let b_now_active = n_axis_x !== 0;
-                if(b_now_active){
-                    o_self.f_gamepad_drive_axis('x', n_axis_x);
-                } else if(b_was_active && !b_now_active){
-                    o_self.f_gamepad_stop_axis('x');
+            o_state.a_o_gamepad = pads.map(p => ({ index: p.index, id: p.id }));
+            // Select the first detected pad once; never silently switch on disconnect.
+            if(o_state.n_index__gamepad === -1 && pads.length) o_state.n_index__gamepad = pads[0].index;
+            const pad = pads.find(p => p.index === o_state.n_index__gamepad);
+            const identity = pad ? pad.index + ':' + pad.id : '';
+            if(identity !== this.s_selected__gamepad) {
+                this.f_stop_gamepad();
+                this.s_selected__gamepad = identity;
+            }
+            o_state.b_connected__gamepad = !!pad;
+            o_state.s_name__gamepad = pad?.id || '';
+            o_state.o_input__gamepad = pad ? {
+                axes: Array.from(pad.axes),
+                buttons: Array.from(pad.buttons, b => ({ value: b.value, pressed: b.pressed })),
+                mapping: pad.mapping,
+            } : null;
+            // Some USB controllers expose the correct stick axes without the browser's
+            // optional standard-mapping label. Use the same axes as the live display.
+            const axesValid = pad && pad.axes.length >= 4 && Array.from(pad.axes).slice(0, 4).every(Number.isFinite);
+            const blocked = !pad ? 'Waiting for controller'
+                : o_state.b_input_suspended ? 'Motor control paused during action search'
+                : !o_state.b_enabled__gamepad ? 'Motor control disabled'
+                : !axesValid ? 'Controller needs four valid stick axes'
+                : !o_state.b_connected__esp ? 'Connect the motors in Setup'
+                : o_state.b_scanning ? 'Motor control paused during scan'
+                : o_state.b_flashing ? 'Motor control paused during firmware update'
+                : document.hidden || !document.hasFocus() ? 'Click in this window, then center both sticks'
+                : '';
+            if(blocked) {
+                o_state.s_status__gamepad = blocked;
+                this.f_stop_gamepad();
+                return;
+            }
+            const values = o_state.o_action_axis || { x: this.f_apply_deadzone(pad.axes[2]), y: this.f_apply_deadzone(pad.axes[3]), z: this.f_apply_deadzone(pad.axes[1]) };
+            if(!o_state.b_armed__gamepad) {
+                this.f_stop_gamepad();
+                if(Object.values(values).every(v => v === 0) && (!o_state.o_action_axis || (Array.from(pad.axes).every(v => Math.abs(v) <= N_DEADZONE) && Array.from(pad.buttons).every(b => b.value <= N_DEADZONE)))) o_state.b_armed__gamepad = true;
+                o_state.s_status__gamepad = o_state.b_armed__gamepad ? 'Ready · move a stick to drive' : 'Center both sticks to enable movement';
+                return;
+            }
+            const activity = [];
+            const keys = { x: ['a', 'd'], y: ['w', 's'], z: ['q', 'e'] };
+            for(const axis of ['x', 'y', 'z']) {
+                const [negative, positive] = keys[axis];
+                const mouse = axis === 'z' ? this.b_driving__mouse_z : this.b_driving__mouse;
+                if(o_state.o_key_held[negative] || o_state.o_key_held[positive] || mouse) {
+                    if(values[axis]) activity.push(axis.toUpperCase() + ': controlled by keyboard or mouse');
+                    // The other input now owns this axis, including its stop command.
+                    delete this.o_sent__gamepad[axis];
+                    continue;
+                }
+                const mapping = this.f_get_mapping(values[axis] < 0 ? negative : positive);
+                const rpm = Math.abs(values[axis]) * Math.min(15, Math.max(0, Number(o_state.n_rpm__jog) || 0));
+                if(!mapping && values[axis]) activity.push(axis.toUpperCase() + ': no motor assigned in Setup');
+                const previous = this.o_sent__gamepad[axis];
+                if(previous !== undefined && (!mapping || previous.motor !== mapping.motor || rpm < N_RPM__MIN)) {
+                    f_send_esp_stop(previous.motor);
+                    delete this.o_sent__gamepad[axis];
+                }
+                if(mapping && rpm >= N_RPM__MIN) {
+                    // Like mouse jog, run continuously at the requested speed. A held
+                    // stick needs no repeated start commands; update only on change.
+                    const sent = this.o_sent__gamepad[axis];
+                    if(!sent || sent.motor !== mapping.motor || sent.direction !== mapping.direction || sent.rpm !== rpm) {
+                        f_send_esp_run_continuous(mapping.motor, rpm, mapping.direction);
+                        this.o_sent__gamepad[axis] = { motor: mapping.motor, rpm, direction: mapping.direction };
+                    }
+                    activity.push(axis.toUpperCase() + ' → motor ' + (mapping.motor + 1) + ' · ' + rpm.toFixed(2) + ' RPM');
                 }
             }
-
-            // Y axis
-            if(!b_keyboard_y){
-                let b_was_active = o_self.n_axis_y__prev !== 0;
-                let b_now_active = n_axis_y !== 0;
-                if(b_now_active){
-                    o_self.f_gamepad_drive_axis('y', n_axis_y);
-                } else if(b_was_active && !b_now_active){
-                    o_self.f_gamepad_stop_axis('y');
-                }
-            }
-
-            o_self.n_axis_x__prev = n_axis_x;
-            o_self.n_axis_y__prev = n_axis_y;
+            o_state.s_status__gamepad = activity.join(' / ') || 'Ready · move a stick to drive';
         },
 
         // ─── Mouse jog ──────────────────────────────────────────────
@@ -600,9 +447,9 @@ let o_component__jog = {
         f_o_mapping__mouse_z: function() {
             let o_self = this;
             let o_map = o_state.o_mapping__mouse_right;
-            if(!o_map || o_map.s_motor === 'none') return null;
+            if(!o_map || f_n_motor__axis('z') === null) return null;
             return {
-                motor: parseInt(o_map.s_motor, 10),
+                motor: f_n_motor__axis('z'),
                 direction: o_self.s_dir__mouse_z,
             };
         },
@@ -647,7 +494,7 @@ let o_component__jog = {
         },
         f_tick_mouse_jog: function() {
             let o_self = this;
-            if(o_state.b_scanning) return;
+            if(o_state.b_scanning || o_state.b_flashing) return;
 
             let b_drive = o_self.b_driving__mouse;
             let n_x_nor = b_drive ? o_self.n_x_nor__mouse : 0;
@@ -699,7 +546,7 @@ let o_component__jog = {
         'o_state.n_rpm__jog': function(n_rpm) {
             let o_self = this;
             if(!isFinite(n_rpm)) return;
-            if(o_state.b_scanning) return;
+            if(o_state.b_scanning || o_state.b_flashing) return;
             for(let s_key of A_S_KEY__JOG){
                 if(!o_state.o_key_held[s_key]) continue;
                 let o_mapping = o_self.f_get_mapping(s_key);
@@ -711,13 +558,23 @@ let o_component__jog = {
     },
     mounted: function() {
         let o_self = this;
+        o_state.o_action_axis = { x: 0, y: 0, z: 0 };
+        for(let [s_axis, n_index] of [['x', 2], ['y', 3], ['z', 1]]) o_actions.f_register({
+            id: 'motion.' + s_axis, name: 'Move ' + s_axis.toUpperCase(), description: 'Proportional movement; release to stop', category: 'Motion', type: 'analog', repeat: 'none', bindings: [{ source: 'axis', index: n_index }],
+            invoke: n_value => { o_state.o_action_axis[s_axis] = n_value; },
+        });
+        for(let s_key of A_S_KEY__JOG) o_actions.f_register({
+            id: 'motion.key.' + s_key, name: 'Jog ' + ({ a: 'X negative', d: 'X positive', w: 'Y negative', s: 'Y positive', q: 'Z negative', e: 'Z positive' }[s_key]), description: 'Hold to move; release to stop', category: 'Motion', repeat: 'none', bindings: [{ source: 'keyboard', keys: [s_key] }],
+            accept: o_binding => o_binding.source === 'keyboard' || (o_state.b_enabled__gamepad && o_state.b_armed__gamepad),
+            invoke: (n_value, s_phase) => n_value ? o_self.f_on_keydown({ key: s_key }) : o_self.f_on_keyup({ key: s_key }),
+        });
         o_self._f_on_keydown = function(e){ o_self.f_on_keydown(e); };
         o_self._f_on_keyup = function(e){ o_self.f_on_keyup(e); };
         o_self._f_on_blur = function(){ o_self.f_on_blur(); };
         // catches a release over a panel or outside the window
         o_self._f_on_mouse_up = function(e){ o_self.f_on_mouse_up(e); };
-        document.addEventListener('keydown', o_self._f_on_keydown);
-        document.addEventListener('keyup', o_self._f_on_keyup);
+
+
         window.addEventListener('blur', o_self._f_on_blur);
         window.addEventListener('mouseup', o_self._f_on_mouse_up);
 
@@ -726,6 +583,9 @@ let o_component__jog = {
         window.addEventListener('gamepadconnected', o_self._f_on_gamepad_connected);
         window.addEventListener('gamepaddisconnected', o_self._f_on_gamepad_disconnected);
 
+        o_self.n_id__gamepad_interval = setInterval(() => o_self.f_poll_gamepad(), N_MS__GAMEPAD_POLL);
+        o_self._f_visibility = () => { if(document.hidden) o_self.f_on_blur(); };
+        document.addEventListener('visibilitychange', o_self._f_visibility);
         if(o_state.b_enabled__mouse_jog) o_self.f_start_mouse_jog();
     },
     beforeUnmount: function() {
@@ -737,6 +597,8 @@ let o_component__jog = {
         window.removeEventListener('gamepadconnected', o_self._f_on_gamepad_connected);
         window.removeEventListener('gamepaddisconnected', o_self._f_on_gamepad_disconnected);
         clearInterval(o_self.n_id__gamepad_interval);
+        document.removeEventListener('visibilitychange', o_self._f_visibility);
+        o_self.f_stop_gamepad();
         o_self.f_stop_mouse_interval();
         o_self.f_stop_mouse_jog();
     },

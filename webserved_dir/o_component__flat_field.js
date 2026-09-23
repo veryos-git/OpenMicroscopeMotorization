@@ -1,4 +1,4 @@
-import { o_state, f_send_esp_move_step, f_send_esp_stop, f_send_wsmsg_with_response, f_save_setting__debounced, f_save_flat_field, f_save_calibration } from './index.js';
+import { f_n_motor__axis, o_state, f_send_esp_move_step, f_send_esp_stop, f_send_wsmsg_with_response, f_save_setting__debounced, f_save_flat_field, f_save_calibration } from './index.js';
 import { f_o_wsmsg } from './constructors.module.js';
 import { f_save_image, f_o_frame__imagedata } from './o_capture.module.js';
 import { f_o_camera_snapshot } from './o_camera.module.js';
@@ -31,17 +31,18 @@ let o_component__flat_field = {
             </div>
             <div class="panel-body">
 
-                <!-- always-on toggle + shortcut hint -->
+                <!-- Current correction and calibration controls -->
                 <div class="filter-row">
                     <span class="filter-label">Dust / flat correction</span>
                     <button
                         class="toolbar-toggle"
                         :class="{ active: o_state.o_flat_field.b_active }"
                         @click="f_toggle_active"
-                    >{{ o_state.o_flat_field.b_active ? 'on' : 'off' }}</button>
+                        :disabled="!b_loaded || b_running || s_status === 'verify'"
+                    >{{ o_state.o_flat_field.b_active ? 'Disable correction' : 'Enable correction' }}</button>
                 </div>
-                <div class="filter-note">shortcut: press <b>F</b> to toggle the correction</div>
-                <div class="filter-note" v-if="o_state.o_flat_field.b_active && !b_loaded">
+                <div class="filter-note">shortcut: press <b>F</b> to open this calibration window</div>
+                <div class="filter-note" v-if="!b_loaded">
                     no flat loaded yet — calibrate first
                 </div>
 
@@ -56,11 +57,7 @@ let o_component__flat_field = {
                     <div class="focus-config">
                         <div class="focus-field">
                             <label>Focus motor</label>
-                            <select v-model="o_config.s_motor" @change="f_save_config">
-                                <option value="0">Motor 1</option>
-                                <option value="1">Motor 2</option>
-                                <option value="2">Motor 3</option>
-                            </select>
+                            <span>{{ s_motor__focus_label }}</span>
                         </div>
                         <div class="focus-field">
                             <label>Frames</label>
@@ -76,11 +73,11 @@ let o_component__flat_field = {
                         </div>
                         <div class="focus-field">
                             <label>Auto defocus (Z motor)</label>
-                            <input type="checkbox" v-model="o_config.b_auto_defocus" @change="f_save_config">
+                            <input type="checkbox" v-model="o_config.b_auto_defocus" :disabled="o_state.o_motor__axis.z === null" @change="f_save_config">
                         </div>
                     </div>
 
-                    <button class="btn-scan-start" @click="f_calibrate" :disabled="!b_ready">Calibrate</button>
+                    <button class="btn-scan-start" @click="f_calibrate" :disabled="!b_ready">Create new correction</button>
 
                     <div class="focus-note" v-if="!o_state.b_streaming__webcam">start a camera first</div>
                     <div class="focus-note" v-else>
@@ -152,7 +149,7 @@ let o_component__flat_field = {
             n_cnt__captured: 0,
             s_src__preview: '',
             o_config: {
-                s_motor: '2',
+
                 n_step__defocus: 40,
                 n_its: 3,
                 n_ms__settle: 350,
@@ -161,6 +158,10 @@ let o_component__flat_field = {
         };
     },
     computed: {
+        s_motor__focus_label: function() {
+            let n_motor = f_n_motor__axis('z');
+            return n_motor === null ? 'No focus motor — configure Z in Setup → motor cards.' : 'Motor ' + (n_motor + 1) + ' (Z axis, set in Setup)';
+        },
         b_ready: function() {
             return o_state.b_streaming__webcam && !o_state.b_scanning;
         },
@@ -220,6 +221,7 @@ let o_component__flat_field = {
             if(!o_setting || !o_setting.s_value) return;
             try {
                 Object.assign(o_self.o_config, JSON.parse(o_setting.s_value));
+                delete o_self.o_config.s_motor;
             } catch(e) { /* ignore parse errors */ }
         },
 
@@ -246,7 +248,8 @@ let o_component__flat_field = {
             if(o_state.b_scanning) return;
             if(o_state.o_panel_visibility.manual_stitch) return; // 'f' is used there
             o_evt.preventDefault();
-            o_self.f_toggle_active();
+            o_state.o_panel_visibility.flat = true;
+            f_save_setting__debounced('o_panel_visibility', o_state.o_panel_visibility);
         },
 
         // ── Motion / timing ─────────────────────────────────────────
@@ -257,7 +260,7 @@ let o_component__flat_field = {
         f_move: async function(n_step) {
             let o_self = this;
             if(n_step === 0) return;
-            let n_motor = parseInt(o_self.o_config.s_motor, 10);
+            let n_motor = f_n_motor__axis('z');
             let o_promise__move = f_send_esp_move_step(n_motor, n_step, N_RPM__DEFOCUS);
             let o_promise__timeout = new Promise(function(resolve){
                 setTimeout(function(){ resolve('timeout'); }, N_MS__MOVE_TIMEOUT);
@@ -342,7 +345,7 @@ let o_component__flat_field = {
                     o_self.n_cnt__captured++;
 
                     if(n_it < n_its - 1){
-                        if(o_self.o_config.b_auto_defocus && o_state.b_connected__esp){
+                        if(o_self.o_config.b_auto_defocus && f_n_motor__axis('z') !== null && o_state.b_connected__esp){
                             o_self.s_status__detail = 'defocusing...';
                             await o_self.f_move(o_self.o_config.n_step__defocus);
                         } else {
@@ -396,7 +399,7 @@ let o_component__flat_field = {
             let o_self = this;
             o_self.b_stop_requested = true;
             if(o_state.b_connected__esp){
-                f_send_esp_stop(parseInt(o_self.o_config.s_motor, 10));
+                f_send_esp_stop(f_n_motor__axis('z'));
             }
             o_self.f_next();
         },
@@ -467,7 +470,7 @@ let o_component__flat_field = {
         o_self.f_load_config();
         o_self.f_load_flat__from_path();
         o_self._f_on_keydown = function(o_evt){ o_self.f_on_keydown(o_evt); };
-        window.addEventListener('keydown', o_self._f_on_keydown);
+
     },
     beforeUnmount: function() {
         let o_self = this;

@@ -1,4 +1,5 @@
-import { o_state, o_router, f_connect_esp_serial, f_disconnect_esp, f_save_setting__debounced, f_save_flat_field, f_toggle_mouse_jog, f_send_esp_stop_all, f_save_library_current, f_refresh_maps } from './index.js';
+import { o_actions } from './o_actions.js';
+import { o_state, f_save_setting__debounced, f_send_esp_stop_all, f_save_library_current, f_refresh_maps } from './index.js';
 import { f_s_key__iso, f_apply_camera_setting, f_set_camera_mode, f_apply_camera__saved } from './o_camera.module.js';
 import { f_recording_stop } from './o_recording.module.js';
 
@@ -7,21 +8,10 @@ let o_component__toolbar = {
     template: `
         <div class="toolbar" ref="el_toolbar">
             <div class="toolbar-row">
+            <button class="toolbar-toggle" @click="f_action_search">find (ctrl+f)</button>
+            <button class="toolbar-toggle" @click="f_capture_image">Capture Image</button>
             <span class="toolbar-title">&#9881; Stepper</span>
-            <button class="toolbar-toggle" @click="f_go_setup">Setup</button>
-            <div class="toolbar-sep"></div>
-
-            <div class="toolbar-ip">
-                <button
-                    v-if="o_state.b_available__serial"
-                    class="toolbar-toggle"
-                    :class="{ active: o_state.s_transport__esp === 'serial' }"
-                    @click="f_on_connect_serial"
-                    :title="o_state.s_transport__esp === 'serial' ? 'reconnect via USB (Web Serial)' : 'connect via USB (Web Serial)'"
-                >USB</button>
-                <span v-else class="toolbar-ip-hint" title="Web Serial is unavailable here — open Setup to connect via WebSocket">no USB — use Setup</span>
-            </div>
-
+            <button class="toolbar-toggle" @click="f_open_setup" :class="{ active: o_state.o_panel_visibility.setup }">Setup</button>
             <div class="toolbar-sep"></div>
 
             <button
@@ -39,6 +29,7 @@ let o_component__toolbar = {
                 :class="{ active: o_state.o_panel_visibility.motion }"
                 @click="f_toggle_panel('motion')"
             >Motion</button>
+            <button class="toolbar-toggle" :class="{ active: o_state.o_panel_visibility.gamepad }" @click="f_toggle_panel('gamepad')">Gamepad</button>
             <button
                 class="toolbar-toggle"
                 :class="{ active: o_state.o_panel_visibility.optics }"
@@ -47,15 +38,9 @@ let o_component__toolbar = {
             <button
                 class="toolbar-toggle"
                 :class="{ active: o_state.o_flat_field.b_active }"
-                @click="f_toggle_flat"
-                title="toggle flat-field (dust) correction — shortcut: F"
+                @click="f_open_flat"
+                title="Open flat-field calibration — shortcut: F"
             >Flat</button>
-            <button
-                class="toolbar-toggle"
-                :class="{ active: o_state.o_panel_visibility.calibration }"
-                @click="f_toggle_panel('calibration')"
-                title="open the calibration checklist"
-            >Calib</button>
             <button
                 class="toolbar-toggle"
                 :class="{ active: o_state.o_panel_visibility.cellpose }"
@@ -90,39 +75,6 @@ let o_component__toolbar = {
             <div class="toolbar-sep"></div>
 
             <button
-                class="toolbar-toggle"
-                :class="{ active: o_state.o_panel_visibility.jog }"
-                @click="f_toggle_panel('jog')"
-                title="open/close the Jog settings panel"
-            >Jog</button>
-            <button
-                class="toolbar-toggle toolbar-mouse-jog"
-                :class="{ active: o_state.b_enabled__mouse_jog }"
-                @click="f_toggle_mouse_jog"
-                :title="o_state.b_enabled__mouse_jog ? 'mouse jog is active - click to stop' : 'jog the motors with the mouse over the live image'"
-            >&#10022; Mouse Jog</button>
-
-            <div class="toolbar-speed" title="jog speed — WASD / mouse / gamepad">
-                <button class="toolbar-speed-step" @click="f_nudge_rpm(-0.5)" title="slower">&minus;</button>
-                <input
-                    class="toolbar-speed-range"
-                    type="range"
-                    min="0.05" max="15" step="0.05"
-                    v-model.number="o_state.n_rpm__jog"
-                    @input="f_on_rpm_change"
-                >
-                <input
-                    class="toolbar-speed-value"
-                    type="number"
-                    min="0.05" max="15" step="0.05"
-                    v-model.number="o_state.n_rpm__jog"
-                    @change="f_on_rpm_change"
-                >
-                <button class="toolbar-speed-step" @click="f_nudge_rpm(0.5)" title="faster">+</button>
-                <span class="toolbar-speed-unit">rpm</span>
-            </div>
-
-            <button
                 class="toolbar-toggle toolbar-stop"
                 :class="{ active: b_any_motor_running }"
                 @click="f_stop_all"
@@ -145,8 +97,7 @@ let o_component__toolbar = {
             <div
                 class="conn-badge"
                 :class="{ connected: o_state.b_connected__esp }"
-                :title="o_state.b_connected__esp ? 'click to disconnect' : ''"
-                @click="f_on_disconnect"
+                title="Controller connection — configure in Setup"
             >
                 <span class="dot"></span>
                 <span>{{ s_connection_label }}</span>
@@ -362,6 +313,8 @@ let o_component__toolbar = {
         },
     },
     methods: {
+        f_action_search() { o_actions.f_invoke('actions.search'); },
+        f_capture_image() { o_actions.f_invoke('image.capture'); },
         f_cam_set: function(s_api, v_value) {
             let o_control = this.a_o_cam_control.find(function(o) {
                 return o.s_kind === 'value' && o.s_api === s_api;
@@ -386,60 +339,25 @@ let o_component__toolbar = {
             if (!el_toolbar) return;
             document.documentElement.style.setProperty('--topbar-h', el_toolbar.offsetHeight + 'px');
         },
-        f_on_connect_serial: function() {
-            f_connect_esp_serial(true);
-        },
-        f_on_disconnect: function() {
-            if (o_state.b_connected__esp) {
-                f_disconnect_esp();
-            }
-        },
         f_toggle_panel: function(s_name) {
-            o_state.o_panel_visibility[s_name] = !o_state.o_panel_visibility[s_name];
-            f_save_setting__debounced('o_panel_visibility', o_state.o_panel_visibility);
+            o_actions.f_invoke('panel.' + s_name);
         },
         f_stop_recording: function() {
             f_recording_stop();
         },
-        f_toggle_flat: function() {
-            let o_flat = o_state.o_flat_field;
-            if(!o_flat.s_path_flat){
-                // nothing to enable yet -> open the calibration panel
-                o_state.o_panel_visibility.flat = true;
-                f_save_setting__debounced('o_panel_visibility', o_state.o_panel_visibility);
-                return;
-            }
-            o_flat.b_active = !o_flat.b_active;
-            f_save_flat_field();
+        f_open_flat: function() {
+            o_state.o_panel_visibility.flat = true;
+            f_save_setting__debounced('o_panel_visibility', o_state.o_panel_visibility);
         },
         f_on_webcam_change: function() {
             f_save_setting__debounced('s_id__webcam_device', o_state.s_id__webcam_device);
         },
-        f_go_setup: function() {
-            o_router.push('/setup');
-        },
-        f_toggle_mouse_jog: function() {
-            f_toggle_mouse_jog();
-        },
-        f_on_rpm_change: function() {
-            let n_rpm = parseFloat(o_state.n_rpm__jog);
-            if(!isFinite(n_rpm)){
-                n_rpm = 0.05;
-            }
-            o_state.n_rpm__jog = Math.max(0.05, Math.min(15, n_rpm));
-            f_save_setting__debounced('n_rpm__jog', String(o_state.n_rpm__jog));
-        },
-        f_nudge_rpm: function(n_delta) {
-            let n_rpm = parseFloat(o_state.n_rpm__jog);
-            if(!isFinite(n_rpm)){
-                n_rpm = 0.05;
-            }
-            let n_next = Math.round((n_rpm + n_delta) * 100) / 100;
-            o_state.n_rpm__jog = Math.max(0.05, Math.min(15, n_next));
-            f_save_setting__debounced('n_rpm__jog', String(o_state.n_rpm__jog));
+        f_open_setup: function() {
+            o_state.o_panel_visibility.setup = true;
+            f_save_setting__debounced('o_panel_visibility', o_state.o_panel_visibility);
         },
         f_stop_all: function() {
-            f_send_esp_stop_all();
+            o_actions.f_invoke('motor.stop');
         },
         f_on_project_change: function(o_evt) {
             let n_id = parseInt(o_evt.target.value, 10) || 0;

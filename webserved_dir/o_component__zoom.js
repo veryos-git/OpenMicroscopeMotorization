@@ -1,3 +1,4 @@
+import { f_action } from './o_actions.js';
 import { o_state, f_save_setting__debounced } from './index.js';
 
 // digital zoom: pick a region of the live image and watch it magnified in a
@@ -208,6 +209,7 @@ let o_component__zoom = {
         let o_self = this;
         o_self.f_clamp_panel();
         o_self._f_on_resize = function(){ o_self.f_on_resize(); };
+        f_action({ id: 'zoom.cancel', name: 'Cancel Zoom Selection', description: 'Leave zoom region selection', category: 'Image' }, () => { o_state.o_zoom.b_selecting = false; });
         o_self._f_on_keydown = function(o_evt){ o_self.f_on_keydown(o_evt); };
         o_self._f_on_keyup = function(o_evt){ o_self.f_on_keyup(o_evt); };
         o_self._f_on_blur = function(){ o_self.b_ctrl = false; o_self.f_cancel_drag(); };
@@ -372,7 +374,7 @@ let o_component__zoom = {
         f_on_keydown: function(o_evt) {
             let o_self = this;
             if(o_evt.key === 'Control' || o_evt.ctrlKey) o_self.b_ctrl = true;
-            if(o_evt.key === 'Escape' && o_state.o_zoom.b_selecting) o_state.o_zoom.b_selecting = false;
+
         },
         f_on_keyup: function(o_evt) {
             if(o_evt.key === 'Control' || !o_evt.ctrlKey) this.b_ctrl = false;

@@ -1,3 +1,4 @@
+import { o_component__actions } from './o_component__actions.js';
 import { f_wait_for_esp_status } from './serial_handshake.module.js';
 import { createApp, reactive, watch, markRaw } from 'vue';
 import { createRouter, createWebHistory } from 'vue-router';
@@ -14,9 +15,9 @@ import { o_component__toolbar } from './o_component__toolbar.js';
 import { o_component__webcam } from './o_component__webcam.js';
 import { o_component__jog } from './o_component__jog.js';
 import { o_component__map } from './o_component__map.js';
+import { o_component__gamepad } from './o_component__gamepad.js';
 import { o_component__motion } from './o_component__motion.js';
 import { o_component__optics } from './o_component__optics.js';
-import { o_component__motor } from './o_component__motor.js';
 import { o_component__scan } from './o_component__scan.js';
 import { o_component__camera_setting } from './o_component__camera_setting.js';
 import { o_component__manual_stitch } from './o_component__manual_stitch.js';
@@ -39,7 +40,7 @@ import { f_o_config__default, f_b_recording__server } from './o_recording.module
 import { f_o_video_config__default } from './o_video.module.js';
 import { o_component__backlash } from './o_component__backlash.js';
 import { o_component__slide_library } from './o_component__slide_library.js';
-import { o_component__page_setup } from './o_component__page_setup.js';
+import { o_component__setup } from './o_component__setup.js';
 import { o_component__page_control } from './o_component__page_control.js';
 import { o_component__stats } from './o_component__stats.js';
 
@@ -235,7 +236,7 @@ let o_state = reactive({
     a_o_map__scanned: [],
 
     // UI
-    o_panel_visibility: { map: false, motion: false, optics: false, slide_library: false, jog: true, motors: true, scan: false, camera_setting: false, manual_stitch: false, macro: false, auto_move: false, autostitch: false, filter: false, flat: false, focus: false, focus_step: false, focus_stack: false, backlash: false, calibration: false, scale: false, stats: false, cellpose: false, zoom: false, record: false, recording_library: false, video: false },
+    o_panel_visibility: { setup: false, map: false, motion: false, gamepad: false, optics: false, slide_library: false, scan: false, camera_setting: false, manual_stitch: false, macro: false, auto_move: false, autostitch: false, filter: false, flat: false, focus: false, focus_step: false, focus_stack: false, scale: false, stats: false, cellpose: false, zoom: false, record: false, recording_library: false, video: false },
     o_key_held: {},
 
     // scan
@@ -278,6 +279,13 @@ let o_state = reactive({
     n_cnt__capture_flash: 0,
 
     // gamepad
+    a_o_gamepad: [],
+    n_index__gamepad: -1,
+    o_input__gamepad: null,
+    b_enabled__gamepad: true,
+    b_armed__gamepad: false,
+    s_error__gamepad: '',
+    s_status__gamepad: 'Waiting for controller',
     s_name__gamepad: '',
     b_connected__gamepad: false,
 
@@ -292,7 +300,7 @@ let o_state = reactive({
     a_o_command__macro: [],
     n_ts_ms__macro_last: 0,
 
-    // setup page state
+    // Setup overlay state
     s_wifi_ssid: '',
     s_wifi_password: '',
     a_o_pin_config: [
@@ -442,14 +450,14 @@ let f_apply_setting_from_db = function(){
     o_state.n_rpm__jog = parseFloat(f_get('n_rpm__jog', '5.0'));
     o_state.s_id__webcam_device = f_get('s_id__webcam_device', '');
 
-    let o_vis = f_get_json('o_panel_visibility', { map: false, motion: false, optics: false, jog: true, motors: true, scan: false, camera_setting: false, stats: false });
+    let o_vis = f_get_json('o_panel_visibility', { map: false, motion: false, gamepad: false, optics: false, scan: false, camera_setting: false, stats: false });
+    o_state.o_panel_visibility.setup = o_state.o_panel_visibility.setup || o_vis.setup || false;
     o_state.o_panel_visibility.flat = o_vis.flat || false;
     o_state.o_panel_visibility.map = o_vis.map || false;
     o_state.o_panel_visibility.motion = o_vis.motion || false;
+    o_state.o_panel_visibility.gamepad = o_vis.gamepad || false;
     o_state.o_panel_visibility.optics = o_vis.optics || false;
     o_state.o_panel_visibility.slide_library = o_vis.slide_library || false;
-    o_state.o_panel_visibility.jog = o_vis.jog;
-    o_state.o_panel_visibility.motors = o_vis.motors;
     o_state.o_panel_visibility.scan = o_vis.scan || false;
     o_state.o_panel_visibility.camera_setting = o_vis.camera_setting || false;
     o_state.o_panel_visibility.manual_stitch = o_vis.manual_stitch || false;
@@ -460,8 +468,7 @@ let f_apply_setting_from_db = function(){
     o_state.o_panel_visibility.focus = o_vis.focus || false;
     o_state.o_panel_visibility.focus_step = o_vis.focus_step || false;
     o_state.o_panel_visibility.focus_stack = o_vis.focus_stack || false;
-    o_state.o_panel_visibility.backlash = o_vis.backlash || false;
-    o_state.o_panel_visibility.calibration = o_vis.calibration || false;
+    if(o_vis.backlash || o_vis.calibration) o_state.o_panel_visibility.setup = true;
     o_state.o_panel_visibility.scale = o_vis.scale || false;
     o_state.o_panel_visibility.stats = o_vis.stats || false;
     o_state.o_panel_visibility.cellpose = o_vis.cellpose || false;
@@ -515,14 +522,14 @@ let f_apply_setting_from_db = function(){
     // steps per pixel (per motor), used by the scan auto-grid
     o_state.a_n_step__per_px = f_get_json('a_n_step__per_px', o_state.a_n_step__per_px);
 
-    // setup page settings
+    // Setup overlay settings
     o_state.s_wifi_ssid = f_get('s_wifi_ssid', o_state.s_wifi_ssid);
     o_state.s_wifi_password = f_get('s_wifi_password', o_state.s_wifi_password);
     o_state.a_o_pin_config = f_get_json('a_o_pin_config', o_state.a_o_pin_config)
         .map((o_pin, n_idx) => ({ ...o_pin, s_name: 'Motor ' + (n_idx + 1) }));
 
     // auto-redirect: if ESP IP is known, try to connect and go to control page
-    f_try_auto_redirect();
+    f_try_open_setup();
 };
 
 // restore the persisted project/slide selection once the slide data has arrived
@@ -660,28 +667,17 @@ let f_save_calibration = function() {
     f_save_setting__debounced('o_calibration', o_state.o_calibration);
 };
 
-// ─── Auto-redirect logic ──────────────────────────────────────────────
-
-let b_auto_redirect_attempted = false;
-
-let f_try_auto_redirect = async function() {
-    if (b_auto_redirect_attempted) return;
-    b_auto_redirect_attempted = true;
-
-    // USB Serial is the default transport: only skip the setup page when a
-    // serial port is already authorized (getPorts() needs no user gesture).
-    // WebSocket must be enabled explicitly from the setup page.
+// Open hardware setup on first use without leaving the microscope view.
+let b_setup_prompt_attempted = false;
+let f_try_open_setup = async function() {
+    if (b_setup_prompt_attempted) return;
+    b_setup_prompt_attempted = true;
     if (o_state.b_available__serial) {
         try {
-            let a_o_port = await navigator.serial.getPorts();
-            if (a_o_port.length > 0) {
-                o_router.push('/control');
-                return;
-            }
+            if ((await navigator.serial.getPorts()).length > 0) return;
         } catch {}
     }
-    // stay on the setup page so the user can choose USB Serial or enter an
-    // IP for the WebSocket fallback
+    o_state.o_panel_visibility.setup = true;
 };
 
 // ─── ESP32 transport (Web Serial primary, WebSocket fallback) ───────
@@ -997,7 +993,7 @@ let f_connect_esp_serial = async function(b_request_if_none, o_selected_port = n
 
 // USB Serial is the default transport. Auto-connect only re-opens an
 // already-authorized port (no user gesture). WebSocket is never auto-connected
-// here — it must be enabled from the setup page.
+// here — it must be enabled from the Setup overlay.
 let f_connect_esp__auto = async function() {
     if (o_state.b_available__serial) {
         try {
@@ -1031,13 +1027,17 @@ let f_send_esp = function(o_msg) {
 // ─── ESP32 motor command helpers ─────────────────────────────────────
 
 // Axis assignments resolve to physical motor indices; calibration stays per motor.
-let f_n_motor__axis = s_axis => o_state.o_motor__axis[s_axis];
+let f_n_motor__axis = s_axis => {
+    let n_motor = o_state.o_motor__axis[s_axis];
+    return Number.isInteger(n_motor) && n_motor >= 0 && n_motor < 3 ? n_motor : null;
+};
 
 let f_send_esp_run_continuous = function(n_motor, n_rpm, s_direction) {
     f_send_esp({ motor: n_motor, command: 'runContinuous', n_rpm: n_rpm, direction: s_direction });
 };
 
 let f_send_esp_move_step = function(n_motor, n_step, n_rpm) {
+    if(!Number.isInteger(n_motor) || n_motor < 0 || n_motor > 2) return Promise.reject(new Error('No motor assigned to this axis'));
     return new Promise(function(resolve) {
         if (!f_b_esp_connected()) {
             resolve(0);
@@ -1062,10 +1062,13 @@ let f_send_esp_move_step = function(n_motor, n_step, n_rpm) {
 };
 
 let f_send_esp_stop = function(n_motor) {
+    if(!Number.isInteger(n_motor) || n_motor < 0 || n_motor > 2) return;
     f_send_esp({ motor: n_motor, command: 'stop' });
 };
 
 let f_send_esp_stop_all = function() {
+    o_state.n_cnt__stop_all = (o_state.n_cnt__stop_all || 0) + 1;
+    o_state.b_armed__gamepad = false;
     f_send_esp({ command: 'stopAll' });
 };
 
@@ -1111,8 +1114,8 @@ let f_send_esp_circle_stop = function() {
 // ─── Vue Router ─────────────────────────────────────────────────────
 
 let a_o_route = [
-    { path: '/', redirect: '/setup' },
-    { path: '/setup', component: o_component__page_setup },
+    { path: '/', redirect: '/control' },
+    { path: '/setup', redirect: () => { o_state.o_panel_visibility.setup = true; return '/control'; } },
     { path: '/control', component: o_component__page_control },
 ];
 
@@ -1149,13 +1152,15 @@ let o_app = createApp({
     `,
 });
 
+o_app.component('o_component__setup', o_component__setup);
+o_app.component('o_component__actions', o_component__actions);
 o_app.component('o_component__toolbar', o_component__toolbar);
 o_app.component('o_component__webcam', o_component__webcam);
 o_app.component('o_component__jog', o_component__jog);
 o_app.component('o_component__map', o_component__map);
+o_app.component('o_component__gamepad', o_component__gamepad);
 o_app.component('o_component__motion', o_component__motion);
 o_app.component('o_component__optics', o_component__optics);
-o_app.component('o_component__motor', o_component__motor);
 o_app.component('o_component__scan', o_component__scan);
 o_app.component('o_component__camera_setting', o_component__camera_setting);
 o_app.component('o_component__manual_stitch', o_component__manual_stitch);

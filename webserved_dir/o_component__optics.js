@@ -18,7 +18,6 @@ let o_component__optics = {
                     <button class="hub-item" @click="f_open('filter')">Filter</button>
                     <button class="hub-item" @click="f_open('flat')">Flat field</button>
                     <button class="hub-item" @click="f_open('scale')">Scale</button>
-                    <button class="hub-item" @click="f_open('calibration')">Calibration</button>
                 </div>
             </div>
         </div>

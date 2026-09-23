@@ -1,4 +1,4 @@
-import { o_state, f_send_esp_move_step, f_send_esp_stop, f_send_wsmsg_with_response, f_register_handler, f_save_setting__debounced } from './index.js';
+import { f_n_motor__axis, o_state, f_send_esp_move_step, f_send_esp_stop, f_send_wsmsg_with_response, f_register_handler, f_save_setting__debounced } from './index.js';
 import { f_o_wsmsg } from './constructors.module.js';
 import { f_n_score__video, f_o_focus__fast } from './focus_search.module.js';
 import { f_o_capture__frame, f_save_image } from './o_capture.module.js';
@@ -31,11 +31,7 @@ let o_component__focus_stack = {
                     <div class="focus-config">
                         <div class="focus-field">
                             <label>Focus motor</label>
-                            <select v-model="o_config.s_motor" @change="f_save_config">
-                                <option value="0">Motor 1</option>
-                                <option value="1">Motor 2</option>
-                                <option value="2">Motor 3</option>
-                            </select>
+                            <span>{{ s_motor__focus_label }}</span>
                         </div>
                         <div class="focus-field">
                             <label>Step size</label>
@@ -153,7 +149,7 @@ let o_component__focus_stack = {
             n_ts_ms__stack_line: 0,
             f_unregister__stack_progress: null,
             o_config: {
-                s_motor: '2',
+
                 n_step: 40,
                 n_its: 20,
                 n_ms__settle: 350,
@@ -166,8 +162,12 @@ let o_component__focus_stack = {
         };
     },
     computed: {
+        s_motor__focus_label: function() {
+            let n_motor = f_n_motor__axis('z');
+            return n_motor === null ? 'No focus motor — configure Z in Setup → motor cards.' : 'Motor ' + (n_motor + 1) + ' (Z axis, set in Setup)';
+        },
         b_ready: function() {
-            return o_state.b_connected__esp && o_state.b_streaming__webcam && !o_state.b_scanning;
+            return f_n_motor__axis('z') !== null && o_state.b_connected__esp && o_state.b_streaming__webcam && !o_state.b_scanning;
         },
         s_path__preview__shown: function() {
             return this.s_path__preview || this.s_path__stacked_image;
@@ -196,6 +196,7 @@ let o_component__focus_stack = {
             if(!o_setting || !o_setting.s_value) return;
             try {
                 Object.assign(o_self.o_config, JSON.parse(o_setting.s_value));
+                delete o_self.o_config.s_motor;
             } catch(e) { /* ignore parse errors */ }
         },
 
@@ -207,7 +208,7 @@ let o_component__focus_stack = {
         f_move: async function(n_step) {
             let o_self = this;
             if(n_step === 0) return;
-            let n_motor = parseInt(o_self.o_config.s_motor, 10);
+            let n_motor = f_n_motor__axis('z');
             let o_promise__move = f_send_esp_move_step(n_motor, n_step, N_RPM__STACK);
             let o_promise__timeout = new Promise(function(resolve){
                 setTimeout(function(){ resolve('timeout'); }, N_MS__MOVE_TIMEOUT);
@@ -223,7 +224,7 @@ let o_component__focus_stack = {
 
         f_o_focus: function() {
             let o_self = this;
-            let n_motor = parseInt(o_self.o_config.s_motor, 10);
+            let n_motor = f_n_motor__axis('z');
             if(!o_self._o_cache__focus) o_self._o_cache__focus = {};
             return f_o_focus__fast({
                 f_move: async function(n_step){
@@ -391,7 +392,7 @@ let o_component__focus_stack = {
         f_stop: function() {
             let o_self = this;
             o_self.b_stop_requested = true;
-            f_send_esp_stop(parseInt(o_self.o_config.s_motor, 10));
+            f_send_esp_stop(f_n_motor__axis('z'));
         },
         f_on_stack_progress: function(o_msg) {
             let o_self = this;

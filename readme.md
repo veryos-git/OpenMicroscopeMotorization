@@ -41,9 +41,18 @@ autostitch or the LoFTR rescue matcher. `stitch.py` itself only needs numpy + op
 not need the `Cell pose` panel. `--cpu` installs the small CPU-only torch build instead
 of the ~3 GB CUDA one.
 
-## flash from the browser
+## hardware setup and browser flashing
 
-Open Setup in desktop Chrome or Edge using HTTPS or `http://localhost:8000`.
+Open the Setup overlay from the toolbar to configure motor axes (including the optional Z/focus motor),
+GPIO pins, backlash compensation, WiFi, and the controller connection. These
+assignments are shared by all tools in Control. Each physical motor appears once,
+with its axis assignment, live movement/direction/position, move and stop buttons,
+and expandable wiring/backlash settings. Keyboard, mouse, and gamepad settings
+are below the cards; the separate Jog and Motors windows have been removed. Firmware flashing is included
+in the same overlay; there is no separate Setup or flashing page. Pin and WiFi changes require
+flashing; axis assignments apply immediately.
+
+For flashing, use desktop Chrome or Edge over HTTPS or `http://localhost:8000`.
 Plug the ESP32-S3 into the **computer running the browser**, then click
 **Generate Firmware & Flash ESP32** and select its USB port. WiFi credentials
 are optional when using USB control.
@@ -70,7 +79,13 @@ least-squares pass and blends the mosaic into `stitched.png` (plus
 its progress is streamed into the scan panel while it runs.
 
 ## backlash calibration
-the `Backlash` panel measures the slack of a motor from the live image. it drives
+In **Hardware Setup**, each motor card has a **Calibrate** button that measures
+that physical motor’s backlash from the live image. Progress and **Stop calibration**
+stay on the card. Expand **Advanced calibration settings & results** for probe
+steps, limits, settling, repeats, compensation mode, plots, and results. Settings
+are saved independently for each motor. Focus motors default to the sharpness
+signal; stage motors use image shift. The calibration checklist and optical
+settings are also available inside Hardware Setup. The calibration drives
 well past the slack in one direction (preload), takes a reference frame, then
 steps back in small probes and measures how far the image moved against that
 reference. while the gears are loose the image stands still; once they engage it
@@ -380,3 +395,40 @@ third-party components and their licences are listed in
 links the LGPL-3.0 `ESP Async WebServer` / `Async TCP` libraries and the
 LGPL-2.1 ESP32 arduino core; the full source of this project is provided, so the
 relinking condition of those licences is met.
+
+### Actions and input bindings
+
+Open **find (ctrl+f)** in the toolbar, or press **Ctrl+F** / **F3**. Search by
+name, category, description, or keyword; use arrow keys and Enter to invoke a
+result. **Capture Image** downloads the current camera frame (Ctrl+Shift+I or
+gamepad button 0 by default). Manual stitch capture uses Ctrl+Shift+F; R runs
+stitching. F opens/closes Flat. Escape stops motors and cancels zoom selection.
+
+Enable **Edit bindings** to select an action and add keyboard chords or gamepad
+buttons/axes (indices are zero-based; D-pad buttons are 12–15 on standard pads,
+triggers are buttons 6/7). Multiple bindings are supported. Conflicts can be
+cancelled or overridden; overriding removes only the conflicting assignment.
+Record keys by holding them together. Sequential shortcuts are not supported.
+
+Profiles are stored in this browser, independently of other browsers/users.
+Enter a profile name to switch or create one. Export/import versioned JSON to
+transfer a keymap. Invalid or conflicting imports leave the current map intact.
+Clear individual bindings, restore an action's defaults and Save, or reset all.
+Auto-repeat waits for the configured delay, then fires at the interval (both
+in milliseconds). Analog values support deadzone, sensitivity and a power
+response curve; threshold converts an analog input into a digital press.
+
+Movement retains connection, scan, focus and controller arming checks. Opening
+action search releases held actions; center the controller before resuming.
+Movement invoked from the palette is a short 150 ms pulse. Global shortcuts
+apply inside this application, not across the operating system. Plain keys are
+suppressed while typing in fields. Browser-reserved shortcuts may require a
+different binding on some platforms.
+
+The framework-independent registry is in `webserved_dir/actions.module.js`;
+application handlers share `o_actions` in `webserved_dir/o_actions.js`. Register
+stable IDs with metadata and callbacks. Digital callbacks receive press/repeat
+and release phases; analog callbacks receive normalized values and zero on
+release. The `f_action` helper ignores digital releases for one-shot operations.
+Additional contexts can be activated with `f_context`; global remains active.
+Run regression tests with `deno test -A tests`.

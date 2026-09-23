@@ -12,16 +12,13 @@ let o_component__motion = {
             </div>
             <div class="panel-body">
                 <div class="hub-grid">
-                    <button class="hub-item" @click="f_open('jog')">Jog</button>
-                    <button class="hub-item" @click="f_open('motors')">Motors</button>
-                    <button class="hub-item" @click="f_open('backlash')">Backlash</button>
                     <button class="hub-item" @click="f_open('auto_move')">Auto</button>
                     <button class="hub-item" @click="f_open('macro')">Macro</button>
                     <button class="hub-item" @click="f_open('stats')">Stats</button>
                 </div>
                 <div class="live-note">
                     jog with WASD / the gamepad, or drag over the live image with the
-                    mouse (Mouse Jog in the top bar).
+                    mouse (enable mouse movement in Setup).
                 </div>
             </div>
         </div>
