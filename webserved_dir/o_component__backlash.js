@@ -403,9 +403,8 @@ let o_component__backlash = {
         // n_sign is the direction the probe steps go; the preload runs the other
         // way, so the run starts with the gears pressed against the far flank.
 
-        f_o_round: async function(n_sign) {
+        f_o_round: async function(n_sign, o_config = this.o_config) {
             let o_self = this;
-            let o_config = o_self.o_config;
             o_self.a_o_sample = [];
             o_self.o_fit = null;
 
@@ -490,11 +489,15 @@ let o_component__backlash = {
             };
         },
 
-        f_run: async function() {
+        f_run: async function(o_options = {}) {
             let o_self = this;
             if(o_self.b_running || !o_self.b_ready) return;
             let n_motor = o_self.f_n_motor();
             if(n_motor === null) return;
+            // Quick runs use a temporary preset; advanced settings stay intact.
+            let o_config = o_options.b_quick === true
+                ? { ...o_self.o_config, n_cnt__repeat: 1, b_both_direction: true, n_step__probe: Math.max(10, o_self.o_config.n_step__probe) }
+                : { ...o_self.o_config };
 
             o_self.b_running = true;
             o_self.b_stop_requested = false;
@@ -513,12 +516,12 @@ let o_component__backlash = {
             if(n_step__backlash__before) f_send_esp_set_backlash(n_motor, 0);
 
             try {
-                let a_n_sign = o_self.o_config.b_both_direction ? [1, -1] : [1];
-                let n_cnt__repeat = Math.max(1, Math.round(o_self.o_config.n_cnt__repeat));
+                let a_n_sign = o_config.b_both_direction ? [1, -1] : [1];
+                let n_cnt__repeat = Math.max(1, Math.round(o_config.n_cnt__repeat));
                 for(let n_it__repeat = 0; n_it__repeat < n_cnt__repeat; n_it__repeat++){
                     for(let n_sign of a_n_sign){
                         if(o_self.b_stop_requested) break;
-                        let o_round = await o_self.f_o_round(n_sign);
+                        let o_round = await o_self.f_o_round(n_sign, o_config);
                         if(!o_round) break;
                         o_self.a_o_round.push(o_round);
                         if(!o_round.o_fit.b_valid){
@@ -554,6 +557,7 @@ let o_component__backlash = {
             if(o_self.b_stop_requested) o_self.s_status = 'stopped';
             o_state.b_scanning = false;
             o_self.b_running = false;
+            return b_applied && !o_self.b_stop_requested;
         },
         f_stop: function() {
             let o_self = this;

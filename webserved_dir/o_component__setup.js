@@ -1,3 +1,4 @@
+import { f_n_rpm__manual } from './manual_speed.module.js';
 import { o_state, f_send_esp, f_send_esp_move_step, f_send_esp_stop, f_send_esp_stop_all, f_send_esp_set_backlash, f_save_setting__debounced, f_send_wsmsg_with_response, f_register_handler, f_save_setting, f_connect_esp, f_connect_esp_serial, f_disconnect_esp } from './index.js';
 import { f_flash_browser } from './flash_browser.module.js';
 import { f_o_wsmsg } from './constructors.module.js';
@@ -14,6 +15,12 @@ let o_component__setup = {
                 <p class="setup-subtitle">Assign, move, and monitor your motors here. Position and movement are reported live by the controller.</p>
 
                 <section class="hardware-motors" aria-label="Motors">
+                    <div class="hardware-calibration-controls">
+                        <button v-if="!b_calibrating_all" class="btn-small" @click="f_calibrate_all" :disabled="!b_can_move || !o_state.b_streaming__webcam">Quick calibrate all</button>
+                        <button v-else class="btn-small" @click="f_stop_calibrating_all">Stop calibration</button>
+                        <span class="hardware-calibration-status" role="status">{{ s_status__calibrate_all }}</span>
+                    </div>
+                    <p class="setup-hint">Quick calibration measures both directions once per motor, with coarser probes. Use a textured sample; for focus, start clearly off focus on one side of the sharpness peak.</p>
                     <p class="setup-hint">Assign each motor to an axis. Choosing an occupied axis swaps motors. Z controls focus; leave its motor unassigned if focus is manual.</p>
                     <article class="hardware-motor" v-for="(o_pin, n_idx) in o_state.a_o_pin_config" :key="n_idx"
                         :class="{ moving: o_state.b_connected__esp && o_state.a_o_motor[n_idx].b_running }">
@@ -34,6 +41,12 @@ let o_component__setup = {
                                 <option value="z">Z · focus</option>
                             </select>
                         </div>
+                        <label v-if="f_s_axis_motor(n_idx) !== 'none'" class="hardware-direction">
+                            <input type="checkbox" :checked="f_b_direction_reversed(n_idx)" :disabled="b_hardware_busy"
+                                @change="f_reverse_direction(n_idx, $event.target.checked)" />
+                            Reverse {{ f_s_axis_motor(n_idx).toUpperCase() }} manual direction
+                        </label>
+                        <p v-if="f_s_axis_motor(n_idx) !== 'none'" class="setup-hint">Applies to keyboard, mouse and gamepad. Saved automatically. The CW/CCW test buttons below use physical motor direction.</p>
                         <div class="hardware-motor-readout">
                             <span>Position <strong>{{ o_state.a_o_motor[n_idx].n_position }}</strong> steps</span>
                             <span v-if="o_state.b_connected__esp && o_state.a_o_motor[n_idx].b_running">{{ o_state.a_o_motor[n_idx].n_rpm.toFixed(2) }} RPM</span>
@@ -188,6 +201,9 @@ let o_component__setup = {
             n_step__manual: 100,
             b_move_pending: false,
             s_error__motor: '',
+            b_calibrating_all: false,
+            b_stop__calibrate_all: false,
+            s_status__calibrate_all: '',
         };
     },
     computed: {
@@ -195,7 +211,7 @@ let o_component__setup = {
             return o_state.b_connected__esp && !this.b_hardware_busy && !this.b_move_pending;
         },
         b_hardware_busy: function() {
-            return this.b_move_pending || o_state.b_flashing || o_state.b_scanning || o_state.a_o_motor.some(o_motor => o_motor.b_running);
+            return this.b_calibrating_all || this.b_move_pending || o_state.b_flashing || o_state.b_scanning || o_state.a_o_motor.some(o_motor => o_motor.b_running);
         },
         s_flash_status_label: function() {
             let o_map = {
@@ -222,8 +238,66 @@ let o_component__setup = {
         },
     },
     methods: {
+        f_calibrate_all: async function() {
+            if(!this.b_can_move || !o_state.b_streaming__webcam) return;
+            this.b_calibrating_all = true;
+            this.b_stop__calibrate_all = false;
+            let n_stop = o_state.n_cnt__stop_all;
+            try {
+                let a_calibration = [...(this.$refs.a_calibration || [])].sort((a, b) => a.n_motor - b.n_motor);
+                if(!a_calibration.length) throw new Error('No motors available');
+                for(let o_calibration of a_calibration) {
+                    if(this.b_stop__calibrate_all || n_stop !== o_state.n_cnt__stop_all || !o_state.b_connected__esp || !o_state.b_streaming__webcam) {
+                        this.s_status__calibrate_all = 'Quick calibration stopped';
+                        return;
+                    }
+                    this.s_status__calibrate_all = `Quick calibration: motor ${o_calibration.n_motor + 1} of ${a_calibration.length}`;
+                    let b_success = await o_calibration.f_run({ b_quick: true });
+                    if(!b_success || this.b_stop__calibrate_all) {
+                        this.s_status__calibrate_all = `Stopped at motor ${o_calibration.n_motor + 1}: ${o_calibration.s_status}`;
+                        return;
+                    }
+                }
+                this.s_status__calibrate_all = 'Quick calibration complete — all motors applied';
+            } catch(o_error) {
+                this.s_status__calibrate_all = 'Quick calibration failed: ' + o_error.message;
+            } finally {
+                this.b_calibrating_all = false;
+            }
+        },
+        f_stop_calibrating_all: function() {
+            this.b_stop__calibrate_all = true;
+            for(let o_calibration of this.$refs.a_calibration || []) {
+                if(o_calibration.b_running) o_calibration.f_stop();
+            }
+        },
         f_s_axis_motor: function(n_motor) {
             return Object.keys(o_state.o_motor__axis).find(s_axis => o_state.o_motor__axis[s_axis] === n_motor) || 'none';
+        },
+        f_b_direction_reversed: function(n_motor) {
+            let s_key = { x: 'd', y: 'w', z: 'e' }[this.f_s_axis_motor(n_motor)];
+            return s_key ? o_state['o_mapping__' + s_key]?.s_dir === 'ccw' : false;
+        },
+        f_reverse_direction: function(n_motor, b_reverse) {
+            if(this.b_hardware_busy) return;
+            let s_axis = this.f_s_axis_motor(n_motor);
+            let o_defaults = {
+                x: { a: 'ccw', d: 'cw' },
+                y: { w: 'cw', s: 'ccw' },
+                z: { q: 'ccw', e: 'cw', mouse_right: 'cw' },
+            }[s_axis];
+            if(!o_defaults) return;
+            // Keep opposing inputs paired and reuse the persisted mappings read
+            // by keyboard, mouse and gamepad. Axis assignments stay untouched.
+            for(let [s_key, s_dir] of Object.entries(o_defaults)) {
+                let o_mapping = {
+                    ...o_state['o_mapping__' + s_key],
+                    s_motor: String(n_motor),
+                    s_dir: b_reverse ? (s_dir === 'cw' ? 'ccw' : 'cw') : s_dir,
+                };
+                o_state['o_mapping__' + s_key] = o_mapping;
+                f_save_setting('o_mapping__' + s_key, o_mapping);
+            }
         },
         f_assign_motor: function(n_motor, s_axis) {
             if(this.b_hardware_busy) return;
@@ -236,7 +310,7 @@ let o_component__setup = {
         f_move_motor: async function(n_motor, n_sign) {
             if(!this.b_can_move) return;
             let n_step = Math.round(Number(this.n_step__manual));
-            let n_rpm = Number(o_state.n_rpm__jog);
+            let n_rpm = f_n_rpm__manual(o_state, o_state.o_motor__axis?.z === n_motor ? 'z' : 'xy');
             if(!Number.isFinite(n_step) || n_step < 1 || n_step > 10000 || !Number.isFinite(n_rpm) || n_rpm < 0.05 || n_rpm > 15) {
                 this.s_error__motor = 'Choose 1–10000 steps and a speed between 0.05 and 15 RPM.';
                 return;
@@ -256,7 +330,10 @@ let o_component__setup = {
             if(o_calibration?.b_running) o_calibration.f_stop();
             else f_send_esp_stop(n_motor);
         },
-        f_stop_all: function() { f_send_esp_stop_all(); },
+        f_stop_all: function() {
+            this.f_stop_calibrating_all();
+            f_send_esp_stop_all();
+        },
         f_refresh_motors: function() { f_send_esp({ command: 'status' }); },
         f_assign_axis: function(s_axis, n_motor) {
             if(this.b_hardware_busy) return;

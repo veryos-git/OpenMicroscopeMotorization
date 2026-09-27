@@ -10,6 +10,7 @@ let o_component__toolbar = {
             <div class="toolbar-row">
             <button class="toolbar-toggle" @click="f_action_search">find (ctrl+f)</button>
             <button class="toolbar-toggle" @click="f_capture_image">Capture Image</button>
+            <button class="toolbar-toggle" :class="{ active: o_state.o_panel_visibility.training }" @click="f_toggle_panel('training')">Train model</button>
             <span class="toolbar-title">&#9881; Stepper</span>
             <button class="toolbar-toggle" @click="f_open_setup" :class="{ active: o_state.o_panel_visibility.setup }">Setup</button>
             <div class="toolbar-sep"></div>
@@ -29,6 +30,8 @@ let o_component__toolbar = {
                 :class="{ active: o_state.o_panel_visibility.motion }"
                 @click="f_toggle_panel('motion')"
             >Motion</button>
+            <button class="toolbar-toggle" :class="{ active: o_state.o_panel_visibility.motion_detection, running: o_state.o_motion_detection.b_enabled }"
+                @click="f_toggle_panel('motion_detection')">Motion detection</button>
             <button class="toolbar-toggle" :class="{ active: o_state.o_panel_visibility.gamepad }" @click="f_toggle_panel('gamepad')">Gamepad</button>
             <button
                 class="toolbar-toggle"
@@ -104,6 +107,8 @@ let o_component__toolbar = {
             </div>
             </div>
 
+            <div class="toolbar-row toolbar-row--speed"><o_component__manual_speed s_context="toolbar" /></div>
+
             <!-- USB camera hardware quick bar (UVC settings, shown while streaming) -->
             <div class="toolbar-row toolbar-row--camera" v-if="o_state.o_camera.b_active">
                 <span class="toolbar-camera-title" title="USB camera hardware controls (UVC)">&#9679; CAM</span>
@@ -115,12 +120,14 @@ let o_component__toolbar = {
                                 class="mode-btn"
                                 :class="{ active: o_cam[o_control.s_local] === o_control.s_a_value[0] }"
                                 @click="f_cam_mode(o_control.s_api, o_control.s_a_value[0])"
+                                :disabled="!o_cam.o_capability[o_control.s_api]?.includes(o_control.s_a_value[0])"
                                 :title="o_control.s_a_title[0]"
                             >{{ o_control.s_a_short[0] }}</button>
                             <button
                                 class="mode-btn"
                                 :class="{ active: o_cam[o_control.s_local] === o_control.s_a_value[1] }"
                                 @click="f_cam_mode(o_control.s_api, o_control.s_a_value[1])"
+                                :disabled="!o_cam.o_capability[o_control.s_api]?.includes(o_control.s_a_value[1])"
                                 :title="o_control.s_a_title[1]"
                             >{{ o_control.s_a_short[1] }}</button>
                         </div>
@@ -132,7 +139,7 @@ let o_component__toolbar = {
                             class="toolbar-cam-range"
                             :min="o_control.o_range.min"
                             :max="o_control.o_range.max"
-                            :step="o_control.o_range.step || 1"
+                            :step="o_control.o_range.step ?? 'any'"
                             v-model.number="o_cam[o_control.s_local]"
                             @input="f_cam_set(o_control.s_api, o_cam[o_control.s_local])"
                         >
@@ -141,13 +148,14 @@ let o_component__toolbar = {
                             class="toolbar-cam-value"
                             :min="o_control.o_range.min"
                             :max="o_control.o_range.max"
-                            :step="o_control.o_range.step || 1"
+                            :step="o_control.o_range.step ?? 'any'"
                             v-model.number="o_cam[o_control.s_local]"
                             @change="f_cam_set(o_control.s_api, o_cam[o_control.s_local])"
                         >
                         <span class="toolbar-cam-unit" v-if="o_control.s_unit">{{ o_control.s_unit }}</span>
                     </label>
                 </template>
+                <span class="toolbar-camera-hint" role="alert" v-if="o_cam.s_error__setting">{{ o_cam.s_error__setting }}</span>
                 <span class="toolbar-camera-hint" v-if="!a_o_cam_control.length">no controllable settings reported by this camera</span>
             </div>
 
@@ -320,14 +328,6 @@ let o_component__toolbar = {
                 return o.s_kind === 'value' && o.s_api === s_api;
             });
             let n_value = parseFloat(v_value);
-            if (o_control && isFinite(n_value)) {
-                let o_range = o_control.o_range;
-                n_value = Math.max(o_range.min, Math.min(o_range.max, n_value));
-                let n_step = o_range.step || 1;
-                if (n_step > 0) n_value = o_range.min + Math.round((n_value - o_range.min) / n_step) * n_step;
-                n_value = Math.round(n_value * 1e6) / 1e6;
-                this.o_cam[o_control.s_local] = n_value;
-            }
             if (!isFinite(n_value)) return;
             f_apply_camera_setting(s_api, n_value);
         },
@@ -353,7 +353,8 @@ let o_component__toolbar = {
             f_save_setting__debounced('s_id__webcam_device', o_state.s_id__webcam_device);
         },
         f_open_setup: function() {
-            o_state.o_panel_visibility.setup = true;
+            if(o_state.o_panel_visibility.setup && o_state.b_flashing) return;
+            o_state.o_panel_visibility.setup = !o_state.o_panel_visibility.setup;
             f_save_setting__debounced('o_panel_visibility', o_state.o_panel_visibility);
         },
         f_stop_all: function() {

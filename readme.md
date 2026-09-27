@@ -1,4 +1,12 @@
 
+# HGC 
+hgc stands for Human Generated Content. this content has only to be written and edited by humans and not by any machine system.
+
+hgc stands for Human Generated Content. this content has only to be written and edited by humans and not by any machine system.
+
+hgc stands for Human Generated Content. this content has only to be written and edited by humans and not by any machine system.
+
+
 # installation 
 
 a glossary mapping the project's terms to standard imaging / microscopy /
@@ -78,7 +86,45 @@ least-squares pass and blends the mosaic into `stitched.png` (plus
 `stitched_preview.jpg` for large mosaics, `positions.json` and `report.json`).
 its progress is streamed into the scan panel while it runs.
 
+## manual movement speeds (WF-004 / WF-005)
+
+The toolbar always shows separate **XY** and **Z focus** RPM controls, with a
+slider and precise numeric entry (0.05–15 RPM). The same values appear in Setup
+and Gamepad. Keyboard uses the selected speed; mouse and gamepad scale it with
+input displacement. Changes take effect while jogging. Motor-card test buttons
+use the speed of their assigned axis; saved-position moves also use XY/Z speeds.
+
+**Slow** sets XY/Z to 0.5/0.15 RPM, **Normal** to 5/0.5 RPM, and **Fast** to
+10/1.5 RPM. Presets set both values; either can then be adjusted independently.
+Values save when a slider is released, a numeric edit is committed, or a preset
+is selected. Existing saved jog speed becomes XY speed; Z defaults to 0.5 RPM.
+Speeds follow the axis when motors are reassigned. Z controls are disabled when
+no focus motor is assigned. Autofocus, scanning and calibration retain their own
+movement settings. No firmware flash is required.
+
+## reversing manual motor direction
+
+In **Setup**, each assigned motor card has a **Reverse X/Y/Z manual direction**
+checkbox directly below its axis selector. Use it when the correct axis moves
+backward. It saves automatically and reverses the paired keyboard controls,
+mouse movement, and gamepad controls together. Stop movement before changing it.
+No firmware flash is needed.
+
+This setting changes manual input directions. The motor card's CW/CCW test
+buttons and automated movement retain their physical motor/coordinate meaning.
+The checkbox stays with the axis if you later change its motor assignment.
+Individual CW/CCW input settings remain available under **Input directions &
+gamepad**; toggling the checkbox sets the whole axis back to a consistent pair.
+
 ## backlash calibration
+**Quick calibrate all** in Hardware Setup runs every motor sequentially, using
+one pass in each direction and probes of at least 10 steps (the default is two
+passes and 5-step probes). This reduces measurement time at the cost of precision;
+motor speed, settling time, travel limits, and saved advanced settings are preserved.
+Stop calibration or Stop all cancels the batch. An unsuccessful motor stops the
+batch and keeps its previous compensation. Focus requires starting clearly off
+focus on one side of the sharpness peak.
+
 In **Hardware Setup**, each motor card has a **Calibrate** button that measures
 that physical motor’s backlash from the live image. Progress and **Stop calibration**
 stay on the card. Expand **Advanced calibration settings & results** for probe

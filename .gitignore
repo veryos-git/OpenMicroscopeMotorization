@@ -9,3 +9,7 @@ venv_cellpose/
 weights/
 __pycache__/
 *.pyc
+
+training_data/
+
+venv_yolo/

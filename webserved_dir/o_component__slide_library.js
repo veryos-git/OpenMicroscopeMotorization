@@ -1,3 +1,4 @@
+import { f_n_rpm__manual } from './manual_speed.module.js';
 import { f_n_motor__axis,
     o_state,
     f_send_wsmsg_with_response,
@@ -231,7 +232,7 @@ let o_component__slide_library = {
                 let n_current = o_motor ? o_motor.n_position : 0;
                 let n_delta = Math.round(n_target - n_current);
                 if(n_delta === 0) continue;
-                await f_send_esp_move_step(n_motor, n_delta, o_state.n_rpm__jog || 5);
+                await f_send_esp_move_step(n_motor, n_delta, f_n_rpm__manual(o_state, ['x', 'y', 'z'][n_axis]));
             }
         },
         f_delete_project: async function(o_project) {

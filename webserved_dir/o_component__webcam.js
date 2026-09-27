@@ -91,8 +91,8 @@ let o_component__webcam = {
                 o_self.o_stream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         deviceId: { exact: s_device_id },
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 },
+                        width: { ideal: 3840 },
+                        height: { ideal: 2160 },
                     }
                 });
                 o_self.$refs.el_video.srcObject = o_self.o_stream;

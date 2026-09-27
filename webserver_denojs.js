@@ -1,3 +1,6 @@
+import { f_o_scan_jobs } from './scan_jobs.module.js';
+import { f_o_yolo_response } from './yolo_functions.module.js';
+import { f_o_training_response } from './training_data_functions.module.js';
 
 import {
     f_db_delete_table_data,
@@ -138,6 +141,26 @@ let f_s_path_folder__capture = function(s_prefix, s_path_target) {
         + f_s_pad(o_date.getSeconds());
     return s_root_dir + s_ds + 'scans' + s_ds + s_name_folder;
 };
+
+// Jobs belong to the server, so closing a browser does not stop stitching.
+const o_scan_jobs = f_o_scan_jobs({
+    s_root: s_root_dir + s_ds + 'scans',
+    f_run: f_o_stitch_run,
+    f_complete: async function(job) {
+        if (!job.n_id__slide) return;
+        const maps = await f_v_crud__indb('read', 'a_o_map', { n_o_slide_n_id: job.n_id__slide });
+        for (const map of maps || []) {
+            if (map.b_primary) await f_v_crud__indb('update', 'a_o_map', { n_id: map.n_id }, { b_primary: false });
+        }
+        const data = { n_o_slide_n_id: job.n_id__slide, s_kind: 'scan',
+            s_path_map: job.o_result.s_path_output, s_path_preview: job.o_result.s_path_preview || '',
+            s_path_folder: job.s_path_folder, n_scl_x: 0, n_scl_y: 0, b_primary: true };
+        const existing = (maps || []).find(map => map.s_path_folder === job.s_path_folder);
+        if (existing) await f_v_crud__indb('update', 'a_o_map', { n_id: existing.n_id }, data);
+        else await f_v_crud__indb('create', 'a_o_map', data);
+    },
+});
+await o_scan_jobs.f_init();
 
 // ─── Request handler ────────────────────────────────────────────────
 
@@ -286,7 +309,10 @@ let f_handler = async function(o_request, o_conninfo) {
                         'scan_',
                         o_data.v_data && o_data.v_data.s_path_folder
                     );
+                    if (!o_data.v_data?.s_path_folder) s_path_folder += '_' + crypto.randomUUID().slice(0, 8);
                     await Deno.mkdir(s_path_folder, { recursive: true });
+                    await Deno.mkdir(s_path_folder + s_ds + 'dowscaled', { recursive: true });
+                    await o_scan_jobs.f_create(s_path_folder, o_data.v_data?.n_id__slide || 0);
                     o_socket.send(JSON.stringify({
                         v_result: { s_path_folder: s_path_folder },
                         s_uuid: o_data.s_uuid,
@@ -559,31 +585,25 @@ let f_handler = async function(o_request, o_conninfo) {
                 }
             }
 
-            // ── Mosaic stitching of a tile folder (stitch.py) ─────
-            if(o_data.s_type === 'stitch_run'){
-                try {
-                    let f_on_line = function(s_line){
-                        try {
-                            o_socket.send(JSON.stringify({
-                                s_type: 'stitch_progress',
-                                v_data: { s_line: s_line },
-                            }));
-                        } catch { /* socket may have closed */ }
-                    };
-
-                    let o_result = await f_o_stitch_run(o_data.v_data || {}, f_on_line);
-
-                    o_socket.send(JSON.stringify({
-                        v_result: o_result,
-                        s_uuid: o_data.s_uuid,
-                    }));
-                } catch (o_error) {
-                    console.error('stitch_run error:', o_error);
-                    o_socket.send(JSON.stringify({
-                        v_result: { b_success: false, s_error: o_error.message, a_s_line: [] },
-                        s_uuid: o_data.s_uuid,
-                    }));
-                }
+            // Stitch requests acknowledge enqueue immediately; clients poll job state.
+            if (o_data.s_type === 'stitch_run') {
+                await f_send_result('stitch_run', () => o_scan_jobs.f_enqueue(o_data.v_data || {}));
+            }
+            if (o_data.s_type === 'scan_jobs_list') {
+                await f_send_result('scan_jobs_list', async () => {
+                    const jobs = o_scan_jobs.f_list();
+                    const revision = jobs.map(job => job.s_id + ':' + (job.n_finished || 0)).join('|');
+                    if (o_socket.s_scan_map_revision !== revision) {
+                        o_socket.send(JSON.stringify({ o_model: f_o_model__from_s_name_table('a_o_map'),
+                            v_data: await f_v_crud__indb('read', 'a_o_map') }));
+                        o_socket.s_scan_map_revision = revision;
+                    }
+                    return jobs;
+                });
+            }
+            if (o_data.s_type === 'scan_finish') {
+                await f_send_result('scan_finish', () => o_scan_jobs.f_finish(
+                    o_data.v_data.s_path_folder, o_data.v_data.n_tiles));
             }
 
             // ── Focus stack folder creation ────────────────────
@@ -767,6 +787,8 @@ let f_handler = async function(o_request, o_conninfo) {
 
     let o_url = new URL(o_request.url);
     let s_path = o_url.pathname;
+    if (s_path.startsWith('/api/training/yolo/')) return await f_o_yolo_response(o_request);
+    if (s_path.startsWith('/api/training/')) return await f_o_training_response(o_request);
 
     // exposed functions via HTTP
     let o_sfunexposed = a_o_sfunexposed.find(function(o){ return o.s_name === s_path.slice('/api/'.length); });
@@ -822,6 +844,23 @@ let f_handler = async function(o_request, o_conninfo) {
             console.error('recording append_blob error:', o_error);
             return new Response('Error: ' + o_error.message, { status: 500 });
         }
+    }
+
+    // Browser-accessible folder view works even when the microscope server is remote.
+    if (s_path === '/api/scans/folder') {
+        try {
+            const folder = await o_scan_jobs.f_folder(o_url.searchParams.get('path') || '');
+            const escape = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+            const entries = [];
+            for await (const entry of Deno.readDir(folder)) {
+                if (!entry.isFile && !entry.isDirectory) continue;
+                const path = folder + s_ds + entry.name;
+                const url = entry.isDirectory ? '/api/scans/folder?path=' : '/api/file?path=';
+                entries.push(`<li><a href="${url}${encodeURIComponent(path)}">${escape(entry.name)}${entry.isDirectory ? '/' : ''}</a></li>`);
+            }
+            return new Response(`<!doctype html><meta charset="utf-8"><title>Scan files</title><h1>${escape(folder)}</h1><ul>${entries.sort().join('')}</ul>`,
+                { headers: { 'content-type': 'text/html; charset=utf-8' } });
+        } catch (error) { return new Response(error.message, { status: 400 }); }
     }
 
     // scan image save endpoint

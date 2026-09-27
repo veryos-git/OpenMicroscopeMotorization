@@ -1,0 +1,2 @@
+# Dedicated venv_yolo, separate from Cellpose and stitching dependencies.
+ultralytics==8.4.162

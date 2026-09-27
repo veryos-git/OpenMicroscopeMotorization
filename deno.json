@@ -5,6 +5,7 @@
         "doctor": "deno run -A install.js --check",
         "verify": "deno run -A install.js --verify-compile",
         "server": "deno run -A webserver_denojs.js",
-        "flash": "deno run -A startup.js"
+        "flash": "deno run -A startup.js",
+        "install-yolo": "deno run -A install_yolo.js"
     }
 }

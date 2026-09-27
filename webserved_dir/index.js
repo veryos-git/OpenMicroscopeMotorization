@@ -1,3 +1,7 @@
+import { f_o_motion_config } from './motion_detection.module.js';
+import { o_component__motion_detection } from './o_component__motion_detection.js';
+import { f_o_manual_speed } from './manual_speed.module.js';
+import { o_component__manual_speed } from './o_component__manual_speed.js';
 import { o_component__actions } from './o_component__actions.js';
 import { f_wait_for_esp_status } from './serial_handshake.module.js';
 import { createApp, reactive, watch, markRaw } from 'vue';
@@ -36,6 +40,7 @@ import { o_component__zoom } from './o_component__zoom.js';
 import { o_component__record } from './o_component__record.js';
 import { o_component__recording_library } from './o_component__recording_library.js';
 import { o_component__video } from './o_component__video.js';
+import { o_component__training } from './o_component__training.js';
 import { f_o_config__default, f_b_recording__server } from './o_recording.module.js';
 import { f_o_video_config__default } from './o_video.module.js';
 import { o_component__backlash } from './o_component__backlash.js';
@@ -114,6 +119,7 @@ let o_state = reactive({
 
     // jog settings
     n_rpm__jog: 5.0,
+    n_rpm__focus_jog: 0.5,
     o_mapping__w: { s_motor: '1', s_dir: 'cw' },
     o_mapping__s: { s_motor: '1', s_dir: 'ccw' },
     o_mapping__a: { s_motor: '0', s_dir: 'ccw' },
@@ -235,8 +241,11 @@ let o_state = reactive({
     // DB-linked maps for the current slide
     a_o_map__scanned: [],
 
+    b_training_busy: false,
+
     // UI
-    o_panel_visibility: { setup: false, map: false, motion: false, gamepad: false, optics: false, slide_library: false, scan: false, camera_setting: false, manual_stitch: false, macro: false, auto_move: false, autostitch: false, filter: false, flat: false, focus: false, focus_step: false, focus_stack: false, scale: false, stats: false, cellpose: false, zoom: false, record: false, recording_library: false, video: false },
+    o_motion_detection: f_o_motion_config(),
+    o_panel_visibility: { motion_detection: false, setup: false, map: false, motion: false, gamepad: false, optics: false, slide_library: false, scan: false, camera_setting: false, manual_stitch: false, macro: false, auto_move: false, autostitch: false, filter: false, flat: false, focus: false, focus_step: false, focus_stack: false, scale: false, stats: false, cellpose: false, zoom: false, record: false, recording_library: false, video: false, training: false },
     o_key_held: {},
 
     // scan
@@ -256,6 +265,16 @@ let o_state = reactive({
     // quick bar and the Camera panel always show the same numbers.
     // o_capability mirrors track.getCapabilities(), the rest mirror track.getSettings().
     o_camera: {
+        s_label: '',
+        n_width: 0,
+        n_height: 0,
+        n_frame_rate: 0,
+        b_applying_resolution: false,
+        s_error__resolution: '',
+        s_error__setting: '',
+        o_setting: {},
+        o_requested: {},
+        o_requested_format: null,
         b_active: false,
         b_loaded: false,            // saved setting already applied to the current stream
         n_ts_ms__apply: 0,          // last local apply (pauses the value sync briefly)
@@ -447,7 +466,9 @@ let f_apply_setting_from_db = function(){
     };
 
     o_state.s_ip__esp = o_state.s_ip__esp || f_get('s_ip__esp', '');
-    o_state.n_rpm__jog = parseFloat(f_get('n_rpm__jog', '5.0'));
+    const o_manual_speed = f_o_manual_speed(f_get_json('o_rpm__manual', null), f_get('n_rpm__jog', '5.0'));
+    o_state.n_rpm__jog = o_manual_speed.xy;
+    o_state.n_rpm__focus_jog = o_manual_speed.z;
     o_state.s_id__webcam_device = f_get('s_id__webcam_device', '');
 
     let o_vis = f_get_json('o_panel_visibility', { map: false, motion: false, gamepad: false, optics: false, scan: false, camera_setting: false, stats: false });
@@ -455,6 +476,8 @@ let f_apply_setting_from_db = function(){
     o_state.o_panel_visibility.flat = o_vis.flat || false;
     o_state.o_panel_visibility.map = o_vis.map || false;
     o_state.o_panel_visibility.motion = o_vis.motion || false;
+    o_state.o_panel_visibility.motion_detection = o_vis.motion_detection || false;
+    Object.assign(o_state.o_motion_detection, f_o_motion_config(f_get_json('o_motion_detection', {})));
     o_state.o_panel_visibility.gamepad = o_vis.gamepad || false;
     o_state.o_panel_visibility.optics = o_vis.optics || false;
     o_state.o_panel_visibility.slide_library = o_vis.slide_library || false;
@@ -1008,7 +1031,10 @@ let f_connect_esp__auto = async function() {
 
 // ─── Send ───────────────────────────────────────────────────────────
 
-let f_send_esp = function(o_msg) {
+let f_send_esp = function(o_msg, s_owner) {
+    if (o_state.b_training_busy && s_owner !== 'training' && !['status', 'stop', 'stopAll'].includes(o_msg.command)) {
+        throw new Error('Training is using the stage. Stop training before starting another operation.');
+    }
     // record macro commands (skip status polls)
     if (o_state.b_recording__macro && o_msg.command !== 'status' && o_msg.command !== 'setBacklash') {
         let n_ts_ms_now = Date.now();
@@ -1037,6 +1063,7 @@ let f_send_esp_run_continuous = function(n_motor, n_rpm, s_direction) {
 };
 
 let f_send_esp_move_step = function(n_motor, n_step, n_rpm) {
+    if(o_state.b_training_busy) return Promise.reject(new Error('Training is using the stage'));
     if(!Number.isInteger(n_motor) || n_motor < 0 || n_motor > 2) return Promise.reject(new Error('No motor assigned to this axis'));
     return new Promise(function(resolve) {
         if (!f_b_esp_connected()) {
@@ -1179,10 +1206,13 @@ o_app.component('o_component__zoom', o_component__zoom);
 o_app.component('o_component__record', o_component__record);
 o_app.component('o_component__recording_library', o_component__recording_library);
 o_app.component('o_component__video', o_component__video);
+o_app.component('o_component__training', o_component__training);
 o_app.component('o_component__backlash', o_component__backlash);
 o_app.component('o_component__slide_library', o_component__slide_library);
+o_app.component('o_component__motion_detection', o_component__motion_detection);
 o_app.component('o_component__stats', o_component__stats);
 
+o_app.component('o_component__manual_speed', o_component__manual_speed);
 o_app.use(o_router);
 
 globalThis.o_app = o_app;
@@ -1211,6 +1241,8 @@ export {
     f_connect_esp__auto,
     f_disconnect_esp,
     f_send_esp,
+    f_register_esp_handler,
+    f_register_esp_disconnect,
     f_n_motor__axis,
     f_send_esp_run_continuous,
     f_send_esp_move_step,

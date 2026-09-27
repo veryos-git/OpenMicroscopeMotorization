@@ -1,6 +1,8 @@
+import { f_n_rpm__manual } from '../webserved_dir/manual_speed.module.js';
 import assert from 'node:assert/strict';
 
 async function component(name, bindings) {
+    bindings = { f_n_rpm__manual, ...bindings };
     const source = (await Deno.readTextFile(new URL('../webserved_dir/o_component__' + name + '.js', import.meta.url)))
         .replace(/^import\s*\{[\s\S]*?\}\s*from\s*['"][^'"]+['"];?/gm, '')
         .replace(/export \{[^}]+\};?/, '');
@@ -143,10 +145,15 @@ Deno.test('Setup opens and closes as an overlay without routing', async () => {
     const setup = await component('setup', bindings);
     toolbar.methods.f_open_setup();
     assert.equal(state.o_panel_visibility.setup, true);
+    toolbar.methods.f_open_setup();
+    assert.equal(state.o_panel_visibility.setup, false);
+    toolbar.methods.f_open_setup();
     setup.methods.f_close();
     assert.equal(state.o_panel_visibility.setup, false);
     toolbar.methods.f_open_setup();
     state.b_flashing = true;
+    toolbar.methods.f_open_setup();
+    assert.equal(state.o_panel_visibility.setup, true);
     setup.methods.f_close();
     assert.equal(state.o_panel_visibility.setup, true);
 });
@@ -281,4 +288,116 @@ Deno.test('stopping motor-card calibration restores compensation and releases th
     assert.equal(state.b_scanning, false);
     assert.equal(ctx.b_running, false);
     assert.equal(ctx.s_status, 'stopped');
+});
+
+Deno.test('axis reversal persists paired manual directions without changing assignments', async () => {
+    const state = { o_motor__axis: { x: 2, y: 0, z: 1 } };
+    const saved = {};
+    const setup = await component('setup', {
+        o_state: state, f_save_setting: (key, value) => saved[key] = JSON.stringify(value),
+    });
+    const ctx = { ...setup.methods, b_hardware_busy: false };
+    for(const [axis, motor, keys] of [['x', 2, ['a', 'd']], ['y', 0, ['s', 'w']], ['z', 1, ['q', 'e']]]) {
+        ctx.f_reverse_direction(motor, true);
+        assert.equal(ctx.f_b_direction_reversed(motor), true);
+        assert.equal(state['o_mapping__' + keys[0]].s_dir, 'cw');
+        assert.equal(state['o_mapping__' + keys[1]].s_dir, 'ccw');
+        for(const key of keys) assert.equal(state['o_mapping__' + key].s_motor, String(motor));
+        // Reconstruct the settings as the application's JSON settings loader does.
+        for(const key of Object.keys(saved)) state[key] = JSON.parse(saved[key]);
+        assert.equal(ctx.f_b_direction_reversed(motor), true);
+        if(axis === 'z') assert.equal(state.o_mapping__mouse_right.s_dir, 'ccw');
+        ctx.f_reverse_direction(motor, false);
+        assert.equal(state['o_mapping__' + keys[0]].s_dir, 'ccw');
+        assert.equal(state['o_mapping__' + keys[1]].s_dir, 'cw');
+        assert.equal(ctx.f_b_direction_reversed(motor), false);
+    }
+    assert.deepEqual(state.o_motor__axis, { x: 2, y: 0, z: 1 });
+    assert.equal(state.o_mapping__mouse_right.s_dir, 'cw');
+    const before = JSON.stringify(state);
+    ctx.b_hardware_busy = true;
+    ctx.f_reverse_direction(2, true);
+    ctx.b_hardware_busy = false;
+    ctx.f_reverse_direction(3, true);
+    assert.equal(JSON.stringify(state), before);
+});
+
+Deno.test('reversed directions reach keyboard, mouse and gamepad motor commands', async () => {
+    const state = {
+        o_motor__axis: { x: 2, y: 0, z: 1 }, b_connected__esp: true,
+        n_rpm__jog: 5, o_key_held: {}, n_index__gamepad: 0, b_enabled__gamepad: true,
+    };
+    const commands = [];
+    const pad = { index: 0, id: 'test', connected: true, axes: [0, 0, 0, 0], buttons: [] };
+    const setup = await component('setup', { o_state: state, f_save_setting() {} });
+    const settings = { ...setup.methods, b_hardware_busy: false };
+    const c = await component('jog', {
+        o_state: state, f_n_motor__axis: axis => state.o_motor__axis[axis],
+        f_send_esp_run_continuous: (motor, rpm, direction) => commands.push([motor, direction]),
+        f_send_esp_stop() {}, navigator: { getGamepads: () => [pad] },
+        document: { hidden: false, hasFocus: () => true },
+    });
+    const jog = Object.assign(c.data(), c.methods, { b_driving__mouse: false, b_driving__mouse_z: false });
+    Object.defineProperty(jog, 's_dir__mouse_z', { get: () => c.computed.s_dir__mouse_z.call(jog) });
+    for(const reversed of [false, true]) {
+        for(const motor of [0, 1, 2]) settings.f_reverse_direction(motor, reversed);
+        const flip = dir => reversed ? (dir === 'cw' ? 'ccw' : 'cw') : dir;
+        commands.length = 0;
+        for(const key of ['a', 'd', 'w', 's', 'q', 'e']) {
+            jog.f_on_keydown({ key }); jog.f_on_keyup({ key });
+        }
+        assert.deepEqual(commands, [[2, flip('ccw')], [2, flip('cw')], [0, flip('cw')], [0, flip('ccw')], [1, flip('ccw')], [1, flip('cw')]]);
+        for(const axis of ['x', 'y', 'z']) jog.f_stop_mouse_axis(axis);
+        commands.length = 0;
+        for(const axis of ['x', 'y', 'z']) for(const value of [-1, 1]) {
+            jog.n_y_nor__mouse = value;
+            jog.f_drive_mouse_axis(axis, value);
+        }
+        assert.deepEqual(commands, [[2, flip('ccw')], [2, flip('cw')], [0, flip('cw')], [0, flip('ccw')], [1, flip('cw')], [1, flip('ccw')]]);
+        commands.length = 0;
+        pad.axes = [0, 0, 0, 0]; jog.f_poll_gamepad();
+        pad.axes = [0, -1, -1, -1]; jog.f_poll_gamepad();
+        pad.axes = [0, 1, 1, 1]; jog.f_poll_gamepad();
+        assert.deepEqual(commands, [[2, flip('ccw')], [0, flip('cw')], [1, flip('ccw')], [2, flip('cw')], [0, flip('ccw')], [1, flip('cw')]]);
+    }
+});
+
+Deno.test('manual XY and Z speeds follow assignments for keyboard, mouse and motor tests', async () => {
+    const state = { o_motor__axis: { x: 2, y: 0, z: 1 }, n_rpm__jog: 8, n_rpm__focus_jog: 0.4, b_connected__esp: true, o_key_held: {} };
+    for(const key of ['a', 'd', 'w', 's', 'q', 'e', 'mouse_right']) state['o_mapping__' + key] = { s_dir: 'cw' };
+    const moves = [];
+    const c = await component('jog', {
+        o_state: state, f_n_motor__axis: axis => state.o_motor__axis[axis],
+        f_send_esp_run_continuous: (motor, rpm) => moves.push([motor, rpm]), f_send_esp_stop() {},
+    });
+    const jog = Object.assign(c.data(), c.methods, { s_dir__mouse_z: 'cw' });
+    jog.f_on_keydown({ key: 'd' }); jog.f_on_keydown({ key: 'e' });
+    assert.deepEqual(moves, [[2, 8], [1, 0.4]]);
+    moves.length = 0;
+    state.n_rpm__focus_jog = 0.8;
+    c.watch['o_state.n_rpm__focus_jog'].call(jog);
+    assert.deepEqual(moves, [[1, 0.8]]);
+    moves.length = 0;
+    state.n_rpm__jog = 6;
+    c.watch['o_state.n_rpm__jog'].call(jog);
+    assert.deepEqual(moves, [[2, 6]]);
+    moves.length = 0;
+    jog.f_drive_mouse_axis('x', 0.5); jog.f_drive_mouse_axis('z', 0.5);
+    assert.deepEqual(moves, [[2, 3], [1, 0.4]]);
+    state.n_rpm__focus_jog = 0.85;
+    jog.f_drive_mouse_axis('z', 0.5);
+    assert.deepEqual(moves.at(-1), [1, 0.425]);
+    state.n_rpm__focus_jog = 0.8;
+    const setup = await component('setup', {
+        o_state: state, f_send_esp_move_step: async (motor, steps, rpm) => moves.push([motor, rpm]),
+    });
+    const ctx = { b_can_move: true, n_step__manual: 100 };
+    moves.length = 0;
+    await setup.methods.f_move_motor.call(ctx, 1, 1);
+    state.o_motor__axis = { x: 1, y: 0, z: 2 };
+    await setup.methods.f_move_motor.call(ctx, 1, 1);
+    await setup.methods.f_move_motor.call(ctx, 2, 1);
+    assert.deepEqual(moves, [[1, 0.8], [1, 6], [2, 0.8]]);
+    assert.equal(jog.f_get_mapping('e').rpm, 0.8);
+    assert.equal(jog.f_get_mapping('e').motor, 2);
 });

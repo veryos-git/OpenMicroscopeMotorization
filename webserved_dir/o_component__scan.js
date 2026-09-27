@@ -1,4 +1,4 @@
-import { f_n_motor__axis, o_state, f_send_esp_move_step, f_send_esp_stop, f_send_esp_stop_all, f_send_wsmsg_with_response, f_register_handler, f_save_setting__debounced, f_o_map__link } from './index.js';
+import { f_n_motor__axis, o_state, f_send_esp_move_step, f_send_esp_stop, f_send_esp_stop_all, f_send_wsmsg_with_response, f_save_setting__debounced } from './index.js';
 import { f_o_wsmsg } from './constructors.module.js';
 import { f_n_score__video, f_o_focus__fast } from './focus_search.module.js';
 import { f_o_capture__frame, f_save_image } from './o_capture.module.js';
@@ -6,9 +6,6 @@ import { f_o_capture__frame, f_save_image } from './o_capture.module.js';
 let N_RPM__SCAN = 8.0;
 let N_MS__SETTLE = 500;
 let N_MS__MOVE_TIMEOUT = 30000;
-// stitching a big scan takes minutes, but stitch.py reports every step it does.
-// if nothing arrives for this long the connection died and we stop waiting.
-let N_MS__STITCH_SILENCE = 600000;
 // the per-tile focus measures on a small crop: the metric is not the bottleneck,
 // but every millisecond here is paid once per tile
 let N_SCL_X__FOCUS_MEASURE = 320;
@@ -23,6 +20,33 @@ let o_component__scan = {
                 <button class="panel-close" @click="f_close" :disabled="s_status === 'scanning'">&times;</button>
             </div>
             <div class="panel-body">
+                <div v-if="s_error__jobs" class="scan-stitch-error">{{ s_error__jobs }}</div>
+                <details class="scan-jobs" :open="a_o_job.some(job => ['queued', 'running'].includes(job.s_status))">
+                    <summary>Scans · {{ a_o_job.length }} <span v-if="n_jobs_pending">· {{ n_jobs_pending }} pending</span></summary>
+                    <div class="scan-hint">Stitching runs in the background. You can capture the next scan while jobs are queued or running.</div>
+                    <article v-for="job in a_o_job" :key="job.s_id" class="scan-job">
+                        <div class="scan-job-title"><strong>{{ job.s_name }}</strong><span>{{ job.s_status }}</span></div>
+                        <div class="scan-hint">{{ job.n_tiles }} tiles</div>
+                        <div class="scan-field-row">
+                            <a class="btn-small" :href="'/api/scans/folder?path=' + encodeURIComponent(job.s_path_folder)" target="_blank" rel="noopener">Open folder</a>
+                            <a v-if="job.s_status === 'complete' && job.o_result?.s_path_output" class="btn-small"
+                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_output) + '&v=' + job.n_finished" target="_blank" rel="noopener">Open mosaic</a>
+                            <button class="btn-small" v-if="!['capturing', 'queued', 'running'].includes(job.s_status)"
+                                :disabled="job.n_tiles < 2 || b_queueing" @click="f_stitch(job)">{{ job.s_status === 'ready' ? 'Stitch' : 'Stitch again' }}</button>
+                        </div>
+                        <div v-if="job.s_error" class="scan-stitch-error">{{ job.s_error }}</div>
+                        <a v-if="job.s_status === 'complete' && job.o_result?.s_path_output"
+                            :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_output)" target="_blank" rel="noopener">
+                            <img class="scan-stitch-preview" loading="lazy" alt="Stitched scan"
+                                :src="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_preview || job.o_result.s_path_output) + '&v=' + job.n_finished" />
+                        </a>
+                        <div class="scan-hint" v-if="job.s_status === 'running'">{{ job.a_s_line.at(-1) }}</div>
+                        <details v-if="job.a_s_line.length"><summary>Stitch log</summary>
+                            <div class="scan-stitch-log"><div v-for="(line, i) in job.a_s_line" :key="i">{{ line }}</div></div>
+                        </details>
+                    </article>
+                </details>
+
 
                 <!-- ── Config (idle) ─────────────────────── -->
                 <template v-if="s_status === 'idle'">
@@ -203,9 +227,9 @@ let o_component__scan = {
                             <span>Stitch automatically when the scan is done</span>
                         </label>
                         <div class="scan-hint">
-                            stitch.py registers the tiles by FFT cross correlation and
-                            solves the whole grid at once, so single bad pairs cannot
-                            break the mosaic.
+                            Alignment uses copies at most 256 pixels wide, saved in
+                            dowscaled/. The original images are combined using those
+                            positions to preserve full-resolution detail.
                         </div>
 
                         <div class="scan-field">
@@ -299,37 +323,8 @@ let o_component__scan = {
                     <button class="btn-scan-stop" @click="f_stop_scan">Stop Scan</button>
                 </template>
 
-                <!-- ── Stitching ───────────────────────────── -->
-                <template v-if="s_status === 'stitching'">
-                    <div class="scan-progress-text">Stitching {{ n_cnt__tile__captured }} images...</div>
-                    <div class="scan-stitch-log" ref="el_log">
-                        <div v-for="(s_line, n_idx) in a_s_line__stitch" :key="n_idx">{{ s_line }}</div>
-                    </div>
-                </template>
-
                 <!-- ── Summary (complete) ────────────────── -->
                 <template v-if="s_status === 'complete'">
-                    <div v-if="s_path__preview__shown" class="scan-stitch-result">
-                        <a
-                            :href="'/api/file?path=' + encodeURIComponent(s_path__stitched_image)"
-                            target="_blank"
-                        >
-                            <img
-                                :src="'/api/file?path=' + encodeURIComponent(s_path__preview__shown)"
-                                class="scan-stitch-preview"
-                            />
-                        </a>
-                        <div class="scan-hint">click the mosaic to open it in full size</div>
-                    </div>
-                    <div v-if="s_error__stitch" class="scan-stitch-error">{{ s_error__stitch }}</div>
-                    <div v-if="a_s_line__stitch.length" class="scan-stitch-log-wrap">
-                        <button class="btn-small" @click="b_visible__log = !b_visible__log">
-                            {{ b_visible__log ? 'hide' : 'show' }} stitch log
-                        </button>
-                        <div class="scan-stitch-log" v-if="b_visible__log">
-                            <div v-for="(s_line, n_idx) in a_s_line__stitch" :key="n_idx">{{ s_line }}</div>
-                        </div>
-                    </div>
                     <div class="scan-summary">
                         <div class="scan-summary-item">
                             <span class="scan-summary-label">Images captured</span>
@@ -348,8 +343,8 @@ let o_component__scan = {
                         <button
                             class="btn-small"
                             @click="f_stitch"
-                            :disabled="n_cnt__tile__captured < 2"
-                        >Stitch again</button>
+                            :disabled="n_cnt__tile__captured < 2 || b_queueing || b_current_job_busy"
+                        >Queue stitching</button>
                         <button class="btn-scan-start" @click="f_reset">New Scan</button>
                     </div>
                 </template>
@@ -370,7 +365,7 @@ let o_component__scan = {
 
             // auto grid
             a_o_point__grid: [],
-            n_overlap__pct: 50,
+            n_overlap__pct: 30,
             a_n_grid__start: null,
 
             // per-tile focus
@@ -409,14 +404,12 @@ let o_component__scan = {
             n_id__elapsed_interval: 0,
             s_elapsed: '0:00',
 
-            // stitch
-            s_path__stitched_image: '',
-            s_path__preview__stitch: '',
-            s_error__stitch: '',
-            a_s_line__stitch: [],
-            b_visible__log: false,
-            n_ts_ms__stitch_line: 0,
-            f_unregister__stitch_progress: null,
+            a_o_job: [],
+            s_error__jobs: '',
+            b_queueing: false,
+            n_id__jobs_poll: 0,
+            b_unmounted: false,
+
         };
     },
 
@@ -425,9 +418,11 @@ let o_component__scan = {
             let n_motor = f_n_motor__axis('z');
             return n_motor === null ? 'No focus motor — configure Z in Setup → motor cards.' : 'Motor ' + (n_motor + 1) + ' (Z axis, set in Setup)';
         },
-        // the preview is only written for big mosaics, otherwise show the mosaic
-        s_path__preview__shown: function() {
-            return this.s_path__preview__stitch || this.s_path__stitched_image;
+        n_jobs_pending: function() {
+            return this.a_o_job.filter(job => ['queued', 'running'].includes(job.s_status)).length;
+        },
+        b_current_job_busy: function() {
+            return this.a_o_job.some(job => job.s_path_folder === this.s_path_folder__scan && ['queued', 'running'].includes(job.s_status));
         },
         n_step__per_px__x: function() {
             return (o_state.a_n_step__per_px && o_state.a_n_step__per_px[f_n_motor__axis('x')]) || 0;
@@ -462,9 +457,7 @@ let o_component__scan = {
     mounted: function() {
         let o_self = this;
         o_self.f_load_config();
-        o_self.f_unregister__stitch_progress = f_register_handler(function(o_msg){
-            o_self.f_on_stitch_progress(o_msg);
-        });
+        o_self.f_poll_jobs();
     },
 
     methods: {
@@ -737,220 +730,214 @@ let o_component__scan = {
         f_start_scan: async function() {
             let o_self = this;
 
-            // create scan folder on server
-            let o_resp = await f_send_wsmsg_with_response(
-                f_o_wsmsg('scan_create_folder', {})
-            );
-            if (!o_resp.v_result || !o_resp.v_result.s_path_folder) {
-                console.error('Failed to create scan folder');
-                return;
-            }
-            o_self.s_path_folder__scan = o_resp.v_result.s_path_folder;
-
-            // init scan state
+            if (o_state.b_scanning || o_self.b_testing) return;
             o_state.b_scanning = true;
             o_self.s_status = 'scanning';
-            o_self.b_stop_requested = false;
-            o_self.n_cnt__tile__captured = 0;
-            o_self.n_idx__cell__current = -1;
-            o_self.a_b_captured = new Array(o_self.n_tile_x * o_self.n_tile_y).fill(false);
-            o_self.f_start_elapsed_timer();
-
-            // remember where the stage is so we can drive it back afterwards
-            o_self.a_n_position__start = [
-                o_state.a_o_motor[0] ? o_state.a_o_motor[0].n_position : 0,
-                o_state.a_o_motor[1] ? o_state.a_o_motor[1].n_position : 0,
-                o_state.a_o_motor[2] ? o_state.a_o_motor[2].n_position : 0,
-            ];
-
-            // move to the computed grid start corner before the first tile
-            if(o_self.a_n_grid__start){
-                let n_motor0 = o_state.a_o_motor[f_n_motor__axis('x')] ? o_state.a_o_motor[f_n_motor__axis('x')].n_position : 0;
-                let n_motor1 = o_state.a_o_motor[f_n_motor__axis('y')] ? o_state.a_o_motor[f_n_motor__axis('y')].n_position : 0;
-                let n_dx = o_self.a_n_grid__start[0] - n_motor0;
-                let n_dy = o_self.a_n_grid__start[1] - n_motor1;
-                if(n_dx !== 0){
-                    o_self.s_status__detail = 'Moving to start X...';
-                    await o_self.f_move_motor_n_step(f_n_motor__axis('x'), n_dx);
-                }
-                if(n_dy !== 0){
-                    o_self.s_status__detail = 'Moving to start Y...';
-                    await o_self.f_move_motor_n_step(f_n_motor__axis('y'), n_dy);
-                }
-            }
-
-            let a_o_tile = o_self.f_a_o_tile__path();
-
-            for (let n_idx = 0; n_idx < a_o_tile.length; n_idx++) {
-                if (o_self.b_stop_requested) break;
-                if (!o_state.b_connected__esp) {
-                    o_self.b_stop_requested = true;
-                    break;
-                }
-
-                let o_tile = a_o_tile[n_idx];
-                let n_idx__cell = o_tile.n_row * o_self.n_tile_x + o_tile.n_col;
-                o_self.n_idx__cell__current = n_idx__cell;
-
-                // move to tile position (skip for first tile)
-                if (n_idx > 0) {
-                    let o_tile__prev = a_o_tile[n_idx - 1];
-                    let n_delta_col = o_tile.n_col - o_tile__prev.n_col;
-                    let n_delta_row = o_tile.n_row - o_tile__prev.n_row;
-
-                    if (n_delta_col !== 0) {
-                        o_self.s_status__detail = 'Moving X...';
-                        await o_self.f_move_motor_n_step(f_n_motor__axis('x'), n_delta_col * o_self.n_step__x);
-                        if (o_self.b_stop_requested) break;
-                    }
-
-                    if (n_delta_row !== 0) {
-                        o_self.s_status__detail = 'Moving Y...';
-                        await o_self.f_move_motor_n_step(f_n_motor__axis('y'), n_delta_row * o_self.n_step__y);
-                        if (o_self.b_stop_requested) break;
-                    }
-                }
-
-                // wait for vibration to settle
-                o_self.s_status__detail = 'Settling...';
-                await o_self.f_delay(N_MS__SETTLE);
-                if (o_self.b_stop_requested) break;
-
-                // sharpen this tile before it is taken: a slide is never
-                // perfectly level, so the focus drifts across the grid
-                if (o_self.b_focus__before_tile && f_n_motor__axis('z') !== null) {
-                    o_self.s_status__detail = 'Focusing...';
-                    try {
-                        let o_focus = await o_self.f_o_focus();
-                        o_self.n_cnt__focus_measure = o_focus.n_cnt__measure;
-                    } catch (e) {
-                        console.error('focus before tile failed:', e);
-                    }
-                    if (o_self.b_stop_requested) break;
-                }
-
-                // capture and save image
-                let s_filename = 'tile_r'
-                    + String(o_tile.n_row).padStart(2, '0')
-                    + '_c'
-                    + String(o_tile.n_col).padStart(2, '0')
-                    + '.png';
-                o_self.s_status__detail = 'Capturing ' + s_filename;
-
-                try {
-                    let o_cap = await f_o_capture__frame();
-                    await f_save_image(o_cap.o_blob, o_self.s_path_folder__scan, s_filename);
-                    o_self.a_b_captured[n_idx__cell] = true;
-                    o_self.n_cnt__tile__captured++;
-                } catch (e) {
-                    console.error('Capture error at tile r' + o_tile.n_row + ' c' + o_tile.n_col + ':', e);
-                }
-            }
-
-            // scan finished
-            o_self.f_stop_elapsed_timer();
-            o_state.b_scanning = false;
-            o_self.n_idx__cell__current = -1;
-            o_self.s_status__detail = '';
-
-            console.log(
-                'Scan ' + (o_self.b_stop_requested ? 'stopped' : 'complete')
-                + ': ' + o_self.n_cnt__tile__captured + '/' + (o_self.n_tile_x * o_self.n_tile_y)
-                + ' tiles captured in ' + o_self.s_elapsed
-            );
-
-            // drive the stage back to its original position (default on)
-            if(!o_self.b_stop_requested && o_self.b_return__after_scan && o_self.a_n_position__start && o_state.b_connected__esp){
-                o_self.s_status__detail = 'Returning to start...';
-                await o_self.f_return_to_start();
-                o_self.s_status__detail = '';
-            }
-
-            // stitch the collected tiles with stitch.py
-            if(o_self.b_stitch__after_scan && o_self.n_cnt__tile__captured >= 2){
-                await o_self.f_stitch();
-                return;
-            }
-
-            o_self.s_status = 'complete';
-        },
-
-        // ── Stitching (stitch.py on the server) ──────────────────────
-
-        f_stitch: async function() {
-            let o_self = this;
-            if(!o_self.s_path_folder__scan) return;
-
-            o_self.s_status = 'stitching';
-            o_self.s_path__stitched_image = '';
-            o_self.s_path__preview__stitch = '';
-            o_self.s_error__stitch = '';
-            o_self.a_s_line__stitch = [];
-            o_self.n_ts_ms__stitch_line = Date.now();
-
+            o_self.s_status__detail = 'Creating scan...';
             try {
-                let o_promise__response = f_send_wsmsg_with_response(
-                    f_o_wsmsg('stitch_run', {
-                        s_path_folder: o_self.s_path_folder__scan,
-                        n_score__min: o_self.n_score__min,
-                        n_dim__max: o_self.n_dim__max,
-                        s_blend: o_self.b_feather ? 'feather' : 'none',
-                        b_no_flatfield: !o_self.b_flatfield,
-                        b_matcher__loftr: o_self.b_matcher__loftr,
-                    })
+                // create scan folder on server
+                let o_resp = await f_send_wsmsg_with_response(
+                    f_o_wsmsg('scan_create_folder', { n_id__slide: o_state.n_id__slide__current })
                 );
-                let o_promise__watchdog = new Promise(function(resolve){
-                    let n_id__interval = setInterval(function(){
-                        if(Date.now() - o_self.n_ts_ms__stitch_line < N_MS__STITCH_SILENCE) return;
-                        clearInterval(n_id__interval);
-                        resolve({ v_result: {
-                            b_success: false,
-                            s_error: 'no answer from the server for 10 minutes — '
-                                + 'the connection died, check the server console',
-                        } });
-                    }, 5000);
-                    o_promise__response.then(function(){ clearInterval(n_id__interval); });
-                });
+                if (!o_resp.v_result || !o_resp.v_result.s_path_folder) {
+                    throw new Error(o_resp.error || 'Failed to create scan folder');
+                }
+                o_self.s_path_folder__scan = o_resp.v_result.s_path_folder;
 
-                let o_resp = await Promise.race([o_promise__response, o_promise__watchdog]);
-                let o_result = o_resp.v_result;
-                if(o_result && o_result.b_success){
-                    o_self.s_path__stitched_image = o_result.s_path_output;
-                    o_self.s_path__preview__stitch = o_result.s_path_preview;
-                } else {
-                    o_self.s_error__stitch = 'Stitch failed: ' + (o_result ? o_result.s_error : 'unknown error');
+                // init scan state
+                o_state.b_scanning = true;
+                o_self.s_status = 'scanning';
+                o_self.b_stop_requested = false;
+                o_self.n_cnt__tile__captured = 0;
+                o_self.n_idx__cell__current = -1;
+                o_self.a_b_captured = new Array(o_self.n_tile_x * o_self.n_tile_y).fill(false);
+                o_self.f_start_elapsed_timer();
+
+                // remember where the stage is so we can drive it back afterwards
+                o_self.a_n_position__start = [
+                    o_state.a_o_motor[0] ? o_state.a_o_motor[0].n_position : 0,
+                    o_state.a_o_motor[1] ? o_state.a_o_motor[1].n_position : 0,
+                    o_state.a_o_motor[2] ? o_state.a_o_motor[2].n_position : 0,
+                ];
+
+                // move to the computed grid start corner before the first tile
+                if(o_self.a_n_grid__start){
+                    let n_motor0 = o_state.a_o_motor[f_n_motor__axis('x')] ? o_state.a_o_motor[f_n_motor__axis('x')].n_position : 0;
+                    let n_motor1 = o_state.a_o_motor[f_n_motor__axis('y')] ? o_state.a_o_motor[f_n_motor__axis('y')].n_position : 0;
+                    let n_dx = o_self.a_n_grid__start[0] - n_motor0;
+                    let n_dy = o_self.a_n_grid__start[1] - n_motor1;
+                    if(n_dx !== 0){
+                        o_self.s_status__detail = 'Moving to start X...';
+                        await o_self.f_move_motor_n_step(f_n_motor__axis('x'), n_dx);
+                    }
+                    if(n_dy !== 0){
+                        o_self.s_status__detail = 'Moving to start Y...';
+                        await o_self.f_move_motor_n_step(f_n_motor__axis('y'), n_dy);
+                    }
                 }
-                if(o_self.s_path__stitched_image){
-                    f_o_map__link({
-                        s_kind: 'scan',
-                        s_path_map: o_self.s_path__stitched_image,
-                        s_path_preview: o_self.s_path__preview__stitch,
-                        s_path_folder: o_self.s_path_folder__scan,
-                        n_scl_x: 0,
-                        n_scl_y: 0,
-                    });
+
+                let a_o_tile = o_self.f_a_o_tile__path();
+
+                for (let n_idx = 0; n_idx < a_o_tile.length; n_idx++) {
+                    if (o_self.b_stop_requested) break;
+                    if (!o_state.b_connected__esp) {
+                        o_self.b_stop_requested = true;
+                        break;
+                    }
+
+                    let o_tile = a_o_tile[n_idx];
+                    let n_idx__cell = o_tile.n_row * o_self.n_tile_x + o_tile.n_col;
+                    o_self.n_idx__cell__current = n_idx__cell;
+
+                    // move to tile position (skip for first tile)
+                    if (n_idx > 0) {
+                        let o_tile__prev = a_o_tile[n_idx - 1];
+                        let n_delta_col = o_tile.n_col - o_tile__prev.n_col;
+                        let n_delta_row = o_tile.n_row - o_tile__prev.n_row;
+
+                        if (n_delta_col !== 0) {
+                            o_self.s_status__detail = 'Moving X...';
+                            await o_self.f_move_motor_n_step(f_n_motor__axis('x'), n_delta_col * o_self.n_step__x);
+                            if (o_self.b_stop_requested) break;
+                        }
+
+                        if (n_delta_row !== 0) {
+                            o_self.s_status__detail = 'Moving Y...';
+                            await o_self.f_move_motor_n_step(f_n_motor__axis('y'), n_delta_row * o_self.n_step__y);
+                            if (o_self.b_stop_requested) break;
+                        }
+                    }
+
+                    // wait for vibration to settle
+                    o_self.s_status__detail = 'Settling...';
+                    await o_self.f_delay(N_MS__SETTLE);
+                    if (o_self.b_stop_requested) break;
+
+                    // sharpen this tile before it is taken: a slide is never
+                    // perfectly level, so the focus drifts across the grid
+                    if (o_self.b_focus__before_tile && f_n_motor__axis('z') !== null) {
+                        o_self.s_status__detail = 'Focusing...';
+                        try {
+                            let o_focus = await o_self.f_o_focus();
+                            o_self.n_cnt__focus_measure = o_focus.n_cnt__measure;
+                        } catch (e) {
+                            console.error('focus before tile failed:', e);
+                        }
+                        if (o_self.b_stop_requested) break;
+                    }
+
+                    // capture and save image
+                    let s_filename = 'tile_r'
+                        + String(o_tile.n_row).padStart(2, '0')
+                        + '_c'
+                        + String(o_tile.n_col).padStart(2, '0')
+                        + '.png';
+                    o_self.s_status__detail = 'Capturing ' + s_filename;
+
+                    try {
+                        let o_cap = await f_o_capture__frame();
+                        await f_save_image(o_cap.o_blob, o_self.s_path_folder__scan, s_filename);
+                        o_self.a_b_captured[n_idx__cell] = true;
+                        o_self.n_cnt__tile__captured++;
+                        // Resize the captured blob so the copy is the exact same frame.
+                        let o_bitmap = await createImageBitmap(o_cap.o_blob);
+                        try {
+                            let el_small = document.createElement('canvas');
+                            el_small.width = Math.min(256, o_bitmap.width);
+                            el_small.height = Math.max(1, Math.round(o_bitmap.height * el_small.width / o_bitmap.width));
+                            let o_ctx = el_small.getContext('2d');
+                            o_ctx.imageSmoothingQuality = 'high';
+                            o_ctx.drawImage(o_bitmap, 0, 0, el_small.width, el_small.height);
+                            let o_small = await new Promise((resolve, reject) => {
+                                el_small.toBlob(blob => blob ? resolve(blob) : reject(new Error('failed to downscale tile')), 'image/png');
+                            });
+                            await f_save_image(o_small, o_self.s_path_folder__scan + '/dowscaled', s_filename);
+                        } finally {
+                            o_bitmap.close();
+                        }
+                    } catch (e) {
+                        console.error('Capture error at tile r' + o_tile.n_row + ' c' + o_tile.n_col + ':', e);
+                    }
                 }
-                if(o_result && o_result.a_s_line && o_result.a_s_line.length){
-                    o_self.a_s_line__stitch = o_result.a_s_line;
+
+                // scan finished
+                o_self.f_stop_elapsed_timer();
+                o_self.n_idx__cell__current = -1;
+                o_self.s_status__detail = '';
+
+                console.log(
+                    'Scan ' + (o_self.b_stop_requested ? 'stopped' : 'complete')
+                    + ': ' + o_self.n_cnt__tile__captured + '/' + (o_self.n_tile_x * o_self.n_tile_y)
+                    + ' tiles captured in ' + o_self.s_elapsed
+                );
+
+                // drive the stage back to its original position (default on)
+                if(!o_self.b_stop_requested && o_self.b_return__after_scan && o_self.a_n_position__start && o_state.b_connected__esp){
+                    o_self.s_status__detail = 'Returning to start...';
+                    await o_self.f_return_to_start();
+                    o_self.s_status__detail = '';
                 }
-            } catch(o_error) {
-                console.error('scan stitch error:', o_error);
-                o_self.s_error__stitch = o_error.message;
+
+                // Snapshot the completed capture before the operator resets the form.
+                const folder = o_self.s_path_folder__scan;
+                const count = o_self.n_cnt__tile__captured;
+                try {
+                    await o_self.f_job_request('scan_finish', { s_path_folder: folder, n_tiles: count });
+                    if (o_self.b_stitch__after_scan && count >= 2) await o_self.f_stitch();
+                    else await o_self.f_refresh_jobs();
+                } catch (error) {
+                    o_self.s_error__jobs = error.message;
+                }
+            } catch (error) {
+                o_self.s_error__jobs = error.message;
+                if (o_self.s_path_folder__scan) {
+                    try { await o_self.f_job_request('scan_finish', { s_path_folder: o_self.s_path_folder__scan }); }
+                    catch { /* connection recovery can recover the saved tiles */ }
+                }
+            } finally {
+                o_self.f_stop_elapsed_timer();
+                o_state.b_scanning = false;
+                o_self.s_status = 'complete';
             }
-
-            o_self.s_status = 'complete';
         },
 
-        f_on_stitch_progress: function(o_msg) {
-            let o_self = this;
-            if(o_msg.s_type !== 'stitch_progress') return;
-            o_self.n_ts_ms__stitch_line = Date.now();
-            o_self.a_s_line__stitch.push(o_msg.v_data.s_line);
-            if(o_self.a_s_line__stitch.length > 400) o_self.a_s_line__stitch.shift();
-            o_self.$nextTick(function(){
-                let el_log = o_self.$refs.el_log;
-                if(el_log) el_log.scrollTop = el_log.scrollHeight;
-            });
+        // Jobs are keyed by scan folder on the server. No late result writes
+        // into the active scan's state, even after New Scan resets that state.
+        f_job_request: async function(type, data = {}) {
+            const response = await f_send_wsmsg_with_response(f_o_wsmsg(type, data), 15000);
+            if (response.error || response.v_result?.b_success === false) {
+                throw new Error(response.error || response.v_result.s_error || 'Scan request failed');
+            }
+            return response.v_result;
+        },
+        f_refresh_jobs: async function() {
+            if (!o_state.b_connected__server) return;
+            const jobs = await this.f_job_request('scan_jobs_list');
+            if (!this.b_unmounted) this.a_o_job = jobs;
+        },
+        f_poll_jobs: async function() {
+            try { await this.f_refresh_jobs(); }
+            catch (error) { this.s_error__jobs = error.message; }
+            if (!this.b_unmounted) this.n_id__jobs_poll = setTimeout(() => this.f_poll_jobs(), 2000);
+        },
+        f_stitch: async function(job) {
+            if (this.b_queueing) return;
+            const folder = job?.s_path_folder || this.s_path_folder__scan;
+            if (!folder) return;
+            const options = job?.o_option && Object.keys(job.o_option).length ? job.o_option : {
+                n_score__min: this.n_score__min,
+                n_dim__max: this.n_dim__max,
+                s_blend: this.b_feather ? 'feather' : 'none',
+                b_no_flatfield: !this.b_flatfield,
+                b_matcher__loftr: this.b_matcher__loftr,
+            };
+            this.b_queueing = true;
+            this.s_error__jobs = '';
+            try {
+                await this.f_job_request('stitch_run', { ...options, s_path_folder: folder });
+                await this.f_refresh_jobs();
+            } catch (error) { this.s_error__jobs = error.message; }
+            finally { this.b_queueing = false; }
         },
 
         f_stop_scan: function() {
@@ -967,11 +954,7 @@ let o_component__scan = {
             this.a_b_captured = [];
             this.s_path_folder__scan = '';
             this.s_elapsed = '0:00';
-            this.s_path__stitched_image = '';
-            this.s_path__preview__stitch = '';
-            this.s_error__stitch = '';
-            this.a_s_line__stitch = [];
-            this.b_visible__log = false;
+
         },
     },
 
@@ -980,7 +963,8 @@ let o_component__scan = {
             this.f_stop_scan();
         }
         this.f_stop_elapsed_timer();
-        if (this.f_unregister__stitch_progress) this.f_unregister__stitch_progress();
+        this.b_unmounted = true;
+        clearTimeout(this.n_id__jobs_poll);
     },
 };
 

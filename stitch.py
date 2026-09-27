@@ -133,6 +133,7 @@ def discover_tiles(inputs: Sequence[str], pattern: Optional[str],
         if os.path.isdir(item):
             if recursive:
                 for root, _dirs, files in os.walk(item):
+                    _dirs[:] = [d for d in _dirs if d != "dowscaled"]
                     paths += [os.path.join(root, f) for f in files]
             else:
                 paths += [os.path.join(item, f) for f in sorted(os.listdir(item))]
@@ -237,6 +238,37 @@ def odd_sized(tiles: List[Tile], shape: Tuple[int, int]) -> List[str]:
         except Exception:
             continue
     return out
+
+
+def prepare_registration_images(tiles: List[Tile], shape: Tuple[int, int],
+                                max_width: int) -> Tuple[List[str], Tuple[float, float]]:
+    """Save reduced copies once; workers never decode originals for alignment.
+
+    Use actual rounded dimensions for each axis when lifting translations back
+    to original pixels. Like compositing, normalize differing tile sizes first.
+    """
+    h, w = shape
+    rw = min(w, max_width)
+    rh = max(1, round(h * rw / w))
+    paths = []
+    for tile in tiles:
+        folder = os.path.join(os.path.dirname(tile.path), "dowscaled")
+        os.makedirs(folder, exist_ok=True)
+        path = os.path.join(folder, tile.name)
+        # Scan capture already saves these. Reuse only fresh, correctly sized
+        # copies; old scans and replaced originals regenerate automatically.
+        if os.path.isfile(path) and os.path.getmtime(path) >= os.path.getmtime(tile.path):
+            cached = cv2.imread(path, cv2.IMREAD_UNCHANGED)
+            if cached is not None and cached.shape[:2] == (rh, rw):
+                paths.append(path)
+                continue
+        img = imread(tile.path, cv2.IMREAD_UNCHANGED)
+        small = cv2.resize(img, (rw, rh), interpolation=cv2.INTER_AREA)
+        write_image(path, small, 92)
+        paths.append(path)
+    log(f"alignment images: {rw} x {rh} in dowscaled/; "
+        "compositing originals at full resolution")
+    return paths, (rw / w, rh / h)
 
 
 def to_gray(img: np.ndarray) -> np.ndarray:
@@ -392,7 +424,7 @@ _W: Dict[str, object] = {}
 
 
 def _worker_init(paths, coarse_scale, hp_sigma, min_overlap_frac, refine_margin,
-                 cache_size, b_keep_cache=False):
+                 cache_size, b_keep_cache=False, registration_scale=(1.0, 1.0)):
     cv2.setNumThreads(1)
     paths = list(paths)
     old_paths = _W.get("paths") or []
@@ -413,8 +445,11 @@ def _worker_init(paths, coarse_scale, hp_sigma, min_overlap_frac, refine_margin,
             o_coarse_cache.pop(next(iter(o_coarse_cache)))
     else:
         o_full_cache, o_coarse_cache = {}, {}
-    _W.update(paths=paths, coarse_scale=coarse_scale, hp_sigma=hp_sigma,
-              min_overlap_frac=min_overlap_frac, refine_margin=refine_margin,
+    sx, sy = registration_scale
+    _W.update(paths=paths, coarse_scale=coarse_scale, hp_sigma=hp_sigma * min(sx, sy),
+              registration_scale=registration_scale,
+              min_overlap_frac=min_overlap_frac,
+              refine_margin=max(2, int(math.ceil(refine_margin * max(sx, sy)))),
               full_cache=o_full_cache, coarse_cache=o_coarse_cache,
               cache_size=cache_size)
 
@@ -450,6 +485,20 @@ def _coarse_gray(i: int) -> np.ndarray:
 
 
 def register_pair(task) -> Edge:
+    """Register small images, returning offsets and overlap in original pixels."""
+    sx, sy = _W["registration_scale"]
+    i, j, prior, radius = task
+    if prior is not None:
+        prior = (prior[0] * sx, prior[1] * sy)
+        radius = max(2, int(math.ceil(radius * max(sx, sy))))
+    e = _register_pair((i, j, prior, radius))
+    e.dx /= sx
+    e.dy /= sy
+    e.area = int(round(e.area / (sx * sy)))
+    return e
+
+
+def _register_pair(task) -> Edge:
     """task = (i, j, prior_dx, prior_dy, radius)  -- prior may be None."""
     i, j, prior, radius = task
     e = Edge(i, j)
@@ -458,7 +507,8 @@ def register_pair(task) -> Edge:
     try:
         a_f, b_f = _full_gray(i), _full_gray(j)
         H, W = a_f.shape
-        min_area_full = max(1024, int(_W["min_overlap_frac"] * H * W))
+        area_floor = max(16, int(1024 * np.prod(_W["registration_scale"])))
+        min_area_full = max(area_floor, int(_W["min_overlap_frac"] * H * W))
         margin = int(_W["refine_margin"])
 
         if prior is None:
@@ -475,7 +525,7 @@ def register_pair(task) -> Edge:
             dx0, dy0 = int(round(prior[0])), int(round(prior[1]))
             margin = int(radius)
 
-        # ---- refine on the (expanded) overlap crops, at full resolution ----
+        # Refine on overlap crops at registration resolution (256px for scans).
         n_ms__t1 = time.perf_counter()
         (ax0, ay0, ax1, ay1), (bx0, by0, bx1, by1) = overlap_rects((H, W), dx0, dy0)
         if (ax1 - ax0) * (ay1 - ay0) <= 0:
@@ -497,7 +547,7 @@ def register_pair(task) -> Edge:
         # A[Y,X] overlaps B[Y-DY, X-DX]  <=>  dx = DX + off_x, dy = DY + off_y
         off_x = cax0 - sbx0
         off_y = cay0 - sby0
-        min_area_crop = max(1024, int(0.35 * min(A.size, B.size)))
+        min_area_crop = max(area_floor, int(0.35 * min(A.size, B.size)))
         rdx, rdy, sc = best_shift(A, B, min_area_crop,
                                   window=(dx0 - off_x, dy0 - off_y, margin))
         dx = rdx + off_x
@@ -631,23 +681,27 @@ def loftr_rescue(tiles: List[Tile], edges: List[Edge], args, tile_shape: Tuple[i
         matcher = LoFTRMatcher(args.matcher_weights, args.matcher_device,
                                args.matcher_long_side, args.matcher_conf)
         _MATCHER["loftr"] = matcher
-    _worker_init([t.path for t in tiles], 1.0, args.highpass, args.min_overlap,
-                 args.refine_margin, 4)
+    paths = getattr(args, "registration_paths", [t.path for t in tiles])
+    registration_scale = getattr(args, "registration_scale", (1.0, 1.0))
+    _worker_init(paths, 1.0, args.highpass, args.min_overlap,
+                 args.refine_margin, 4, registration_scale=registration_scale)
     log(f"matcher: LoFTR on {len(failed)} unsolved pairs")
     recovered = 0
     for e in failed:
-        m = matcher.match(tiles[e.i].path, tiles[e.j].path)
+        m = matcher.match(paths[e.i], paths[e.j])
         if m is None:
             log(f"  {tiles[e.i].name} -> {tiles[e.j].name}: no consistent matches")
             continue
         dx, dy, n, rot, scale = m
+        dx /= registration_scale[0]
+        dy /= registration_scale[1]
         # only meaningful when the match is substantial; a handful of scattered
         # correspondences always "sees" some rotation
         if n >= 100 and math.isfinite(rot) and (abs(rot) > 1.0 or abs(scale - 1) > 0.02):
             warn(f"{tiles[e.i].name} -> {tiles[e.j].name}: LoFTR sees {rot:.1f} deg "
                  f"rotation / scale {scale:.3f} over {n} matches; these tiles are "
                  "not related by translation alone")
-        # verify + sub-pixel refine at full resolution
+        # Verify and sub-pixel refine at the selected registration resolution.
         cand = register_pair((e.i, e.j, (dx, dy), args.matcher_window))
         if cand.score >= args.min_score:
             cand.kind = "loftr"
@@ -1966,6 +2020,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                         "carries the positions")
 
     g = p.add_argument_group("registration")
+    g.add_argument("--registration-max-width", type=int, default=0,
+                   help="align only reduced copies in dowscaled/ (scan uses 256); "
+                        "0 keeps full-resolution refinement")
     g.add_argument("--coarse-scale", type=float, default=0.0,
                    help="downscale for the global search (0 = auto)")
     g.add_argument("--highpass", type=float, default=8.0,
@@ -2060,6 +2117,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                         "(world px, 0 = search the whole mosaic)")
 
     args = p.parse_args(argv)
+    if args.registration_max_width < 0:
+        p.error("--registration-max-width must be non-negative")
     _VERBOSE = not args.quiet
     args.mode = mode
 
@@ -2133,20 +2192,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     scale = args.coarse_scale or min(1.0, 512.0 / max(w, h))
     jobs = args.jobs or min(os.cpu_count() or 4, 16)
     paths = [t.path for t in tiles]
+    args.registration_paths = paths
+    args.registration_scale = (1.0, 1.0)
+    if args.registration_max_width:
+        args.registration_paths, args.registration_scale = prepare_registration_images(
+            tiles, (h, w), args.registration_max_width)
+        scale = 1.0
 
     # ------------------------------------------------------------- register --
     import multiprocessing as mp
 
     def run_pool(tasks) -> List[Edge]:
         if jobs <= 1:
-            _worker_init(paths, scale, args.highpass, args.min_overlap,
-                         args.refine_margin, 8)
+            _worker_init(args.registration_paths, scale, args.highpass, args.min_overlap,
+                         args.refine_margin, 8, registration_scale=args.registration_scale)
             return [register_pair(t) for t in tasks]
         ctx = mp.get_context("fork" if hasattr(os, "fork") else "spawn")
         out: List[Edge] = []
         with ctx.Pool(jobs, initializer=_worker_init,
-                      initargs=(paths, scale, args.highpass, args.min_overlap,
-                                args.refine_margin, 6)) as pool:
+                      initargs=(args.registration_paths, scale, args.highpass, args.min_overlap,
+                                args.refine_margin, 6, False, args.registration_scale)) as pool:
             for k, e in enumerate(pool.imap_unordered(register_pair, tasks, chunksize=1), 1):
                 out.append(e)
                 if k % 25 == 0 or k == len(tasks):

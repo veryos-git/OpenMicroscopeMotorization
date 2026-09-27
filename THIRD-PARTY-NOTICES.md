@@ -108,3 +108,12 @@ LGPL-3.0 is compatible with this project's GPL-3.0 licence.
 under Apache-2.0. Its license is included in `webserved_dir/vendor/esptool-js-LICENSE`.
 The bundle includes pako (MIT/Zlib), tslib (0BSD), and atob-lite (MIT);
 their licenses are included alongside the bundle.
+
+## Ultralytics YOLO (optional training/inference)
+
+- Source: https://github.com/ultralytics/ultralytics
+- License: GNU Affero General Public License, version 3
+  (https://github.com/ultralytics/ultralytics/blob/main/LICENSE).
+- Used by `yolo_worker.py` through the separately installed `venv_yolo` environment.
+  The pretrained YOLO11n checkpoint is downloaded from upstream on first training
+  use. No Ultralytics source code or weights are committed in this repository.

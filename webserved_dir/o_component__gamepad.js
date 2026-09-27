@@ -15,10 +15,6 @@ const o_component__gamepad = {
         f_pressed(i) { return o_state.o_input__gamepad?.buttons[i]?.pressed || this.f_value(i) > 0.1; },
         f_axis(i) { return o_state.o_input__gamepad?.axes[i] || 0; },
         f_change() { o_state.b_armed__gamepad = false; },
-        f_speed() {
-            o_state.n_rpm__jog = Math.min(15, Math.max(0.05, Number(o_state.n_rpm__jog) || 5));
-            f_save_setting__debounced('n_rpm__jog', String(o_state.n_rpm__jog));
-        },
     },
     template: `
         <div class="overlay-panel panel-gamepad" :class="{ visible: o_state.o_panel_visibility.gamepad }">
@@ -51,8 +47,8 @@ const o_component__gamepad = {
                     </div>
                 </div>
                 <label class="gamepad-enable"><input type="checkbox" v-model="o_state.b_enabled__gamepad" @change="f_change"> Enable motor control</label>
-                <div class="setup-input-row"><label for="gamepad-speed">Maximum speed (RPM)</label><input id="gamepad-speed" type="number" min="0.05" max="15" step="0.05" v-model.number="o_state.n_rpm__jog" @change="f_speed"></div>
-                <p class="setup-hint">Right stick: X/Y movement. Left stick up/down: Z focus. Speed = stick value × maximum RPM (0.5 = half speed). Hold to keep moving; center to stop. A 15% center dead zone ignores drift. Buttons and triggers are shown for testing.</p>
+                <o_component__manual_speed s_context="gamepad" />
+                <p class="setup-hint">Right stick: X/Y movement. Left stick up/down: Z focus. Speed = stick value × the corresponding XY or Z RPM (0.5 = half speed). Hold to keep moving; center to stop. A 15% center dead zone ignores drift. Buttons and triggers are shown for testing.</p>
                 <p class="gamepad-status" role="status">{{ o_state.s_status__gamepad }}</p>
             </div>
         </div>

@@ -62,6 +62,8 @@ let f_o_stitch_run = async function(o_option, f_on_line) {
         '-o', s_path_output,
         '--positions', s_path_position,
         '--report', s_path_report,
+        '--registration-max-width', '256',
+        '--jobs', '2',
     ];
     if(o_option.n_score__min) a_s_arg.push('--min-score', String(o_option.n_score__min));
     if(o_option.n_dim__max) a_s_arg.push('--max-dim', String(o_option.n_dim__max));
@@ -80,6 +82,7 @@ let f_o_stitch_run = async function(o_option, f_on_line) {
 
     let o_command = new Deno.Command(s_path__python, {
         args: a_s_arg,
+        env: { OMP_NUM_THREADS: '1', OPENBLAS_NUM_THREADS: '1' },
         stdout: 'piped',
         stderr: 'piped',
     });

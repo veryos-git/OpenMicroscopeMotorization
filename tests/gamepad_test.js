@@ -1,10 +1,11 @@
+import { f_n_rpm__manual } from '../webserved_dir/manual_speed.module.js';
 import { f_o_action_system } from '../webserved_dir/actions.module.js';
 import assert from 'node:assert/strict';
 
 async function fixture() {
     const state = {
         n_index__gamepad: -1, b_enabled__gamepad: true, b_armed__gamepad: false,
-        b_connected__esp: true, n_rpm__jog: 5, o_key_held: {},
+        b_connected__esp: true, n_rpm__jog: 5, n_rpm__focus_jog: 5, o_key_held: {},
     };
     for(const key of ['a', 'd', 'w', 's', 'q', 'e']) state['o_mapping__' + key] = { s_dir: ['a', 's', 'e'].includes(key) ? 'ccw' : 'cw' };
     const pad = { index: 0, id: 'PlayStation', connected: true, mapping: 'standard', axes: [0, 0, 0, 0], buttons: [] };
@@ -13,8 +14,8 @@ async function fixture() {
     const commands = [];
     const source = (await Deno.readTextFile(new URL('../webserved_dir/o_component__jog.js', import.meta.url)))
         .replace(/^import .*;$/gm, '').replace(/export \{[^}]+\};?/, '');
-    const component = new Function('o_state', 'navigator', 'document', 'f_n_motor__axis', 'f_send_esp_run_continuous', 'f_send_esp_stop', source + '\nreturn o_component__jog;')(
-        state, navigator, document, axis => ({ x: 2, y: 0, z: 1 })[axis],
+    const component = new Function('f_n_rpm__manual', 'o_state', 'navigator', 'document', 'f_n_motor__axis', 'f_send_esp_run_continuous', 'f_send_esp_stop', source + '\nreturn o_component__jog;')(
+        f_n_rpm__manual, state, navigator, document, axis => ({ x: 2, y: 0, z: 1 })[axis],
         (motor, rpm, direction) => commands.push({ motor, rpm, direction }), motor => commands.push({ stop: motor }),
     );
     const jog = Object.assign(component.data(), component.methods, { b_driving__mouse: false, b_driving__mouse_z: false });
@@ -103,7 +104,8 @@ Deno.test('status explains focus and connection blocks', async () => {
 Deno.test('held half stick continuously engages each motor at half maximum alongside idle mouse jog', async () => {
     for(const [axisIndex, motor] of [[2, 2], [3, 0], [1, 1]]) {
         const { pad, jog, commands, state } = await fixture();
-        state.n_rpm__jog = 10;
+        const speedKey = axisIndex === 1 ? 'n_rpm__focus_jog' : 'n_rpm__jog';
+        state[speedKey] = 10;
         pad.axes[axisIndex] = 0.5;
         // Simulate five seconds with both input timers active. Firmware keeps the
         // continuous command active until a new speed or a stop is sent.
@@ -114,7 +116,7 @@ Deno.test('held half stick continuously engages each motor at half maximum along
         assert.equal(commands.length, 1);
         assert.equal(commands[0].motor, motor);
         assert.equal(commands[0].rpm, 5);
-        state.n_rpm__jog = 6;
+        state[speedKey] = 6;
         jog.f_poll_gamepad();
         assert.equal(commands.at(-1).rpm, 3);
         pad.axes[axisIndex] = -0.5;
@@ -155,4 +157,17 @@ Deno.test('opening action search stops gamepad movement and requires neutral inp
     assert.equal(state.b_armed__gamepad, false);
     pad.axes[2] = 0; jog.f_poll_gamepad();
     assert.equal(state.b_armed__gamepad, true);
+});
+
+Deno.test('XY and focus sticks use independent speeds and update independently while held', async () => {
+    const { state, pad, jog, commands } = await fixture();
+    state.n_rpm__jog = 10;
+    state.n_rpm__focus_jog = 0.6;
+    pad.axes = [0, 0.5, 0.5, 0.5];
+    jog.f_poll_gamepad();
+    assert.deepEqual(commands.map(c => [c.motor, c.rpm]), [[2, 5], [0, 5], [1, 0.3]]);
+    commands.length = 0;
+    state.n_rpm__focus_jog = 1;
+    jog.f_poll_gamepad();
+    assert.deepEqual(commands.map(c => [c.motor, c.rpm]), [[1, 0.5]]);
 });

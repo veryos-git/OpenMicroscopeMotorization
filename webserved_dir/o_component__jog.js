@@ -1,3 +1,4 @@
+import { f_n_rpm__manual } from './manual_speed.module.js';
 import { o_actions } from './o_actions.js';
 import { f_n_motor__axis, o_state, f_send_esp_run_continuous, f_send_esp_stop, f_send_esp_stop_all, f_save_setting, f_save_setting__debounced, f_set_mouse_jog, f_toggle_mouse_jog } from './index.js';
 
@@ -21,10 +22,7 @@ let o_component__jog = {
     template: `
         <section class="hardware-inputs">
             <h3>Manual movement</h3>
-            <div class="setup-input-row">
-                <label for="hardware-jog-speed">Speed (RPM) · buttons, keyboard, mouse &amp; gamepad</label>
-                <input id="hardware-jog-speed" type="number" min="0.05" max="15" step="0.05" v-model.number="o_state.n_rpm__jog" @change="f_on_rpm_change" />
-            </div>
+            <o_component__manual_speed s_context="setup" />
             <p class="setup-hint">Default keys: A / D: X · W / S: Y · Q / E: focus. Hold to move; release to stop. Customize in Actions.</p>
             <button class="toolbar-toggle" :class="{ active: o_state.b_enabled__mouse_jog }" @click="f_toggle_mouse_jog">Mouse movement {{ o_state.b_enabled__mouse_jog ? 'on' : 'off' }}</button>
             <p class="setup-hint">On the camera image, hold the left mouse button for X/Y or the right button for focus.</p>
@@ -164,11 +162,6 @@ let o_component__jog = {
         f_o_mapping: function(s_key) {
             return o_state['o_mapping__' + s_key];
         },
-        f_on_rpm_change: function() {
-            let n_rpm = Number(o_state.n_rpm__jog);
-            o_state.n_rpm__jog = Number.isFinite(n_rpm) ? Math.min(15, Math.max(0.05, n_rpm)) : 5;
-            f_save_setting__debounced('n_rpm__jog', String(o_state.n_rpm__jog));
-        },
         f_on_mapping_change: function(s_key) {
             f_save_setting('o_mapping__' + s_key, o_state['o_mapping__' + s_key]);
         },
@@ -179,11 +172,19 @@ let o_component__jog = {
 
         // ─── Keyboard jog ───────────────────────────────────────────
 
+        f_refresh_keyboard_speed: function(s_axis) {
+            if(o_state.b_scanning || o_state.b_flashing || !o_state.b_connected__esp) return;
+            for(const s_key of s_axis === 'z' ? ['q', 'e'] : ['a', 'd', 'w', 's']) {
+                if(!o_state.o_key_held[s_key]) continue;
+                const mapping = this.f_get_mapping(s_key);
+                if(mapping) f_send_esp_run_continuous(mapping.motor, mapping.rpm, mapping.direction);
+            }
+        },
         f_get_mapping: function(s_key) {
             let o_map = o_state['o_mapping__' + s_key];
             let n_motor = f_n_motor__axis({ a: 'x', d: 'x', w: 'y', s: 'y', q: 'z', e: 'z' }[s_key]);
             if(!o_map || n_motor === null) return null;
-            return { motor: n_motor, direction: o_map.s_dir };
+            return { motor: n_motor, direction: o_map.s_dir, rpm: f_n_rpm__manual(o_state, ['q', 'e'].includes(s_key) ? 'z' : 'xy') };
         },
         f_on_keydown: function(o_evt) {
             let o_self = this;
@@ -196,7 +197,7 @@ let o_component__jog = {
 
             let o_mapping = o_self.f_get_mapping(s_key);
             if(o_mapping){
-                f_send_esp_run_continuous(o_mapping.motor, o_state.n_rpm__jog, o_mapping.direction);
+                f_send_esp_run_continuous(o_mapping.motor, o_mapping.rpm, o_mapping.direction);
             }
         },
         f_on_keyup: function(o_evt) {
@@ -215,7 +216,7 @@ let o_component__jog = {
                 if(!o_state.o_key_held[s_key__held]) continue;
                 let o_mapping__held = o_self.f_get_mapping(s_key__held);
                 if(o_mapping__held && o_mapping__held.motor === o_mapping.motor){
-                    f_send_esp_run_continuous(o_mapping.motor, o_state.n_rpm__jog, o_mapping__held.direction);
+                    f_send_esp_run_continuous(o_mapping.motor, o_mapping__held.rpm, o_mapping__held.direction);
                     return;
                 }
             }
@@ -319,7 +320,7 @@ let o_component__jog = {
                     continue;
                 }
                 const mapping = this.f_get_mapping(values[axis] < 0 ? negative : positive);
-                const rpm = Math.abs(values[axis]) * Math.min(15, Math.max(0, Number(o_state.n_rpm__jog) || 0));
+                const rpm = Math.abs(values[axis]) * f_n_rpm__manual(o_state, axis);
                 if(!mapping && values[axis]) activity.push(axis.toUpperCase() + ': no motor assigned in Setup');
                 const previous = this.o_sent__gamepad[axis];
                 if(previous !== undefined && (!mapping || previous.motor !== mapping.motor || rpm < N_RPM__MIN)) {
@@ -383,7 +384,7 @@ let o_component__jog = {
             let b_driving = s_axis === 'z' ? o_self.b_driving__mouse_z : o_self.b_driving__mouse;
             if(!b_driving) return 0;
             let n_nor = s_axis === 'x' ? o_self.n_x_nor__mouse : o_self.n_y_nor__mouse;
-            let n_rpm = Math.min(Math.abs(n_nor), 1) * o_state.n_rpm__jog;
+            let n_rpm = Math.min(Math.abs(n_nor), 1) * f_n_rpm__manual(o_state, s_axis);
             if(n_rpm < N_RPM__MIN) return 0;
             return n_rpm;
         },
@@ -455,7 +456,8 @@ let o_component__jog = {
         },
         f_drive_mouse_axis: function(s_axis, n_nor) {
             let o_self = this;
-            let n_rpm = Math.min(Math.abs(n_nor), 1) * o_state.n_rpm__jog;
+            let n_rpm__max = f_n_rpm__manual(o_state, s_axis);
+            let n_rpm = Math.min(Math.abs(n_nor), 1) * n_rpm__max;
             if(n_rpm < N_RPM__MIN){
                 o_self.f_stop_mouse_axis(s_axis);
                 return;
@@ -482,7 +484,8 @@ let o_component__jog = {
                 o_sent = o_self.f_o_sent__mouse_axis(s_axis);
             }
 
-            let b_same = o_sent.n_motor === o_mapping.motor
+            let b_same = o_sent.n_rpm__max === n_rpm__max
+                && o_sent.n_motor === o_mapping.motor
                 && o_sent.s_dir === o_mapping.direction
                 && Math.abs(o_sent.n_rpm - n_rpm) < N_RPM__RESEND_DELTA;
             if(b_same) return;
@@ -490,6 +493,7 @@ let o_component__jog = {
             f_send_esp_run_continuous(o_mapping.motor, n_rpm, o_mapping.direction);
             o_sent.n_motor = o_mapping.motor;
             o_sent.n_rpm = n_rpm;
+            o_sent.n_rpm__max = n_rpm__max;
             o_sent.s_dir = o_mapping.direction;
         },
         f_tick_mouse_jog: function() {
@@ -541,20 +545,8 @@ let o_component__jog = {
                 o_self.f_stop_mouse_jog();
             }
         },
-        // when the jog speed changes while keys are held, re-issue the command
-        // so the new speed applies immediately (mouse/gamepad already poll it)
-        'o_state.n_rpm__jog': function(n_rpm) {
-            let o_self = this;
-            if(!isFinite(n_rpm)) return;
-            if(o_state.b_scanning || o_state.b_flashing) return;
-            for(let s_key of A_S_KEY__JOG){
-                if(!o_state.o_key_held[s_key]) continue;
-                let o_mapping = o_self.f_get_mapping(s_key);
-                if(o_mapping){
-                    f_send_esp_run_continuous(o_mapping.motor, n_rpm, o_mapping.direction);
-                }
-            }
-        },
+        'o_state.n_rpm__jog': function() { this.f_refresh_keyboard_speed('xy'); },
+        'o_state.n_rpm__focus_jog': function() { this.f_refresh_keyboard_speed('z'); },
     },
     mounted: function() {
         let o_self = this;

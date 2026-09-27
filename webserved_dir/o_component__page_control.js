@@ -1,4 +1,5 @@
 import { o_state, f_connect_esp__auto } from './index.js';
+import { f_install_overlay_windows } from './overlay_windows.module.js';
 
 let o_component__page_control = {
     name: 'page-control',
@@ -12,6 +13,7 @@ let o_component__page_control = {
         <o_component__setup />
         <o_component__map />
         <o_component__motion />
+        <o_component__motion_detection />
         <o_component__gamepad />
         <o_component__optics />
         <o_component__stats />
@@ -28,6 +30,7 @@ let o_component__page_control = {
         <o_component__record />
         <o_component__recording_library />
         <o_component__video />
+        <o_component__training />
         <o_component__slide_library />
         <o_component__actions />
     `,
@@ -37,9 +40,13 @@ let o_component__page_control = {
         };
     },
     mounted: function() {
+        this.f_remove_overlay_windows = f_install_overlay_windows();
         if (!o_state.b_connected__esp) {
             f_connect_esp__auto();
         }
+    },
+    beforeUnmount: function() {
+        this.f_remove_overlay_windows?.();
     },
 };
 

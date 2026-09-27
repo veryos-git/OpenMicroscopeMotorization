@@ -6,7 +6,7 @@ import { o_state, f_save_setting__debounced } from './index.js';
 // a window resize (the box is re-projected every frame).
 //
 // picking is done by holding Ctrl and dragging on the image (or with the Select
-// area button for a mouse without a keyboard).  the wheel over the preview
+// area button; use that button while Training reserves Ctrl for annotation).  the wheel over the preview
 // window zooms, dragging its corner resizes it, and its header moves it.
 //
 // the magnifier resamples the raw webcam frame — the same source every capture
@@ -79,7 +79,7 @@ let o_component__zoom = {
                     <canvas class="zoom-mag-canvas" ref="el_mag"></canvas>
                     <div class="zoom-stage-empty" v-if="!b_active">
                         <span>no area selected</span>
-                        <span>Ctrl + drag on the live image</span>
+                        <span>{{ o_state.o_panel_visibility.training ? 'Use Select area below' : 'Ctrl + drag on the live image' }}</span>
                     </div>
                 </div>
 
@@ -161,7 +161,7 @@ let o_component__zoom = {
         },
         // the pick layer takes the pointer while picking is armed or Ctrl is down
         b_armed__pick: function() {
-            return o_state.o_zoom.b_selecting || this.b_ctrl || this.b_dragging;
+            return o_state.o_zoom.b_selecting || (this.b_ctrl && !o_state.o_panel_visibility.training) || this.b_dragging;
         },
         n_x__roi: function() {
             return o_state.o_zoom.n_x__roi;
@@ -240,14 +240,15 @@ let o_component__zoom = {
         f_o_box__video: function() {
             let el_video = document.getElementById('webcamVideo');
             if(!el_video || !el_video.videoWidth || !el_video.videoHeight) return null;
-            let n_scl_x__win = window.innerWidth;
-            let n_scl_y__win = window.innerHeight;
+            let o_rect = el_video.getBoundingClientRect();
+            let n_scl_x__win = o_rect.width;
+            let n_scl_y__win = o_rect.height;
             let n_scl_x__video = el_video.videoWidth;
             let n_scl_y__video = el_video.videoHeight;
             let n_scl = Math.min(n_scl_x__win / n_scl_x__video, n_scl_y__win / n_scl_y__video);
             return {
-                n_x: (n_scl_x__win - n_scl_x__video * n_scl) / 2,
-                n_y: (n_scl_y__win - n_scl_y__video * n_scl) / 2,
+                n_x: o_rect.left + (n_scl_x__win - n_scl_x__video * n_scl) / 2,
+                n_y: o_rect.top + (n_scl_y__win - n_scl_y__video * n_scl) / 2,
                 n_scl: n_scl,
                 n_scl_x__video: n_scl_x__video,
                 n_scl_y__video: n_scl_y__video,
@@ -481,6 +482,7 @@ let o_component__zoom = {
             let o_self = this;
             if(o_evt.button !== 0) return;
             if(!o_self.b_active) return;
+            if(o_state.o_panel_visibility.training && (o_evt.ctrlKey || o_evt.shiftKey)) return;
             o_self.o_pan = {
                 n_x: o_evt.clientX,
                 n_y: o_evt.clientY,
@@ -734,6 +736,7 @@ let o_component__zoom = {
             let el_canvas = o_self.$refs.el_mag;
             if(!el_canvas) return;
             if(!o_self.b_active){
+                el_canvas._o_training_view = null;
                 o_self.f_n_dpr__canvas(el_canvas, 0, 0);
                 return;
             }
@@ -762,6 +765,8 @@ let o_component__zoom = {
             n_scl_x__out = Math.max(1, n_scl_x__out);
             n_scl_y__out = Math.max(1, n_scl_y__out);
 
+            // Exact source crop for training overlays; includes frame-boundary clamping.
+            el_canvas._o_training_view = {n_x, n_y, n_width:n_scl_x__roi, n_height:n_scl_y__roi};
             let n_dpr = o_self.f_n_dpr__canvas(el_canvas, n_scl_x__out, n_scl_y__out);
             let o_ctx = el_canvas.getContext('2d');
             o_ctx.setTransform(n_dpr, 0, 0, n_dpr, 0, 0);
