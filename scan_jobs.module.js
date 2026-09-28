@@ -6,6 +6,52 @@ export function f_o_scan_jobs({ s_root, f_run, f_complete = async () => {} }) {
     let b_running = false;
     let o_idle = Promise.resolve();
     const m_write = new WeakMap();
+    const m_live = new Map();
+    let liveTail = Promise.resolve();
+    function f_schedule_live(job, state) {
+        if (state.pending) return;
+        state.pending = true;
+        state.work = liveTail = liveTail.catch(() => {}).then(async () => {
+            // Coalesce notifications received while another preview is running.
+            const revision = state.revision;
+            const names = [...state.tiles].sort();
+            try {
+                const result = await f_run({ ...job.o_option, s_path_folder: job.s_path_folder,
+                    b_live_scan: true, b_live_preview: true, a_s_tile: names }, () => {});
+                if (result.b_success) {
+                    job.o_live = { s_path_preview: result.s_path_output, n_revision: revision,
+                        n_tiles: names.length, s_error: '' };
+                } else {
+                    job.o_live = { ...job.o_live, s_error: result.s_error || 'Waiting for overlapping tiles' };
+                }
+            } catch (error) {
+                job.o_live = { ...job.o_live, s_error: error.message };
+            }
+            try { await f_save(job); }
+            catch (error) { job.o_live = { ...job.o_live, s_error: 'Could not save preview state: ' + error.message }; }
+            state.pending = false;
+            if (state.revision !== revision && !state.closed) f_schedule_live(job, state);
+        });
+    }
+    async function f_tile(s_path, name) {
+        const folder = await f_folder(s_path);
+        const job = m_job.get(folder);
+        if (!job || job.s_status !== 'capturing' || !job.o_option.b_live_scan) throw Error('No active live scan');
+        if (!/^tile_r\d+_c\d+\.png$/.test(name)) throw Error('Invalid tile name');
+        for (const path of [join(folder, name), join(folder, 'dowscaled', name)]) {
+            const real = await Deno.realPath(path);
+            if (!real.startsWith(folder + sep) || !(await Deno.stat(real)).isFile) throw Error('Invalid saved tile');
+        }
+        let state = m_live.get(folder);
+        if (!state) { state = { tiles: new Set(), revision: 0, pending: false, closed: false }; m_live.set(folder, state); }
+        if (!state.tiles.has(name)) {
+            state.tiles.add(name);
+            job.n_tiles = state.tiles.size;
+            state.revision++;
+            f_schedule_live(job, state);
+        }
+        return { b_success: true };
+    }
     const f_copy = o => structuredClone(o);
     async function f_folder(s_path) {
         const root = await Deno.realPath(s_root);
@@ -40,6 +86,13 @@ export function f_o_scan_jobs({ s_root, f_run, f_complete = async () => {} }) {
                 job.n_started = Date.now();
                 try {
                     await f_save(job);
+                    // Do not race the live writer against final cache consumption.
+                    const live = m_live.get(job.s_path_folder);
+                    if (live) {
+                        live.closed = true;
+                        await live.work;
+                        m_live.delete(job.s_path_folder);
+                    }
                     const result = await f_run({ ...job.o_option, s_path_folder: job.s_path_folder }, line => f_log(job, line));
                     job.o_result = result;
                     job.s_status = result.b_success ? 'complete' : 'failed';
@@ -89,11 +142,11 @@ export function f_o_scan_jobs({ s_root, f_run, f_complete = async () => {} }) {
         }
         f_pump();
     }
-    async function f_create(s_path, n_id__slide = 0) {
+    async function f_create(s_path, n_id__slide = 0, o_option = {}) {
         const folder = await f_folder(s_path);
         const job = { s_id: crypto.randomUUID(), s_name: basename(folder), s_path_folder: folder,
             n_id__slide, n_created: Date.now(), s_status: 'capturing', n_tiles: 0,
-            a_s_line: [], o_option: {}, o_result: null, s_error: '' };
+            a_s_line: [], o_option: f_copy(o_option), o_result: null, s_error: '' };
         if (m_job.has(folder)) throw Error('Scan folder already registered');
         m_job.set(folder, job);
         await f_save(job);
@@ -117,6 +170,7 @@ export function f_o_scan_jobs({ s_root, f_run, f_complete = async () => {} }) {
         if (['queued', 'running'].includes(job.s_status)) return f_copy(job);
         if (job.s_status === 'capturing') throw Error('Finish capture before stitching');
         if (job.n_tiles < 2) throw Error('At least two saved tiles are needed');
+        o_option = { ...job.o_option, ...o_option, b_live_scan: job.o_option.b_live_scan === true };
         const previous = f_copy(job);
         Object.assign(job, { s_status: 'queued', n_queued: Date.now(), n_finished: null,
             s_error: '', a_s_line: [], o_result: null, o_option: f_copy(o_option) });
@@ -125,7 +179,7 @@ export function f_o_scan_jobs({ s_root, f_run, f_complete = async () => {} }) {
         f_pump();
         return f_copy(job);
     }
-    return { f_init, f_create, f_finish, f_enqueue, f_folder,
+    return { f_init, f_create, f_finish, f_enqueue, f_folder, f_tile,
         f_list: () => f_copy([...m_job.values()].sort((a, b) => b.n_created - a.n_created)),
-        f_idle: () => o_idle };
+        f_idle: async () => { await o_idle; while (true) { const tail = liveTail; await tail; if (tail === liveTail) break; } } };
 }

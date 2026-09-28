@@ -312,7 +312,8 @@ let f_handler = async function(o_request, o_conninfo) {
                     if (!o_data.v_data?.s_path_folder) s_path_folder += '_' + crypto.randomUUID().slice(0, 8);
                     await Deno.mkdir(s_path_folder, { recursive: true });
                     await Deno.mkdir(s_path_folder + s_ds + 'dowscaled', { recursive: true });
-                    await o_scan_jobs.f_create(s_path_folder, o_data.v_data?.n_id__slide || 0);
+                    await o_scan_jobs.f_create(s_path_folder, o_data.v_data?.n_id__slide || 0,
+                        o_data.v_data?.b_live_scan ? { ...o_data.v_data.o_option, b_live_scan: true } : {});
                     o_socket.send(JSON.stringify({
                         v_result: { s_path_folder: s_path_folder },
                         s_uuid: o_data.s_uuid,
@@ -586,6 +587,10 @@ let f_handler = async function(o_request, o_conninfo) {
             }
 
             // Stitch requests acknowledge enqueue immediately; clients poll job state.
+            if (o_data.s_type === 'scan_tile_ready') {
+                await f_send_result('scan_tile_ready', () => o_scan_jobs.f_tile(
+                    o_data.v_data.s_path_folder, o_data.v_data.s_filename));
+            }
             if (o_data.s_type === 'stitch_run') {
                 await f_send_result('stitch_run', () => o_scan_jobs.f_enqueue(o_data.v_data || {}));
             }

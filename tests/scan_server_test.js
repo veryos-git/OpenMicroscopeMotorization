@@ -43,7 +43,7 @@ for col,x in enumerate((0,160)): cv2.imwrite(sys.argv[1]+'/tile_r00_c0'+str(col)
         await request('scan_finish', { s_path_folder: folder });
         const queued = await request('stitch_run', { s_path_folder: folder, b_no_flatfield: true });
         assert.ok(['running', 'queued'].includes(queued.s_status));
-        const second = await request('scan_create_folder');
+        const second = await request('scan_create_folder', { b_live_scan: true, o_option: { b_no_flatfield: true } });
         assert.notEqual(second.s_path_folder, folder);
         let job;
         for (let i = 0; i < 100; i++) {
@@ -53,6 +53,33 @@ for col,x in enumerate((0,160)): cv2.imwrite(sys.argv[1]+'/tile_r00_c0'+str(col)
         }
         assert.equal(job.s_status, 'complete', JSON.stringify(job));
         assert.ok(job.a_s_line.some(line => line.includes('done')));
+        // The real Python live preview must become available before scan_finish.
+        for (let col = 0; col < 2; col++) {
+            const name = 'tile_r00_c0' + col + '.png';
+            await Deno.copyFile(folder + '/' + name, second.s_path_folder + '/' + name);
+            await Deno.copyFile(folder + '/' + name, second.s_path_folder + '/dowscaled/' + name);
+            await request('scan_tile_ready', { s_path_folder: second.s_path_folder, s_filename: name });
+        }
+        let liveJob;
+        for (let i = 0; i < 100; i++) {
+            liveJob = (await request('scan_jobs_list')).find(j => j.s_path_folder === second.s_path_folder);
+            if (liveJob.o_live?.n_revision === 2) break;
+            await new Promise(r => setTimeout(r, 100));
+        }
+        assert.equal(liveJob.s_status, 'capturing');
+        assert.equal(liveJob.o_live?.n_revision, 2, JSON.stringify(liveJob));
+        const previewResponse = await fetch(origin + '/api/file?path=' + encodeURIComponent(liveJob.o_live.s_path_preview));
+        assert.equal(previewResponse.status, 200);
+        assert.ok((await previewResponse.arrayBuffer()).byteLength > 100);
+        await request('scan_finish', { s_path_folder: second.s_path_folder });
+        await request('stitch_run', { s_path_folder: second.s_path_folder });
+        for (let i = 0; i < 100; i++) {
+            liveJob = (await request('scan_jobs_list')).find(j => j.s_path_folder === second.s_path_folder);
+            if (['complete', 'failed'].includes(liveJob.s_status)) break;
+            await new Promise(r => setTimeout(r, 100));
+        }
+        assert.equal(liveJob.s_status, 'complete', JSON.stringify(liveJob));
+        assert.ok(liveJob.a_s_line.some(line => line.includes('reused 1/1 pairs')), JSON.stringify(liveJob));
         const response = await fetch(origin + '/api/file?path=' + encodeURIComponent(job.o_result.s_path_output));
         assert.equal(response.status, 200);
         await response.arrayBuffer();

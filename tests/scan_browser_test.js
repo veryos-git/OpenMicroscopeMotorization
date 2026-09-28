@@ -20,13 +20,17 @@ Deno.test('scan UI captures a second slide while the first stitch runs and keeps
                 const d = msg.v_data;
                 if (msg.s_type === 'scan_create_folder') {
                     const folder = '/scans/scan_' + jobs.length;
-                    jobs.push({s_id:folder, s_name:folder, s_path_folder:folder, s_status:'capturing', n_tiles:0, a_s_line:[], n_id__slide:d.n_id__slide});
+                    jobs.push({s_id:folder, s_name:folder, s_path_folder:folder, s_status:'capturing', n_tiles:0, a_s_line:[], n_id__slide:d.n_id__slide,
+                        o_option: d.b_live_scan ? {...d.o_option,b_live_scan:true} : {}});
                     return {v_result:{s_path_folder:folder}};
                 }
                 if (msg.s_type === 'scan_jobs_list') return {v_result:structuredClone(jobs)};
                 const job = jobs.find(j => j.s_path_folder === d.s_path_folder);
+                if (msg.s_type === 'scan_tile_ready') {
+                    job.o_live={s_path_preview:job.s_path_folder+'/live_preview.jpg',n_revision:(job.o_live?.n_revision||0)+1};
+                }
                 if (msg.s_type === 'scan_finish') { job.n_tiles=d.n_tiles; job.s_status='ready'; }
-                if (msg.s_type === 'stitch_run') { job.o_option=d; job.s_status=jobs.some(j => j.s_status === 'running')?'queued':'running'; job.a_s_line.push('log ' + job.s_id); }
+                if (msg.s_type === 'stitch_run') { job.o_option={...job.o_option,...d}; job.s_status=jobs.some(j => j.s_status === 'running')?'queued':'running'; job.a_s_line.push('log ' + job.s_id); }
                 return {v_result:structuredClone(job)};
             }
         `);
@@ -48,7 +52,16 @@ Deno.test('scan UI captures a second slide while the first stitch runs and keeps
             const app=createApp(o_component__scan), vm=app.mount('#app');
             try {
                 vm.n_tile_x=2;vm.n_tile_y=1;vm.f_delay=async()=>{};vm.f_move_motor_n_step=async()=>{};
-                vm.f_return_to_start=async()=>assert(o_state.b_scanning,'Capture lock released before return');
+                assert(document.body.textContent.includes('Start classical scan'),'Classical button missing');
+                assert(document.body.textContent.includes('Start live scan'),'Live button missing');
+                vm.f_return_to_start=async()=>{
+                    assert(o_state.b_scanning,'Capture lock released before return');
+                    if (vm.b_live_scan) {
+                        await vm.f_refresh_jobs();await nextTick();
+                        assert(jobs.at(-1).s_status==='capturing','Preview check ran after capture finished');
+                        assert(document.querySelector('img[alt="Provisional live scan mosaic"]'),'No preview during capture');
+                    }
+                };
                 await vm.f_start_scan();
                 assert(vm.s_status==='complete','Capture waited on running stitch');
                 assert(jobs[0].s_status==='running','First stitch did not start');
@@ -59,8 +72,11 @@ Deno.test('scan UI captures a second slide while the first stitch runs and keeps
                 assert(vm.s_status==='idle','New scan unavailable');
                 assert(document.body.textContent.includes('running'),'Job disappeared on reset');
                 o_state.n_id__slide__current=20;
-                await vm.f_start_scan();
+                await vm.f_start_scan(true);
                 assert(jobs[1].s_status==='queued','Second stitch must queue behind first');
+                assert(jobs[1].o_live?.n_revision===2,'Live scan did not notify both saved tiles');
+                await nextTick();
+                assert(document.querySelector('img[alt="Provisional live scan mosaic"]'),'Live preview missing');
                 assert(jobs[0].n_id__slide===10 && jobs[1].n_id__slide===20,'Slide associations lost');
                 assert(saved.filter(s=>!s.folder.endsWith('dowscaled')).length===4,'Both scans not captured');
                 const folder=vm.s_path_folder__scan;

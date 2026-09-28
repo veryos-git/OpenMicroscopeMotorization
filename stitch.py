@@ -29,13 +29,14 @@ Examples
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import os
 import re
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict, replace
 from typing import Dict, List, Optional, Sequence, Tuple
 
 try:
@@ -2116,6 +2117,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                    help="locate: search radius around --expect-x/--expect-y "
                         "(world px, 0 = search the whole mosaic)")
 
+    p.add_argument('--scan-live-cache', help='reuse first-pass scan neighbor registrations')
+    p.add_argument('--live-preview', action='store_true', help='render provisional reduced scan mosaic')
     args = p.parse_args(argv)
     if args.registration_max_width < 0:
         p.error("--registration-max-width must be non-negative")
@@ -2135,11 +2138,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # ---------------------------------------------------------------- tiles --
     tiles = discover_tiles(args.input, args.pattern, args.recursive)
     log(f"found {len(tiles)} images")
-    if len(tiles) < 2:
+    if len(tiles) < 2 and not args.live_preview:
         raise SystemExit("error: need at least 2 images to stitch")
 
     grid = False
-    if not args.no_grid:
+    if args.scan_live_cache:
+        # Explicit scan coordinates allow partial rows and missing captures.
+        for t in tiles:
+            m = re.fullmatch(r'tile_r(\d+)_c(\d+)\.png', t.name, re.I)
+            if not m:
+                raise SystemExit('error: live scan inputs must be named grid tiles')
+            t.row, t.col = map(int, m.groups())
+        grid = True
+    elif not args.no_grid:
         if args.grid:
             m = re.fullmatch(r"(\d+)\s*[xX,]\s*(\d+)", args.grid.strip())
             if not m:
@@ -2202,7 +2213,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # ------------------------------------------------------------- register --
     import multiprocessing as mp
 
-    def run_pool(tasks) -> List[Edge]:
+    def run_uncached(tasks) -> List[Edge]:
         if jobs <= 1:
             _worker_init(args.registration_paths, scale, args.highpass, args.min_overlap,
                          args.refine_margin, 8, registration_scale=args.registration_scale)
@@ -2217,6 +2228,45 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 if k % 25 == 0 or k == len(tasks):
                     log(f"  {k}/{len(tasks)} pairs")
         return out
+
+    def run_pool(tasks) -> List[Edge]:
+        # Only the independent first pass is cached. Guided retries depend on
+        # the evolving global layout and must be recomputed at finalization.
+        if not args.scan_live_cache or any(t[2] is not None for t in tasks):
+            return run_uncached(tasks)
+        try:
+            with open(args.scan_live_cache) as fh:
+                cache = json.load(fh)
+        except (OSError, ValueError):
+            cache = {}
+        def fingerprint(path):
+            stat = os.stat(path)
+            return [os.path.abspath(path), stat.st_size, stat.st_mtime_ns]
+        signatures = [[fingerprint(t.path), fingerprint(rp)]
+                      for t, rp in zip(tiles, args.registration_paths)]
+        keys = {}
+        for i, j, _, _ in tasks:
+            payload = [1, signatures[i], signatures[j], [h, w], scale,
+                       args.registration_scale, args.highpass, args.min_overlap,
+                       args.refine_margin]
+            keys[i, j] = hashlib.sha256(json.dumps(payload).encode()).hexdigest()
+        out, todo = [], []
+        for task in tasks:
+            i, j = task[:2]
+            saved = cache.get(keys[i, j])
+            if saved is not None:
+                out.append(Edge(**{**saved, 'i': i, 'j': j}))
+            else:
+                todo.append(task)
+        log(f'live alignment cache: reused {len(out)}/{len(tasks)} pairs')
+        fresh = run_uncached(todo) if todo else []
+        for e in fresh:
+            cache[keys[e.i, e.j]] = asdict(e)
+        temp = args.scan_live_cache + '.tmp'
+        with open(temp, 'w') as fh:
+            json.dump(cache, fh)
+        os.replace(temp, args.scan_live_cache)
+        return out + fresh
 
     n_ms__t0 = time.perf_counter()
     if b_motor:
@@ -2277,7 +2327,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         loftr_rescue(tiles, edges, args, (h, w), tile_area)
         report("after matcher")
 
-    if not any_accepted():
+    if not any_accepted() and not (args.live_preview and len(tiles) == 1):
         raise SystemExit(
             "error: no tile pair could be registered.  Are these images really "
             "overlapping?  Try --min-score 0.15, --no-grid, or --matcher loftr.")
@@ -2367,6 +2417,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     for t, (x, y) in zip(tiles, pos):
         t.x, t.y = float(x), float(y)
+
+    if args.live_preview:
+        # Only show the largest connected group: disconnected components have
+        # no meaningful relative placement. Final processing still uses all tiles.
+        group = max(groups, key=len)
+        sx, sy = args.registration_scale
+        small_tiles = [replace(tiles[k], path=args.registration_paths[k]) for k in group]
+        small_pos = pos[group] * np.array([sx, sy])
+        shape = imread(small_tiles[0].path).shape[:2]
+        preview, _ = composite(small_tiles, small_pos, shape, args, None, None)
+        factor = min(1.0, 1600 / max(preview.shape[:2]))
+        if factor < 1:
+            preview = cv2.resize(preview, None, fx=factor, fy=factor, interpolation=cv2.INTER_AREA)
+        temp = args.output + '.tmp.jpg'
+        write_image(temp, preview, args.jpeg_quality)
+        os.replace(temp, args.output)
+        log(f'live preview: {len(group)}/{len(tiles)} tiles (provisional, no exposure correction)')
+        return 0
 
     if args.positions:
         with open(args.positions, "w") as fh:

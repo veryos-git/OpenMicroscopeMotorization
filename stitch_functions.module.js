@@ -51,25 +51,31 @@ let f_o_stitch_run = async function(o_option, f_on_line) {
         return { b_success: false, s_error: `stitch.py not found at ${s_path__script}`, a_s_line: [] };
     }
 
-    let s_path_output = `${s_path_folder}${s_ds}stitched.png`;
+    const live = o_option.b_live_preview === true;
+    let s_path_output = `${s_path_folder}${s_ds}${live ? 'live_preview.jpg' : 'stitched.png'}`;
     let s_path_preview = `${s_path_folder}${s_ds}stitched_preview.jpg`;
     let s_path_position = `${s_path_folder}${s_ds}positions.json`;
     let s_path_report = `${s_path_folder}${s_ds}report.json`;
 
     let a_s_arg = [
         s_path__script,
-        s_path_folder,
+        ...(live ? o_option.a_s_tile.map(name => `${s_path_folder}${s_ds}${name}`) : [s_path_folder]),
         '-o', s_path_output,
         '--positions', s_path_position,
         '--report', s_path_report,
         '--registration-max-width', '256',
-        '--jobs', '2',
+        '--jobs', live ? '1' : '2',
     ];
+    if (o_option.b_live_scan) {
+        a_s_arg.push('--scan-live-cache', `${s_path_folder}${s_ds}live_alignment.json`);
+        if (!live) a_s_arg.push('--pattern', '^tile_r[0-9]+_c[0-9]+\\.png$');
+    }
+    if (live) a_s_arg.push('--live-preview', '--passes', '1');
     if(o_option.n_score__min) a_s_arg.push('--min-score', String(o_option.n_score__min));
     if(o_option.n_dim__max) a_s_arg.push('--max-dim', String(o_option.n_dim__max));
     if(o_option.s_blend === 'none') a_s_arg.push('--blend', 'none');
     if(o_option.b_no_flatfield) a_s_arg.push('--no-flatfield');
-    if(o_option.b_matcher__loftr) a_s_arg.push('--matcher', 'loftr');
+    if(o_option.b_matcher__loftr && !live) a_s_arg.push('--matcher', 'loftr');
     if(o_option.b_dry_run) a_s_arg.push('--dry-run');
 
     let a_s_line = [];

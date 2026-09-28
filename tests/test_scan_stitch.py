@@ -11,6 +11,41 @@ import stitch
 
 
 class ScanStitchTest(unittest.TestCase):
+    def test_live_partial_grid_cache_and_finalization(self):
+        rng = np.random.default_rng(28)
+        scene = cv2.GaussianBlur(rng.integers(0, 256, (400, 600, 3), dtype=np.uint8), (0, 0), 2)
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            files = []
+            # Arrival order changes natural-sort indices: exercise stable cache keys.
+            for row, col in [(0, 1), (0, 0), (1, 1)]:
+                path = root / f'tile_r{row:02}_c{col:02}.png'
+                cv2.imwrite(str(path), scene[row*120:row*120+240, col*160:col*160+340])
+                files.append(str(path))
+            common = ['--scan-live-cache', str(root / 'live_alignment.json'),
+                      '--registration-max-width', '256', '--jobs', '1']
+            preview = root / 'live_preview.jpg'
+            with patch.object(stitch, 'register_pair', wraps=stitch.register_pair) as register:
+                for count in (1, 2, 3):
+                    self.assertEqual(stitch.main(files[:count] + common + [
+                        '--live-preview', '--passes', '1', '-o', str(preview)]), 0)
+                    self.assertTrue(preview.exists())
+                self.assertEqual(register.call_count, 2)
+                self.assertEqual(stitch.main([folder] + common + [
+                    '--pattern', r'^tile_r\d+_c\d+\.png$', '--no-flatfield', '--no-gain-comp',
+                    '-o', str(root / 'stitched.png')]), 0)
+                self.assertEqual(register.call_count, 2, 'final build should reuse live registrations')
+                self.assertGreater(cv2.imread(str(root / 'stitched.png')).shape[1], 490)
+                # Replacing an original invalidates only incident edges.
+                image = cv2.imread(files[1])
+                cv2.imwrite(files[1], image)
+                self.assertEqual(stitch.main(files + common + [
+                    '--live-preview', '--passes', '1', '-o', str(preview)]), 0)
+                self.assertEqual(register.call_count, 3)
+                self.assertEqual(stitch.main(files + common + [
+                    '--live-preview', '--passes', '1', '--highpass', '10', '-o', str(preview)]), 0)
+                self.assertEqual(register.call_count, 5, 'registration setting changes must invalidate cache')
+
     def test_reduced_alignment_and_original_composite(self):
         rng = np.random.default_rng(17)
         # Odd dimensions exercise the separate rounded X/Y scale factors.

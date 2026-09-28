@@ -21,7 +21,7 @@ let o_component__scan = {
             </div>
             <div class="panel-body">
                 <div v-if="s_error__jobs" class="scan-stitch-error">{{ s_error__jobs }}</div>
-                <details class="scan-jobs" :open="a_o_job.some(job => ['queued', 'running'].includes(job.s_status))">
+                <details class="scan-jobs" :open="a_o_job.some(job => ['queued', 'running'].includes(job.s_status) || (job.s_status === 'capturing' && job.o_option?.b_live_scan))">
                     <summary>Scans · {{ a_o_job.length }} <span v-if="n_jobs_pending">· {{ n_jobs_pending }} pending</span></summary>
                     <div class="scan-hint">Stitching runs in the background. You can capture the next scan while jobs are queued or running.</div>
                     <article v-for="job in a_o_job" :key="job.s_id" class="scan-job">
@@ -41,6 +41,13 @@ let o_component__scan = {
                                 :src="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_preview || job.o_result.s_path_output) + '&v=' + job.n_finished" />
                         </a>
                         <div class="scan-hint" v-if="job.s_status === 'running'">{{ job.a_s_line.at(-1) }}</div>
+                        <div v-if="job.o_option?.b_live_scan && job.s_status !== 'complete'">
+                            <div class="scan-hint">Live preview — provisional alignment; final colors and placement may change.</div>
+                            <img v-if="job.o_live?.s_path_preview" class="scan-stitch-preview" alt="Provisional live scan mosaic"
+                                :src="'/api/file?path=' + encodeURIComponent(job.o_live.s_path_preview) + '&v=' + job.o_live.n_revision" />
+                            <div v-else class="scan-hint">Waiting for live alignment…</div>
+                            <div v-if="job.o_live?.s_error" class="scan-hint">{{ job.o_live.s_error }} Capture can continue; final stitching will retry.</div>
+                        </div>
                         <details v-if="job.a_s_line.length"><summary>Stitch log</summary>
                             <div class="scan-stitch-log"><div v-for="(line, i) in job.a_s_line" :key="i">{{ line }}</div></div>
                         </details>
@@ -287,9 +294,13 @@ let o_component__scan = {
 
                     <button
                         class="btn-scan-start"
-                        @click="f_start_scan"
+                        @click="f_start_scan(false)"
                         :disabled="!o_state.b_connected__esp || n_step__x < 1 || n_step__y < 1 || n_tile_x < 1 || n_tile_y < 1"
-                    >Start Scan</button>
+                    >Start classical scan</button>
+                    <button class="btn-scan-start" @click="f_start_scan(true)"
+                        :disabled="!o_state.b_connected__esp || n_step__x < 1 || n_step__y < 1 || n_tile_x < 1 || n_tile_y < 1"
+                    >Start live scan</button>
+                    <div class="scan-hint">Live scan aligns tiles during capture and shows a provisional mosaic. Preview updates may lag behind capture.</div>
                 </template>
 
                 <!-- ── Progress (scanning) ───────────────── -->
@@ -378,6 +389,7 @@ let o_component__scan = {
 
             // stitch config (stitch.py)
             b_stitch__after_scan: true,
+            b_live_scan: false,
             n_score__min: 0.3,
             n_dim__max: 0,
             b_feather: true,
@@ -727,17 +739,27 @@ let o_component__scan = {
 
         // ── Main scan execution ──────────────────────────────────────
 
-        f_start_scan: async function() {
+        f_stitch_options: function() {
+            return {
+                n_score__min: this.n_score__min, n_dim__max: this.n_dim__max,
+                s_blend: this.b_feather ? 'feather' : 'none',
+                b_no_flatfield: !this.b_flatfield, b_matcher__loftr: this.b_matcher__loftr,
+            };
+        },
+        f_start_scan: async function(b_live = false) {
             let o_self = this;
 
             if (o_state.b_scanning || o_self.b_testing) return;
+            o_self.b_live_scan = b_live === true;
+            const pendingTiles = [];
             o_state.b_scanning = true;
             o_self.s_status = 'scanning';
             o_self.s_status__detail = 'Creating scan...';
             try {
                 // create scan folder on server
                 let o_resp = await f_send_wsmsg_with_response(
-                    f_o_wsmsg('scan_create_folder', { n_id__slide: o_state.n_id__slide__current })
+                    f_o_wsmsg('scan_create_folder', { n_id__slide: o_state.n_id__slide__current,
+                        b_live_scan: o_self.b_live_scan, o_option: o_self.f_stitch_options() })
                 );
                 if (!o_resp.v_result || !o_resp.v_result.s_path_folder) {
                     throw new Error(o_resp.error || 'Failed to create scan folder');
@@ -852,6 +874,12 @@ let o_component__scan = {
                                 el_small.toBlob(blob => blob ? resolve(blob) : reject(new Error('failed to downscale tile')), 'image/png');
                             });
                             await f_save_image(o_small, o_self.s_path_folder__scan + '/dowscaled', s_filename);
+                            if (o_self.b_live_scan) {
+                                // Do not wait on alignment or its acknowledgement before moving.
+                                pendingTiles.push(o_self.f_job_request('scan_tile_ready', {
+                                    s_path_folder: o_self.s_path_folder__scan, s_filename,
+                                }).catch(error => { o_self.s_error__jobs = error.message; }));
+                            }
                         } finally {
                             o_bitmap.close();
                         }
@@ -882,6 +910,7 @@ let o_component__scan = {
                 const folder = o_self.s_path_folder__scan;
                 const count = o_self.n_cnt__tile__captured;
                 try {
+                    await Promise.all(pendingTiles);
                     await o_self.f_job_request('scan_finish', { s_path_folder: folder, n_tiles: count });
                     if (o_self.b_stitch__after_scan && count >= 2) await o_self.f_stitch();
                     else await o_self.f_refresh_jobs();
@@ -891,6 +920,7 @@ let o_component__scan = {
             } catch (error) {
                 o_self.s_error__jobs = error.message;
                 if (o_self.s_path_folder__scan) {
+                    await Promise.all(pendingTiles);
                     try { await o_self.f_job_request('scan_finish', { s_path_folder: o_self.s_path_folder__scan }); }
                     catch { /* connection recovery can recover the saved tiles */ }
                 }
@@ -924,13 +954,7 @@ let o_component__scan = {
             if (this.b_queueing) return;
             const folder = job?.s_path_folder || this.s_path_folder__scan;
             if (!folder) return;
-            const options = job?.o_option && Object.keys(job.o_option).length ? job.o_option : {
-                n_score__min: this.n_score__min,
-                n_dim__max: this.n_dim__max,
-                s_blend: this.b_feather ? 'feather' : 'none',
-                b_no_flatfield: !this.b_flatfield,
-                b_matcher__loftr: this.b_matcher__loftr,
-            };
+            const options = job?.o_option && Object.keys(job.o_option).length ? job.o_option : this.f_stitch_options();
             this.b_queueing = true;
             this.s_error__jobs = '';
             try {

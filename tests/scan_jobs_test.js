@@ -1,12 +1,66 @@
 import assert from 'node:assert/strict';
 import { f_o_scan_jobs } from '../scan_jobs.module.js';
 const deferred = () => { let resolve; const promise = new Promise(r => resolve = r); return { promise, resolve }; };
+Deno.test('live scan acknowledges tiles during processing, coalesces updates and waits before finalization', async () => {
+    const root = await Deno.makeTempDir();
+    const started = deferred(), release = deferred();
+    const calls = [];
+    const queue = f_o_scan_jobs({ s_root: root, f_run: async option => {
+        calls.push(option);
+        if (calls.length === 1) { started.resolve(); await release.promise; }
+        return { b_success: true, s_path_output: option.s_path_folder + (option.b_live_preview ? '/live_preview.jpg' : '/stitched.png') };
+    } });
+    try {
+        await queue.f_init();
+        const folder = await tiles(root, 'live');
+        await Deno.mkdir(folder + '/dowscaled');
+        for (let i = 0; i < 2; i++) await Deno.writeTextFile(folder + '/dowscaled/tile_r00_c0' + i + '.png', 'small');
+        await queue.f_create(folder, 1, { b_live_scan: true, n_score__min: .4 });
+        await queue.f_tile(folder, 'tile_r00_c00.png');
+        await started.promise;
+        await queue.f_tile(folder, 'tile_r00_c01.png');
+        await queue.f_tile(folder, 'tile_r00_c01.png');
+        await assert.rejects(queue.f_tile(folder, '../tile.png'), /Invalid tile/);
+        assert.equal(calls.length, 1);
+        await queue.f_finish(folder);
+        await queue.f_enqueue({ s_path_folder: folder });
+        assert.equal(calls.length, 1, 'finalization must wait for live cache writer');
+        release.resolve();
+        await queue.f_idle();
+        assert.equal(calls.at(-1).b_live_preview, undefined);
+        assert.equal(calls.at(-1).b_live_scan, true);
+        assert.equal(queue.f_list()[0].s_status, 'complete');
+        assert.equal(queue.f_list()[0].o_live.n_revision, 1);
+    } finally { release.resolve(); await queue.f_idle(); await Deno.remove(root, { recursive: true }); }
+});
 async function tiles(root, name) {
     const folder = root + '/' + name;
     await Deno.mkdir(folder);
     for (let i = 0; i < 2; i++) await Deno.writeTextFile(folder + '/tile_r00_c0' + i + '.png', 'tile');
     return folder;
 }
+Deno.test('failed live previews do not fail capture or final stitching', async () => {
+    const root = await Deno.makeTempDir();
+    const queue = f_o_scan_jobs({ s_root: root, f_run: async option => {
+        if (option.b_live_preview) throw Error('preview test failure');
+        return { b_success: true };
+    } });
+    try {
+        await queue.f_init();
+        const folder = await tiles(root, 'live');
+        await Deno.mkdir(folder + '/dowscaled');
+        await Deno.writeTextFile(folder + '/dowscaled/tile_r00_c00.png', 'small');
+        await queue.f_create(folder, 0, { b_live_scan: true });
+        await queue.f_tile(folder, 'tile_r00_c00.png');
+        await queue.f_idle();
+        assert.equal(queue.f_list()[0].s_status, 'capturing');
+        assert.match(queue.f_list()[0].o_live.s_error, /preview test failure/);
+        await queue.f_finish(folder);
+        await queue.f_enqueue({ s_path_folder: folder });
+        await queue.f_idle();
+        assert.equal(queue.f_list()[0].s_status, 'complete');
+    } finally { await queue.f_idle(); await Deno.remove(root, { recursive: true }); }
+});
 Deno.test('scan queue: capture while stitching, FIFO, duplicate requests, isolated logs/options and failure recovery', async () => {
     const root = await Deno.makeTempDir();
     const started = deferred(), release = deferred();
