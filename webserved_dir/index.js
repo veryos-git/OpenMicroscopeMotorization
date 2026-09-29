@@ -116,6 +116,7 @@ let o_state = reactive({
 
     b_axis_assignment__circle: false,
     o_motor__axis: { x: 0, y: 1, z: 2 },
+    o_focus__probe: null,
 
     // jog settings
     n_rpm__jog: 5.0,
@@ -539,6 +540,7 @@ let f_apply_setting_from_db = function(){
     o_state.b_enabled__mouse_jog = f_get('b_enabled__mouse_jog', 'true') === 'true';
 
     o_state.o_motor__axis = f_get_json('o_motor__axis', o_state.o_motor__axis);
+    o_state.o_focus__probe = f_get_json('o_focus__probe', null);
 
     // backlash (per motor)
     o_state.a_n_step__backlash = f_get_json('a_n_step__backlash', o_state.a_n_step__backlash);
@@ -1053,8 +1055,10 @@ let f_send_esp = function(o_msg, s_owner) {
 // ─── ESP32 motor command helpers ─────────────────────────────────────
 
 // Axis assignments resolve to physical motor indices; calibration stays per motor.
-let f_n_motor__axis = s_axis => {
+let f_n_motor__axis = (s_axis, b_allow_unresponsive = false) => {
     let n_motor = o_state.o_motor__axis[s_axis];
+    let o_probe = o_state.o_focus__probe;
+    if(s_axis === 'z' && !b_allow_unresponsive && o_probe?.n_motor === n_motor && o_probe.s_status === 'no_response') return null;
     return Number.isInteger(n_motor) && n_motor >= 0 && n_motor < 3 ? n_motor : null;
 };
 

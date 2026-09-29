@@ -160,6 +160,7 @@ let o_component__flat_field = {
     computed: {
         s_motor__focus_label: function() {
             let n_motor = f_n_motor__axis('z');
+            if(n_motor === null && o_state.o_focus__probe?.s_status === 'no_response' && o_state.o_focus__probe.n_motor === o_state.o_motor__axis?.z) return 'No focus response — check the motor and retry calibration in Setup.';
             return n_motor === null ? 'No focus motor — configure Z in Setup → motor cards.' : 'Motor ' + (n_motor + 1) + ' (Z axis, set in Setup)';
         },
         b_ready: function() {

@@ -198,7 +198,7 @@ Deno.test('typing in hardware settings does not jog motors', async () => {
 
 Deno.test('backlash selects axes, routes probes and applies compensation to assigned motors', async () => {
     const moves = [], applied = [];
-    const state = { a_n_step__backlash: [0, 0, 0] };
+    const state = { a_n_step__backlash: [0, 0, 0], b_connected__esp: true };
     const c = await component('backlash', {
         o_state: state,
         f_n_motor__axis: axis => ({ x: 2, y: 0, z: 1 })[axis],

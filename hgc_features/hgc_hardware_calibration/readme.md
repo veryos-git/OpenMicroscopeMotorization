@@ -29,3 +29,12 @@ z focus is not the same over the whole slide, in one left  upper corner focus is
 possible solution: 
 the full slide could be probed for leveling by measuring focus at points of a virtual grid. 
 then the focus could be compensated in software. however this is difficult if the hardware is anyways not precise and steps get often lost . we only have relative steps  and no closed-loop stepper motors so far. 
+
+problem: 
+the assembly is also possible to use without adding a motor to the focus. in this case however the software has to adapt and has to know if there is a focus or not. 
+- sub problem:
+    - the calibration of the focus never will find a backlash because there is no focus motor and there is no way to control the focus via software
+- possible solution
+    - while calibrating the focus motor. first check very coarse by moving a lot of steps like 100 steps, check if the focus even move a bit. if not the focus motor might not be connected or not installed at all. if this is the case 
+    the user should get a warning and the software should be aware at anytime that the focus motor is not connected. this might be also visualized in a short hardware overview where the user sees what all is connected and what not. 
+    

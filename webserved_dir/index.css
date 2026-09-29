@@ -2368,3 +2368,8 @@ body.training-mode { --training-panel: 392px; }
 .scan-job .scan-field-row { flex-wrap: wrap; gap: 6px; margin: 8px 0; }
 .scan-job .btn-small { margin: 0; text-decoration: none; }
 .scan-jobs { max-height: 45vh; overflow-y: auto; }
+
+.hardware-overview { display: flex; flex-wrap: wrap; gap: 8px; font-size: .7rem; }
+.hardware-state--unknown { color: var(--dim); }
+.hardware-state--ready { color: var(--green, #72cb98); }
+.hardware-state--warning { color: var(--yellow); }

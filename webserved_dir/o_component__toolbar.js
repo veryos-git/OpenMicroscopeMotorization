@@ -85,6 +85,9 @@ let o_component__toolbar = {
             >&#9632; Stop</button>
 
             <div class="toolbar-spacer"></div>
+            <button class="toolbar-toggle hardware-overview" @click="f_open_setup" aria-label="Hardware overview — open Setup">
+                <span v-for="o_item in a_o_hardware" :key="o_item.s_label" :class="'hardware-state--' + o_item.s_status" :title="o_item.s_detail">{{ o_item.s_label }}: {{ o_item.s_value }}</span>
+            </button>
 
             <select
                 v-model="o_state.s_id__webcam_device"
@@ -203,6 +206,28 @@ let o_component__toolbar = {
         };
     },
     computed: {
+        a_o_hardware: function() {
+            let a_items = [{ s_label: 'Camera', s_value: o_state.b_streaming__webcam ? 'live' : 'off', s_status: o_state.b_streaming__webcam ? 'ready' : 'unknown', s_detail: 'Camera stream' }];
+            for(let s_axis of ['x', 'y', 'z']) {
+                let n_motor = o_state.o_motor__axis[s_axis];
+                let b_assigned = Number.isInteger(n_motor) && n_motor >= 0 && n_motor < 3;
+                let o_probe = o_state.o_focus__probe;
+                let s_value = !b_assigned ? 'manual' : !o_state.b_connected__esp ? 'offline' : 'M' + (n_motor + 1);
+                let s_status = 'unknown';
+                let s_detail = 'Axis assignment only; motor connection is not electronically detected';
+                if(s_axis === 'z' && b_assigned && o_state.b_connected__esp) {
+                    s_value = 'untested';
+                    s_detail = 'Run focus calibration in Setup to check motor response';
+                    if(o_probe?.n_motor === n_motor && ['responsive', 'no_response'].includes(o_probe.s_status)) {
+                        s_value = o_probe.s_status === 'responsive' ? 'responded' : 'no response';
+                        s_status = o_probe.s_status === 'responsive' ? 'ready' : 'warning';
+                        s_detail = 'Last focus probe: ' + new Date(o_probe.n_ts_ms).toLocaleString() + '. Recalibrate after hardware changes.';
+                    }
+                }
+                a_items.push({ s_label: s_axis === 'z' ? 'Focus' : s_axis.toUpperCase(), s_value, s_status, s_detail });
+            }
+            return a_items;
+        },
         o_cam: function() {
             return o_state.o_camera;
         },

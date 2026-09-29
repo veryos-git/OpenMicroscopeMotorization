@@ -36,6 +36,7 @@ let o_component__backlash = {
             <p class="setup-hint" v-else-if="!o_state.b_streaming__webcam">Start a camera to calibrate.</p>
             <p class="setup-hint" v-else-if="o_config.s_signal === 'sharpness'">Focus calibration: start clearly off focus, on one side of the sharpness peak.</p>
             <p class="setup-hint" v-else>Use a textured sample and manual exposure.</p>
+            <p class="focusstack-error" v-if="o_state.o_focus__probe?.n_motor === f_n_motor() && o_state.o_focus__probe.s_status === 'no_response'" role="alert">No focus response detected. The motor may be absent, disconnected or slipping. Automatic focus is unavailable. Check the drive and use a textured, slightly defocused sample, then Calibrate again.</p>
             <p class="backlash-applied" v-if="s_note__applied">{{ s_note__applied }}</p>
             <details class="hardware-calibration-advanced">
                 <summary>Advanced calibration settings &amp; results</summary>
@@ -253,7 +254,7 @@ let o_component__backlash = {
     },
     methods: {
         f_n_motor: function() {
-            return Number.isInteger(this.n_motor) && this.n_motor >= 0 && this.n_motor < 3 ? this.n_motor : f_n_motor__axis(this.o_config.s_axis);
+            return Number.isInteger(this.n_motor) && this.n_motor >= 0 && this.n_motor < 3 ? this.n_motor : f_n_motor__axis(this.o_config.s_axis, true);
         },
         f_sync_axis: function() {
             if(!Number.isInteger(this.n_motor)) return;
@@ -372,6 +373,7 @@ let o_component__backlash = {
             }
             let n_mean = n_sum / a_n_luma.length;
             return {
+                n_time: el_video.currentTime,
                 o_profile: f_o_profile(a_n_luma, n_scl_x, n_scl_y),
                 n_score: f_n_score(a_n_luma, n_scl_x, n_scl_y, n_mean, 'tenengrad'),
             };
@@ -387,15 +389,61 @@ let o_component__backlash = {
             if(n_step === 0 || this.b_stop_requested) return;
             let n_motor = o_self.f_n_motor();
             if(n_motor === null) return;
-            let o_promise__move = f_send_esp_move_step(n_motor, n_step, N_RPM__PROBE);
-            let o_promise__timeout = new Promise(function(resolve){
-                setTimeout(function(){ resolve('timeout'); }, N_MS__MOVE_TIMEOUT);
-            });
-            let v_result = await Promise.race([o_promise__move, o_promise__timeout]);
-            if(v_result === 'timeout'){
-                console.warn('backlash move timeout on motor', n_motor);
+            if(!o_state.b_connected__esp) throw new Error('controller disconnected');
+            let n_timer;
+            try {
+                await Promise.race([
+                    f_send_esp_move_step(n_motor, n_step, N_RPM__PROBE),
+                    new Promise((resolve, reject) => {
+                        n_timer = setTimeout(() => reject(new Error('motor move timed out')), N_MS__MOVE_TIMEOUT);
+                    }),
+                ]);
+                if(!o_state.b_connected__esp) throw new Error('controller disconnected');
+            } catch(o_error) {
                 f_send_esp_stop(n_motor);
+                throw o_error;
+            } finally {
+                clearTimeout(n_timer);
             }
+        },
+
+        // Compare several stationary frames so camera noise alone is not a response.
+        f_a_focus_scores: async function(o_config) {
+            let a_score = [];
+            let a_time = [];
+            for(let n = 0; n < 5; n++) {
+                await this.f_delay(Math.max(100, Number(o_config.n_ms__settle) || 0));
+                if(this.b_stop_requested) throw new Error('probe stopped');
+                if(!o_state.b_streaming__webcam) throw new Error('camera stopped');
+                let o_frame = this.f_o_frame();
+                if(!o_frame || !Number.isFinite(o_frame.n_score)) throw new Error('no camera frame');
+                a_score.push(o_frame.n_score);
+                a_time.push(o_frame.n_time);
+            }
+            if(a_time.every(n => n === a_time[0])) throw new Error('camera frames are not updating');
+            return a_score;
+        },
+        f_probe_focus: async function(o_config) {
+            this.s_status = 'checking focus response — 100 coarse steps';
+            let a_before = await this.f_a_focus_scores(o_config);
+            await this.f_move(100);
+            if(this.b_stop_requested) return false;
+            let a_after = await this.f_a_focus_scores(o_config);
+            let f_mean = a => a.reduce((sum, n) => sum + n, 0) / a.length;
+            let n_before = f_mean(a_before), n_after = f_mean(a_after);
+            let n_noise = Math.max(...a_before) - Math.min(...a_before);
+            n_noise = Math.max(n_noise, Math.max(...a_after) - Math.min(...a_after));
+            let b_response = Math.abs(n_after - n_before) > Math.max(1e-6, Math.abs(n_before) * 0.05, n_noise * 3);
+            // Return the commanded displacement before the normal backlash sequence.
+            await this.f_move(-100);
+            if(this.b_stop_requested) return false;
+            o_state.o_focus__probe = {
+                n_motor: this.f_n_motor(), s_status: b_response ? 'responsive' : 'no_response',
+                n_ts_ms: Date.now(), n_score__before: n_before, n_score__after: n_after,
+            };
+            f_save_setting__debounced('o_focus__probe', o_state.o_focus__probe);
+            if(!b_response) this.s_status = 'No focus response after 100 steps — check the motor and sample, then retry';
+            return b_response;
         },
 
         // ── One probe run ───────────────────────────────────────────
@@ -516,7 +564,8 @@ let o_component__backlash = {
             if(n_step__backlash__before) f_send_esp_set_backlash(n_motor, 0);
 
             try {
-                let a_n_sign = o_config.b_both_direction ? [1, -1] : [1];
+                let b_focus_ready = (o_config.s_axis !== 'z' && o_config.s_signal !== 'sharpness') || await o_self.f_probe_focus(o_config);
+                let a_n_sign = b_focus_ready ? (o_config.b_both_direction ? [1, -1] : [1]) : [];
                 let n_cnt__repeat = Math.max(1, Math.round(o_config.n_cnt__repeat));
                 for(let n_it__repeat = 0; n_it__repeat < n_cnt__repeat; n_it__repeat++){
                     for(let n_sign of a_n_sign){
@@ -531,7 +580,7 @@ let o_component__backlash = {
                         }
                     }
                 }
-                if(!o_self.b_stop_requested){
+                if(!o_self.b_stop_requested && b_focus_ready){
                     let n_cnt__valid = o_self.a_o_round.filter(function(o){ return o.o_fit.b_valid; }).length;
                     if(n_cnt__valid){
                         // a measurement is only worth anything once it is in
