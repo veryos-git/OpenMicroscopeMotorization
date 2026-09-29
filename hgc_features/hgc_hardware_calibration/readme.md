@@ -37,4 +37,3 @@ the assembly is also possible to use without adding a motor to the focus. in thi
 - possible solution
     - while calibrating the focus motor. first check very coarse by moving a lot of steps like 100 steps, check if the focus even move a bit. if not the focus motor might not be connected or not installed at all. if this is the case 
     the user should get a warning and the software should be aware at anytime that the focus motor is not connected. this might be also visualized in a short hardware overview where the user sees what all is connected and what not. 
-    
