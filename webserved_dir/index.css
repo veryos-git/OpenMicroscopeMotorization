@@ -1151,6 +1151,13 @@ input[type="range"]::-moz-range-thumb {
 .panel-scan { top: var(--topbar-h); left: 16px; width: 340px; max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto; }
 
 .scan-section { margin-bottom: 16px; }
+.scan-config { border: 0; padding: 0; margin: 0; min-width: 0; }
+.scan-field select {
+  width: 100%; padding: 8px; background: var(--bg); color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; font-size: .75rem;
+}
+.scan-focus-corner { margin: 10px 0; padding-top: 8px; border-top: 1px solid var(--border); font-size: .75rem; }
+.scan-focus-corner .btn-small { margin: 0; }
 
 .scan-label {
   font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; font-weight: 700;

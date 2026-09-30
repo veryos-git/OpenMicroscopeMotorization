@@ -77,6 +77,28 @@ possible solution:
 the scan result large image can be exported as a crop version 
 
 
+# scan workflow without autofocus
+problem: the scan with autofocus does take a long time. each autofocus takes about 3 seconds and makes the process slow. 
+also the focus might get lost and the autofocus drifts away from the actual target plane. 
+possible solution:
+since the scan is like a big rectangle operator can first manually define what the best focus position is at each of the 4 corners
+after this information has been set, the scan can calculate /interpolate the focus between the corners. it is like leveling a 3d printer by probing the distance between nozzle and printbed. 
+
+problem: 
+the scan has to cover the full subject and should overshoot a bit with the area it covers. when the operator navigates to the corners of the scan area, the subject might not be in the field of view and therefore the operator cannot find the correct focus. 
+possible solution: 
+- the focus corner points have a certain padding from the actual corner points so that the operator still sees the subject
+- after navigating to a corner end point the operator can still navigate freely and find the closest field of view where the subject can be seen then the operator can set the desired focus point 
+
+## possible workflow
+- operator sets size / tiles x and y 
+- operator can go to corners and set the desired focus. 
+    - corner 1, 2, 3, 4
+    - since the operator is likely to define a larger scan area to cover than the actual sample  will take space , the focus points should have a certain padding to the actual scan edge points. this padding is by default 10% of the defined scan size  
+- operator can start the scan
+- the scan automatically adjusts the focus so that it matches the set values on the corners , focus is interpolated between the values
+
+
 # Scan alignment at reduced resolution
 
 Scan capture saves each original tile and an aspect-preserving copy at most 256

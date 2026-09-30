@@ -987,6 +987,45 @@ def write_image(path: str, img: np.ndarray, jpeg_quality: int) -> None:
         raise SystemExit(f"error: failed to write {path}")
 
 
+def write_jpeg_copy(output: str, img: np.ndarray, jpeg_quality: int) -> None:
+    """Save a full-size companion without losing the primary image on failure."""
+    path = os.path.splitext(output)[0] + ".jpg"
+    temp = path + ".tmp.jpg"
+    try:
+        write_image(temp, img, jpeg_quality)
+        os.replace(temp, path)
+        log(f"wrote full-size JPEG -> {path} (quality {jpeg_quality})")
+    except (cv2.error, OSError, SystemExit) as exc:
+        # Some very large mosaics exceed the JPEG encoder's dimension limit.
+        # Remove partial or stale copies so the UI cannot offer the wrong image.
+        for candidate in (temp, path):
+            if os.path.exists(candidate):
+                os.remove(candidate)
+        warn(f"could not write full-size JPEG; primary image saved: {exc}")
+
+
+def write_mosaic_outputs(path: str, mosaic: np.ndarray, args) -> None:
+    """Apply the output size limit and save matching PNG/JPEG/preview versions."""
+    if args.max_dim:
+        scale = args.max_dim / max(mosaic.shape[:2])
+        if scale < 1.0:
+            log(f"downscaling mosaic by {scale:.3f} (--max-dim {args.max_dim})")
+            mosaic = cv2.resize(mosaic, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+    log(f"writing {path} ({mosaic.shape[1]} x {mosaic.shape[0]})")
+    write_image(path, mosaic, args.jpeg_quality)
+    if args.jpeg_copy and os.path.splitext(path)[1].lower() == ".png":
+        write_jpeg_copy(path, mosaic, args.jpeg_quality)
+    preview_path = os.path.splitext(path)[0] + "_preview.jpg"
+    if args.preview and args.preview < max(mosaic.shape[:2]):
+        scale = args.preview / max(mosaic.shape[:2])
+        preview = cv2.resize(mosaic, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+        write_image(preview_path, preview, args.jpeg_quality)
+        log(f"wrote preview -> {preview_path}")
+    elif os.path.exists(preview_path):
+        # A previous, larger stitch must not remain as the preview of this build.
+        os.remove(preview_path)
+
+
 # --------------------------------------------------------------------------- #
 # incremental sessions
 # --------------------------------------------------------------------------- #
@@ -2075,6 +2114,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     g.add_argument("--max-dim", type=int, default=0,
                    help="downscale the mosaic so neither side exceeds this")
     g.add_argument("--jpeg-quality", type=int, default=92)
+    g.add_argument("--jpeg-copy", action="store_true",
+                   help="also save a full-size JPEG beside the output PNG")
+    g.add_argument("--original-colors-copy", action="store_true",
+                   help="also save an _original_colors.png mosaic without flat-field or exposure adjustments")
     g.add_argument("--positions", help="JSON file to write (and reuse) tile positions")
     g.add_argument("--report", help="JSON file with per-pair registration quality")
     g.add_argument("--dry-run", action="store_true",
@@ -2525,23 +2568,23 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 f"(extend it with:  stitch.py add <images> --session "
                 f"{os.path.basename(sess.path)})")
 
-    if args.max_dim:
-        m = args.max_dim / max(mosaic.shape[0], mosaic.shape[1])
-        if m < 1.0:
-            log(f"downscaling mosaic by {m:.3f} (--max-dim {args.max_dim})")
-            mosaic = cv2.resize(mosaic, None, fx=m, fy=m, interpolation=cv2.INTER_AREA)
-
     n_ms__t2 = time.perf_counter()
-    log(f"writing {out_path} ({mosaic.shape[1]} x {mosaic.shape[0]})")
-    write_image(out_path, mosaic, args.jpeg_quality)
-    if args.preview:
-        s = args.preview / max(mosaic.shape[0], mosaic.shape[1])
-        if s < 1.0:
-            prev = cv2.resize(mosaic, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
-            ppath = os.path.splitext(out_path)[0] + "_preview.jpg"
-            write_image(ppath, prev, args.jpeg_quality)
-            log(f"wrote preview -> {ppath}")
+    write_mosaic_outputs(out_path, mosaic, args)
     n_ms__write = (time.perf_counter() - n_ms__t2) * 1000
+
+    if args.original_colors_copy:
+        original_path = os.path.splitext(out_path)[0] + "_original_colors.png"
+        if field is not None or gains is not None:
+            # Reuse alignment and blending, but never alter the captured colors.
+            # Release the adjusted canvas before allocating another full mosaic.
+            del mosaic
+            n_ms__t2 = time.perf_counter()
+            log("compositing original colors (no flat-field or exposure adjustments)")
+            mosaic, _ = composite(tiles, pos, (h, w), args, None, None)
+            n_ms__comp += (time.perf_counter() - n_ms__t2) * 1000
+        n_ms__t2 = time.perf_counter()
+        write_mosaic_outputs(original_path, mosaic, args)
+        n_ms__write += (time.perf_counter() - n_ms__t2) * 1000
 
     a_s_timing = [
         f"register {f_s_dur(n_ms__reg1 / 1000)}",

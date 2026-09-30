@@ -17,7 +17,7 @@ let o_component__scan = {
         <div class="overlay-panel panel-scan" :class="{ visible: o_state.o_panel_visibility.scan }">
             <div class="panel-header">
                 <h2>Tile Scan</h2>
-                <button class="panel-close" @click="f_close" :disabled="s_status === 'scanning'">&times;</button>
+                <button class="panel-close" @click="f_close" :disabled="s_status === 'scanning' || b_testing">&times;</button>
             </div>
             <div class="panel-body">
                 <div v-if="s_error__jobs" class="scan-stitch-error">{{ s_error__jobs }}</div>
@@ -28,17 +28,23 @@ let o_component__scan = {
                         <div class="scan-job-title"><strong>{{ job.s_name }}</strong><span>{{ job.s_status }}</span></div>
                         <div class="scan-hint">{{ job.n_tiles }} tiles</div>
                         <div class="scan-field-row">
-                            <a class="btn-small" :href="'/api/scans/folder?path=' + encodeURIComponent(job.s_path_folder)" target="_blank" rel="noopener">Open folder</a>
+                            <button class="btn-small" @click="f_open_folder(job)">Open folder</button>
+                            <a v-if="job.s_status === 'complete' && job.o_result?.s_path_original_colors" class="btn-small"
+                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_original_colors) + '&v=' + job.n_finished" target="_blank" rel="noopener">Original colors PNG</a>
+                            <a v-if="job.s_status === 'complete' && job.o_result?.s_path_original_colors_jpeg" class="btn-small"
+                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_original_colors_jpeg) + '&v=' + job.n_finished" target="_blank" rel="noopener">Original colors JPEG</a>
                             <a v-if="job.s_status === 'complete' && job.o_result?.s_path_output" class="btn-small"
-                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_output) + '&v=' + job.n_finished" target="_blank" rel="noopener">Open mosaic</a>
+                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_output) + '&v=' + job.n_finished" target="_blank" rel="noopener">{{ job.o_result.s_path_original_colors ? 'Adjusted PNG' : 'Open mosaic' }}</a>
+                            <a v-if="job.s_status === 'complete' && job.o_result?.s_path_jpeg" class="btn-small"
+                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_jpeg) + '&v=' + job.n_finished" target="_blank" rel="noopener">{{ job.o_result.s_path_original_colors ? 'Adjusted JPEG' : 'Open JPEG' }}</a>
                             <button class="btn-small" v-if="!['capturing', 'queued', 'running'].includes(job.s_status)"
                                 :disabled="job.n_tiles < 2 || b_queueing" @click="f_stitch(job)">{{ job.s_status === 'ready' ? 'Stitch' : 'Stitch again' }}</button>
                         </div>
                         <div v-if="job.s_error" class="scan-stitch-error">{{ job.s_error }}</div>
                         <a v-if="job.s_status === 'complete' && job.o_result?.s_path_output"
-                            :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_output)" target="_blank" rel="noopener">
-                            <img class="scan-stitch-preview" loading="lazy" alt="Stitched scan"
-                                :src="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_preview || job.o_result.s_path_output) + '&v=' + job.n_finished" />
+                            :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_original_colors || job.o_result.s_path_output)" target="_blank" rel="noopener">
+                            <img class="scan-stitch-preview" loading="lazy" :alt="job.o_result.s_path_original_colors ? 'Stitched scan — original colors' : 'Stitched scan'"
+                                :src="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_original_colors_preview || job.o_result.s_path_original_colors_jpeg || job.o_result.s_path_original_colors || job.o_result.s_path_preview || job.o_result.s_path_output) + '&v=' + job.n_finished" />
                         </a>
                         <div class="scan-hint" v-if="job.s_status === 'running'">{{ job.a_s_line.at(-1) }}</div>
                         <div v-if="job.o_option?.b_live_scan && job.s_status !== 'complete'">
@@ -57,6 +63,7 @@ let o_component__scan = {
 
                 <!-- ── Config (idle) ─────────────────────── -->
                 <template v-if="s_status === 'idle'">
+                    <fieldset class="scan-config" :disabled="b_testing || o_state.b_scanning">
 
                     <div class="scan-section">
                         <div class="scan-label">Auto Grid (mark points)</div>
@@ -192,11 +199,15 @@ let o_component__scan = {
 
                     <div class="scan-section">
                         <div class="scan-label">Focus</div>
-                        <label class="scan-toggle">
-                            <input type="checkbox" v-model="b_focus__before_tile" :disabled="o_state.o_motor__axis.z === null" @change="f_save_config" />
-                            <span>Find focus before every image</span>
-                        </label>
-                        <div class="scan-hint">
+                        <div class="scan-field">
+                            <label for="scan-focus-mode">Focus method</label>
+                            <select id="scan-focus-mode" v-model="s_mode__focus" @change="f_save_config">
+                                <option value="fixed">Keep current focus</option>
+                                <option value="corners" :disabled="!b_focus_motor_available">Interpolate corner focus (no autofocus)</option>
+                                <option value="autofocus" :disabled="!b_focus_motor_available">Autofocus before every image</option>
+                            </select>
+                        </div>
+                        <div class="scan-hint" v-if="b_focus__before_tile">
                             a short search around the focus the previous tile ended on:
                             it walks uphill only as far as it must and finishes with a
                             parabola, so it needs about 4 measurements instead of the
@@ -208,6 +219,33 @@ let o_component__scan = {
                             <label>Focus motor</label>
                             <span>{{ s_motor__focus_label }}</span>
                         </div>
+                        <template v-if="s_mode__focus === 'corners'">
+                            <div class="scan-hint">
+                                Set the grid size and movement distances first, then set the scan start.
+                                Visit each focus point, adjust focus with the Z controls, and save it.
+                                Focus points are padded inward so you can focus on the sample inside the scan area.
+                            </div>
+                            <div class="scan-field">
+                                <label for="scan-focus-padding">Focus point padding (%)</label>
+                                <input id="scan-focus-padding" type="number" min="0" max="49" step="1"
+                                    v-model.number="n_pct__focus_padding" @change="f_save_config" />
+                            </div>
+                            <div class="scan-hint">Padding is a percentage of the scan width and height from each edge. Capture still covers the full grid; focus extends to its edges.</div>
+                            <div v-if="!b_focus_padding_valid" class="scan-stitch-error">Enter a padding from 0 to 49%.</div>
+                            <button class="btn-small" @click="f_set_focus_start" :disabled="!b_corner_controls_ready">Set scan start here</button>
+                            <div class="scan-hint" v-if="a_n_grid__start">Scan start: X {{ a_n_grid__start[0] }}, Y {{ a_n_grid__start[1] }} steps</div>
+                            <div class="scan-hint" v-else>Set the scan start, or use Compute grid to choose it from marked bounds.</div>
+                            <div v-for="corner in a_o_focus_corner" :key="corner.n_index" class="scan-focus-corner">
+                                <strong>Focus point {{ corner.n_index + 1 }} · {{ corner.s_label }}</strong>
+                                <div class="scan-hint">{{ a_n_focus__corner[corner.n_index] === null ? 'Focus not saved' : 'Z ' + a_n_focus__corner[corner.n_index] + ' steps' }}</div>
+                                <div class="scan-field-row">
+                                    <button class="btn-small" @click="f_go_focus_corner(corner)" :disabled="!a_n_grid__start || !b_corner_controls_ready">Go to point {{ corner.n_index + 1 }}</button>
+                                    <button class="btn-small" @click="f_save_focus_corner(corner)" :disabled="!b_corner_controls_ready || !f_b_at_focus_corner(corner)">Save focus</button>
+                                </div>
+                            </div>
+                            <div class="scan-hint">{{ b_corner_focus_ready ? 'Corner focus ready. You can start from any position.' : 'Save focus at every distinct point before starting.' }}</div>
+                            <div class="scan-hint">Focus values are cleared when the grid or padding changes, the controller disconnects, or you select New Scan.</div>
+                        </template>
                         <div class="scan-field" v-if="b_focus__before_tile">
                             <label>Search step</label>
                             <input type="number" min="1" v-model.number="n_step__focus" @change="f_save_config">
@@ -221,7 +259,7 @@ let o_component__scan = {
                             frame that was still in flight when the motor moved reads the
                             sharpness of the previous position.
                         </div>
-                        <div class="scan-field" v-if="b_focus__before_tile">
+                        <div class="scan-field" v-if="s_mode__focus !== 'fixed'">
                             <label>Focus settle (ms)</label>
                             <input type="number" min="0" step="50" v-model.number="n_ms__focus_settle" @change="f_save_config">
                         </div>
@@ -271,6 +309,7 @@ let o_component__scan = {
                             <input type="checkbox" v-model="b_flatfield" @change="f_save_config" />
                             <span>Flat-field / vignetting correction</span>
                         </label>
+                        <div class="scan-hint">Every stitch also saves an original-color PNG and JPEG without flat-field correction or exposure equalization.</div>
                         <label class="scan-toggle">
                             <input type="checkbox" v-model="b_matcher__loftr" @change="f_save_config" />
                             <span>LoFTR rescue matcher (slow)</span>
@@ -295,12 +334,15 @@ let o_component__scan = {
                     <button
                         class="btn-scan-start"
                         @click="f_start_scan(false)"
-                        :disabled="!o_state.b_connected__esp || n_step__x < 1 || n_step__y < 1 || n_tile_x < 1 || n_tile_y < 1"
+                        :disabled="!b_scan_ready"
                     >Start classical scan</button>
                     <button class="btn-scan-start" @click="f_start_scan(true)"
-                        :disabled="!o_state.b_connected__esp || n_step__x < 1 || n_step__y < 1 || n_tile_x < 1 || n_tile_y < 1"
+                        :disabled="!b_scan_ready"
                     >Start live scan</button>
                     <div class="scan-hint">Live scan aligns tiles during capture and shows a provisional mosaic. Preview updates may lag behind capture.</div>
+                    </fieldset>
+                    <div v-if="b_testing" class="scan-progress-text">{{ s_status__detail || 'Moving stage…' }}</div>
+                    <button v-if="b_testing" class="btn-scan-stop" @click="f_stop_scan">Stop movement</button>
                 </template>
 
                 <!-- ── Progress (scanning) ───────────────── -->
@@ -380,7 +422,9 @@ let o_component__scan = {
             a_n_grid__start: null,
 
             // per-tile focus
-            b_focus__before_tile: false,
+            s_mode__focus: 'fixed',
+            n_pct__focus_padding: 10,
+            a_n_focus__corner: [null, null, null, null],
 
             n_step__focus: 20,
             n_step__focus_max: 120,
@@ -426,6 +470,64 @@ let o_component__scan = {
     },
 
     computed: {
+        b_focus__before_tile: function() { return this.s_mode__focus === 'autofocus'; },
+        b_focus_motor_available: function() { return f_n_motor__axis('z') !== null; },
+        b_grid_valid: function() {
+            return [this.n_step__x, this.n_step__y, this.n_tile_x, this.n_tile_y]
+                .every(n => Number.isSafeInteger(n) && n > 0);
+        },
+        b_stage_ready: function() {
+            return o_state.b_connected__esp && !o_state.b_scanning && !this.b_testing
+                && !o_state.b_flashing && !o_state.b_training_busy
+                && ['x', 'y'].every(axis => f_n_motor__axis(axis) !== null)
+                && !o_state.a_o_motor.some(motor => motor.b_running);
+        },
+        b_corner_controls_ready: function() {
+            return this.b_stage_ready && this.b_grid_valid && this.b_focus_motor_available && this.b_focus_padding_valid;
+        },
+        b_corner_focus_ready: function() {
+            return this.b_focus_padding_valid && this.a_n_grid__start !== null && this.a_n_focus__corner.every(Number.isFinite);
+        },
+        b_scan_ready: function() {
+            return this.b_stage_ready && this.b_grid_valid
+                && (this.s_mode__focus === 'fixed' || this.b_focus_motor_available)
+                && (this.s_mode__focus !== 'corners' || this.b_corner_focus_ready);
+        },
+        b_focus_padding_valid: function() {
+            return Number.isFinite(this.n_pct__focus_padding) && this.n_pct__focus_padding >= 0 && this.n_pct__focus_padding <= 49;
+        },
+        o_focus__bounds: function() {
+            // Work in motor steps so interpolation uses the positions actually visited.
+            const bounds = (tiles, steps) => {
+                if (!this.b_grid_valid || !this.b_focus_padding_valid) return [0, 0];
+                const span = (tiles - 1) * steps;
+                // Rounding must not merge distinct points on a very small grid.
+                const padding = Math.min(Math.round(span * this.n_pct__focus_padding / 100), Math.max(0, Math.floor((span - 1) / 2)));
+                return [padding, span - padding];
+            };
+            const [x0, x1] = bounds(this.n_tile_x, this.n_step__x);
+            const [y0, y1] = bounds(this.n_tile_y, this.n_step__y);
+            return { x0, x1, y0, y1 };
+        },
+        a_o_focus_corner_all: function() {
+            const { x0, x1, y0, y1 } = this.o_focus__bounds;
+            return [
+                { n_index: 0, n_x: x0, n_y: y0, s_label: 'near X start / Y start' },
+                { n_index: 1, n_x: x1, n_y: y0, s_label: 'near X end / Y start' },
+                { n_index: 2, n_x: x0, n_y: y1, s_label: 'near X start / Y end' },
+                { n_index: 3, n_x: x1, n_y: y1, s_label: 'near X end / Y end' },
+            ];
+        },
+        a_o_focus_corner: function() {
+            return this.a_o_focus_corner_all.filter((corner, i, corners) =>
+                corners.findIndex(c => c.n_x === corner.n_x && c.n_y === corner.n_y) === i);
+        },
+        s_key__focus_grid: function() {
+            return JSON.stringify([this.n_step__x, this.n_step__y, this.n_tile_x, this.n_tile_y, this.a_n_grid__start, this.n_pct__focus_padding]);
+        },
+        s_key__focus_axes: function() {
+            return JSON.stringify(['x', 'y', 'z'].map(axis => f_n_motor__axis(axis)));
+        },
         s_motor__focus_label: function() {
             let n_motor = f_n_motor__axis('z');
             if(n_motor === null && o_state.o_focus__probe?.s_status === 'no_response' && o_state.o_focus__probe.n_motor === o_state.o_motor__axis?.z) return 'No focus response — check the motor and retry calibration in Setup.';
@@ -467,6 +569,24 @@ let o_component__scan = {
         },
     },
 
+    watch: {
+        s_key__focus_grid: { flush: 'sync', handler: function() {
+            this.a_n_focus__corner = [null, null, null, null];
+            if (this.s_status === 'scanning') this.f_stop_scan();
+        } },
+        s_key__focus_axes: { flush: 'sync', handler: function() { this.f_clear_corner_focus(); } },
+        'o_state.n_id__slide__current': { flush: 'sync', handler: function() { this.f_clear_corner_focus(); } },
+        'o_state.b_connected__esp': { flush: 'sync', handler: function(connected) {
+            if (!connected) {
+                this.f_clear_corner_focus();
+                if (this.s_status === 'scanning' || this.b_testing) this.b_stop_requested = true;
+            }
+        } },
+        'o_state.n_cnt__stop_all': { flush: 'sync', handler: function() {
+            if (this.s_status === 'scanning' || this.b_testing) this.b_stop_requested = true;
+        } },
+    },
+
     mounted: function() {
         let o_self = this;
         o_self.f_load_config();
@@ -478,7 +598,7 @@ let o_component__scan = {
         // ── Panel ────────────────────────────────────────────────────
 
         f_close: function() {
-            if (this.s_status === 'scanning') return;
+            if (this.s_status === 'scanning' || this.b_testing) return;
             o_state.o_panel_visibility.scan = false;
             f_save_setting__debounced('o_panel_visibility', o_state.o_panel_visibility);
         },
@@ -500,7 +620,10 @@ let o_component__scan = {
                     if (typeof o_config.n_overlap__pct === 'number') o_self.n_overlap__pct = o_config.n_overlap__pct;
                     if (o_config.n_score__min) o_self.n_score__min = o_config.n_score__min;
                     if (typeof o_config.n_dim__max === 'number') o_self.n_dim__max = o_config.n_dim__max;
-                    if (typeof o_config.b_focus__before_tile === 'boolean') o_self.b_focus__before_tile = o_config.b_focus__before_tile;
+                    o_self.s_mode__focus = ['fixed', 'autofocus', 'corners'].includes(o_config.s_mode__focus)
+                        ? o_config.s_mode__focus : o_config.b_focus__before_tile ? 'autofocus' : 'fixed';
+                    o_self.n_pct__focus_padding = Number.isFinite(o_config.n_pct__focus_padding)
+                        && o_config.n_pct__focus_padding >= 0 && o_config.n_pct__focus_padding <= 49 ? o_config.n_pct__focus_padding : 10;
                     if (o_config.n_step__focus) o_self.n_step__focus = o_config.n_step__focus;
                     if (o_config.n_step__focus_max) o_self.n_step__focus_max = o_config.n_step__focus_max;
                     if (typeof o_config.n_ms__focus_settle === 'number') o_self.n_ms__focus_settle = o_config.n_ms__focus_settle;
@@ -521,6 +644,8 @@ let o_component__scan = {
                 n_tile_y: this.n_tile_y,
                 n_overlap__pct: this.n_overlap__pct,
                 b_focus__before_tile: this.b_focus__before_tile,
+                s_mode__focus: this.s_mode__focus,
+                n_pct__focus_padding: this.n_pct__focus_padding,
                 n_step__focus: this.n_step__focus,
                 n_step__focus_max: this.n_step__focus_max,
                 n_ms__focus_settle: this.n_ms__focus_settle,
@@ -537,19 +662,33 @@ let o_component__scan = {
         // ── Motor helpers ────────────────────────────────────────────
 
         f_move_motor_n_step: async function(n_motor, n_step) {
-            let o_self = this;
+            if (this.b_stop_requested) throw new Error('Scan movement stopped');
+            if (!o_state.b_connected__esp) throw new Error('Controller disconnected');
+            const motor = o_state.a_o_motor[n_motor];
+            if (n_motor === null || !motor || !Number.isFinite(motor.n_position)) throw new Error('Motor position unavailable');
+            if (!Number.isFinite(n_step)) throw new Error('Invalid motor movement');
+            n_step = Math.round(n_step);
             if (n_step === 0) return;
-            if (o_self.b_stop_requested) return;
-
-            let o_promise__move = f_send_esp_move_step(n_motor, n_step, N_RPM__SCAN);
-            let o_promise__timeout = new Promise(function(resolve) {
-                setTimeout(function() { resolve('timeout'); }, N_MS__MOVE_TIMEOUT);
-            });
-
-            let v_result = await Promise.race([o_promise__move, o_promise__timeout]);
-            if (v_result === 'timeout') {
-                console.warn('Move timeout: motor', n_motor);
-                f_send_esp_stop(n_motor);
+            const target = motor.n_position + n_step;
+            let timer;
+            try {
+                const result = await Promise.race([
+                    f_send_esp_move_step(n_motor, n_step, N_RPM__SCAN),
+                    new Promise((_, reject) => { timer = setTimeout(() => {
+                        f_send_esp_stop(n_motor);
+                        reject(new Error('Motor movement timed out'));
+                    }, N_MS__MOVE_TIMEOUT); }),
+                ]);
+                if (!o_state.b_connected__esp) throw new Error('Controller disconnected');
+                // Completion carries the position before the next status poll arrives.
+                if (Number.isFinite(result)) motor.n_position = result;
+                motor.b_running = false;
+                if (this.b_stop_requested || result !== target) throw new Error('Motor movement stopped before reaching its target');
+            } catch (error) {
+                this.b_stop_requested = true;
+                throw error;
+            } finally {
+                clearTimeout(timer);
             }
         },
 
@@ -575,6 +714,65 @@ let o_component__scan = {
 
         // ── Focus before a tile ──────────────────────────────────────
 
+        f_clear_corner_focus: function() {
+            this.a_n_focus__corner = [null, null, null, null];
+            if (this.s_mode__focus === 'corners') {
+                this.a_n_grid__start = null;
+                if (this.s_status === 'scanning' || this.b_testing) this.f_stop_scan();
+            }
+        },
+        f_set_focus_start: function() {
+            if (!this.b_corner_controls_ready) return;
+            this.a_n_grid__start = ['x', 'y'].map(axis => o_state.a_o_motor[f_n_motor__axis(axis)].n_position);
+            this.a_n_focus__corner = [null, null, null, null];
+        },
+        f_b_at_focus_corner: function(corner) {
+            if (!this.a_n_grid__start) return false;
+            return ['x', 'y'].every((axis, i) => {
+                const offset = i === 0 ? corner.n_x : corner.n_y;
+                const position = o_state.a_o_motor[f_n_motor__axis(axis)]?.n_position;
+                return Number.isFinite(position) && Math.abs(position - this.a_n_grid__start[i] - offset) < 0.5;
+            });
+        },
+        f_save_focus_corner: function(corner) {
+            if (!this.b_corner_controls_ready || !this.f_b_at_focus_corner(corner)) return;
+            const z = o_state.a_o_motor[f_n_motor__axis('z')]?.n_position;
+            if (!Number.isFinite(z)) return;
+            // A one-row/one-column scan has coincident corners: save them together.
+            this.a_o_focus_corner_all.forEach(point => {
+                if (point.n_x === corner.n_x && point.n_y === corner.n_y) this.a_n_focus__corner[point.n_index] = z;
+            });
+        },
+        f_go_focus_corner: async function(corner) {
+            if (!this.b_corner_controls_ready || !this.a_n_grid__start) return;
+            const targets = [this.a_n_grid__start[0] + corner.n_x, this.a_n_grid__start[1] + corner.n_y];
+            this.b_testing = true;
+            this.b_stop_requested = false;
+            o_state.b_scanning = true;
+            this.s_error__jobs = '';
+            this.s_status__detail = 'Moving to focus point ' + (corner.n_index + 1) + '…';
+            try {
+                for (const [i, axis] of ['x', 'y'].entries()) {
+                    const motor = f_n_motor__axis(axis);
+                    await this.f_move_motor_n_step(motor, targets[i] - o_state.a_o_motor[motor].n_position);
+                }
+                await this.f_delay(N_MS__SETTLE);
+            } catch (error) { this.s_error__jobs = error.message; }
+            finally {
+                this.b_testing = false;
+                o_state.b_scanning = false;
+                this.s_status__detail = '';
+            }
+        },
+        f_n_focus__tile: function(tile) {
+            if (!this.b_corner_focus_ready) throw new Error('Save focus at every focus point first');
+            const { x0, x1, y0, y1 } = this.o_focus__bounds;
+            // Extend the measured surface beyond the padded points to the scan edges.
+            const x = x1 > x0 ? (tile.n_col * this.n_step__x - x0) / (x1 - x0) : 0;
+            const y = y1 > y0 ? (tile.n_row * this.n_step__y - y0) / (y1 - y0) : 0;
+            const [z00, z10, z01, z11] = this.a_n_focus__corner;
+            return Math.round((1 - y) * ((1 - x) * z00 + x * z10) + y * ((1 - x) * z01 + x * z11));
+        },
         f_o_focus: function() {
             let o_self = this;
             let n_motor = f_n_motor__axis('z');
@@ -609,6 +807,7 @@ let o_component__scan = {
 
         f_test_distance: async function(s_axis, n_sign) {
             let o_self = this;
+            if (!o_self.b_stage_ready || !o_self.b_grid_valid) return;
             o_self.b_testing = true;
             o_self.b_stop_requested = false;
             try {
@@ -623,6 +822,7 @@ let o_component__scan = {
 
         f_test_square: async function() {
             let o_self = this;
+            if (!o_self.b_stage_ready || !o_self.b_grid_valid) return;
             o_self.b_testing = true;
             o_self.b_stop_requested = false;
             try {
@@ -646,6 +846,7 @@ let o_component__scan = {
         // drive only one axis along its side of the boundary box and back
         f_test_axis: async function(s_axis) {
             let o_self = this;
+            if (!o_self.b_stage_ready || !o_self.b_grid_valid) return;
             o_self.b_testing = true;
             o_self.b_stop_requested = false;
             try {
@@ -750,9 +951,11 @@ let o_component__scan = {
         f_start_scan: async function(b_live = false) {
             let o_self = this;
 
-            if (o_state.b_scanning || o_self.b_testing) return;
+            if (!o_self.b_scan_ready) return;
             o_self.b_live_scan = b_live === true;
             const pendingTiles = [];
+            o_self.b_stop_requested = false;
+            o_self.s_error__jobs = '';
             o_state.b_scanning = true;
             o_self.s_status = 'scanning';
             o_self.s_status__detail = 'Creating scan...';
@@ -770,7 +973,7 @@ let o_component__scan = {
                 // init scan state
                 o_state.b_scanning = true;
                 o_self.s_status = 'scanning';
-                o_self.b_stop_requested = false;
+                if (o_self.b_stop_requested || !o_state.b_connected__esp) throw new Error('Scan stopped before capture');
                 o_self.n_cnt__tile__captured = 0;
                 o_self.n_idx__cell__current = -1;
                 o_self.a_b_captured = new Array(o_self.n_tile_x * o_self.n_tile_y).fill(false);
@@ -831,9 +1034,17 @@ let o_component__scan = {
                         }
                     }
 
+                    if (o_self.s_mode__focus === 'corners') {
+                        o_self.s_status__detail = 'Setting interpolated focus…';
+                        const motor = f_n_motor__axis('z');
+                        const target = o_self.f_n_focus__tile(o_tile);
+                        await o_self.f_move_motor_n_step(motor, target - o_state.a_o_motor[motor].n_position);
+                    }
+
                     // wait for vibration to settle
                     o_self.s_status__detail = 'Settling...';
-                    await o_self.f_delay(N_MS__SETTLE);
+                    await o_self.f_delay(o_self.s_mode__focus === 'corners'
+                        ? Math.max(N_MS__SETTLE, o_self.n_ms__focus_settle) : N_MS__SETTLE);
                     if (o_self.b_stop_requested) break;
 
                     // sharpen this tile before it is taken: a slide is never
@@ -951,6 +1162,13 @@ let o_component__scan = {
             catch (error) { this.s_error__jobs = error.message; }
             if (!this.b_unmounted) this.n_id__jobs_poll = setTimeout(() => this.f_poll_jobs(), 2000);
         },
+        f_open_folder: async function(job) {
+            this.s_error__jobs = '';
+            try {
+                const response = await fetch('/api/scans/open_folder?path=' + encodeURIComponent(job.s_path_folder), { method: 'POST' });
+                if (!response.ok) throw new Error(await response.text() || 'Could not open scan folder');
+            } catch (error) { this.s_error__jobs = error.message; }
+        },
         f_stitch: async function(job) {
             if (this.b_queueing) return;
             const folder = job?.s_path_folder || this.s_path_folder__scan;
@@ -972,6 +1190,7 @@ let o_component__scan = {
 
         f_reset: function() {
             this.s_status = 'idle';
+            this.f_clear_corner_focus();
             this.b_stop_requested = false;
             this.a_n_position__start = null;
             this.n_cnt__tile__captured = 0;
@@ -984,7 +1203,7 @@ let o_component__scan = {
     },
 
     beforeUnmount: function() {
-        if (this.s_status === 'scanning') {
+        if (this.s_status === 'scanning' || this.b_testing) {
             this.f_stop_scan();
         }
         this.f_stop_elapsed_timer();

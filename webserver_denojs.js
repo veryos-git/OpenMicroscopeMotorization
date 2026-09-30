@@ -851,6 +851,30 @@ let f_handler = async function(o_request, o_conninfo) {
         }
     }
 
+    // Open the folder on the computer running the microscope server.
+    if (s_path === '/api/scans/open_folder') {
+        if (o_request.method !== 'POST') {
+            return new Response('Method not allowed', { status: 405, headers: { Allow: 'POST' } });
+        }
+        let folder;
+        try {
+            folder = await o_scan_jobs.f_folder(o_url.searchParams.get('path') || '');
+            if (!(await Deno.stat(folder)).isDirectory) throw new Error('Path must be a scan folder');
+        } catch (error) { return new Response(error.message, { status: 400 }); }
+        try {
+            const command = Deno.build.os === 'windows' ? 'explorer.exe' : Deno.build.os === 'darwin' ? 'open' : 'xdg-open';
+            const result = await new Deno.Command(command, {
+                args: [folder], stdin: 'null', stdout: 'null', stderr: 'piped',
+            }).output();
+            if (!result.success) {
+                throw new Error(new TextDecoder().decode(result.stderr).trim() || 'File browser exited with code ' + result.code);
+            }
+            return new Response(null, { status: 204 });
+        } catch (error) {
+            return new Response('Could not open scan folder: ' + error.message, { status: 500 });
+        }
+    }
+
     // Browser-accessible folder view works even when the microscope server is remote.
     if (s_path === '/api/scans/folder') {
         try {

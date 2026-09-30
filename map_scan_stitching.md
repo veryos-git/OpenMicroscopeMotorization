@@ -70,11 +70,25 @@ scans/scan_<timestamp>/
 
 `dowscaled` is the actual directory spelling used by the application.
 
-After movement/settling and optional autofocus, `f_o_capture__frame()` captures the whole video frame with no requested crop or size reduction. The browser saves the PNG, decodes that same blob, and draws it onto a smaller canvas. Thus the registration copy and original represent the same captured frame. The smaller width is `min(256, original_width)`; height preserves aspect ratio with rounding.
+After movement/settling and the selected focus adjustment, `f_o_capture__frame()` captures the whole video frame with no requested crop or size reduction. The browser saves the PNG, decodes that same blob, and draws it onto a smaller canvas. Thus the registration copy and original represent the same captured frame. The smaller width is `min(256, original_width)`; height preserves aspect ratio with rounding.
 
 The saved original can already include the application's active capture-time flat-field/dust correction, if its calibration matches the frame dimensions. This is independent of the Scan panel's Python flat-field checkbox. Both corrections can therefore be applied in one workflow.
 
 The stitch request contains no motor steps, calibrated pixel-per-step value, or expected tile overlap. Normal Scan filenames contain row/column indices only. Their indices select likely neighbors; their actual pixel spacing and direction are inferred from image content.
+
+### Scanning with manual corner focus
+
+1. Set X/Y tile counts and movement distances, or compute the grid from calibrated marked bounds.
+2. Under **Focus method**, choose **Interpolate corner focus (no autofocus)**.
+3. Move to the desired scan start and select **Set scan start here**, or retain the start from an already computed grid. Set **Focus point padding (%)**, which defaults to 10% inward from each edge.
+4. Use **Go to point** for each focus point, adjust Z manually, then **Save focus**. Focus can only be saved while the stage is stopped at that point's XY coordinates. Setting the scan start does not record focus at the edge.
+5. Start a classical or live scan. Both return to the saved grid start before capture and adjust Z for every tile.
+
+Padding uses the X/Y travel between the first and last tile positions. At 10%, the focus points are at 10% and 90% along each axis; the capture grid retains its original size and origin. Padding can be set from 0 to 49%; 0 places the points at the scan corners. Point coordinates are rounded to motor steps, with padding reduced on tiny grids if necessary to keep the points distinct.
+
+The four saved Z positions define a bilinear focus surface using the actual, rounded focus-point coordinates. It is interpolated inside the padded rectangle and extrapolated to the outer scan tiles, preserving the measured slope through the margins. Serpentine traversal does not reverse the focus gradient. Single-row or single-column scans need only two distinct focus points; a single tile needs one. Z targets are rounded to whole motor steps. Capture waits for the focus move to complete and for at least the configured focus-settle time (with a minimum 500 ms settling period).
+
+The focus method and padding are saved as preferences; measured focus values are session-only. Grid or padding changes clear the focus values. Axis changes, slide selection changes, controller disconnection, and **New Scan** also clear the corner scan origin. Focus-point navigation holds the shared stage lock and provides **Stop movement**. Cancelled moves, disconnection, or movement timeout stop acquisition before another tile is taken. **Keep current focus** and **Autofocus before every image** remain separate choices, and existing saved autofocus settings migrate to the selector.
 
 ## 3. Queue, options, and exact invocation
 
@@ -87,6 +101,7 @@ The launcher executes the equivalent of:
 ```bash
 venv/bin/python3 stitch.py scans/scan_<timestamp> \
   -o scans/scan_<timestamp>/stitched.png \
+  --jpeg-copy --original-colors-copy --pattern '^tile_r[0-9]+_c[0-9]+.*\.(png|jpe?g|tiff?)$' \
   --positions scans/scan_<timestamp>/positions.json \
   --report scans/scan_<timestamp>/report.json \
   --registration-max-width 256 \
@@ -104,7 +119,7 @@ It adds flags according to the selected options:
 | Flat-field correction | Enabled | Disabled adds `--no-flatfield`. |
 | LoFTR rescue | Disabled | Enabled adds `--matcher loftr`. |
 
-Saved settings can override these UI defaults. Re-stitching a job with stored options reuses that job's options rather than the current controls. Exposure gain compensation is enabled independently of flat-field correction and has no Scan panel toggle.
+Saved settings can override these UI defaults. Re-stitching a job with stored options reuses that job's options rather than the current controls. Exposure gain compensation is enabled independently of flat-field correction and has no Scan panel toggle. Every final stitch also produces an original-color version with both flat-field correction and exposure gain compensation disabled, including when re-stitching older jobs.
 
 The launcher sets `OMP_NUM_THREADS=1` and `OPENBLAS_NUM_THREADS=1`; registration workers also set OpenCV threads to one. `--jobs 2` controls registration processes, while the queue allows only one stitch job at a time.
 
@@ -130,7 +145,7 @@ pair count = R × (C - 1) + (R - 1) × C
 
 There are no diagonal pairs. Capture order does not affect this adjacency because filenames encode logical locations.
 
-If grid inference fails, ordinary Scan files fall back to all `N(N-1)/2` pairs. In particular, two- or three-tile scans and incomplete rectangles use this fallback. Previous mosaic/preview files are then not automatically removed by the successful-grid filtering path, so re-stitching such folders can inadvertently include generated outputs as inputs. The launcher's command does not provide a tile-only `--pattern` filter.
+If grid inference fails, ordinary Scan files fall back to all `N(N-1)/2` pairs. In particular, two- or three-tile scans and incomplete rectangles use this fallback. The launcher filters input filenames to scan tiles, so generated mosaics and previews are excluded when re-stitching these folders too.
 
 ## 5. Reduced-resolution registration
 
@@ -288,12 +303,18 @@ The layout and gain solvers use dense matrices, so they also become expensive at
 | Artifact | Contents |
 | --- | --- |
 | `stitched.png` | Corrected, composited image; optionally resized by maximum output size. |
+| `stitched.jpg` | Compressed copy at exactly the PNG's pixel dimensions; JPEG quality 92. |
 | `stitched_preview.jpg` | Written only if the final image's longest side exceeds 4000 pixels; JPEG quality 92. |
+| `stitched_original_colors.png` | Same alignment, blending, and dimensions, using saved tile colors without flat-field or exposure adjustments. |
+| `stitched_original_colors.jpg` | Full-size compressed copy of the original-color PNG; JPEG quality 92. |
+| `stitched_original_colors_preview.jpg` | Reduced original-color preview, written when the longest side exceeds 4000 pixels. |
 | `positions.json` | Original tile size plus filename, path, row, column, and solved floating-point `x/y` for every tile. |
 | `report.json` | Per candidate pair: filenames, displacement, NCC, overlap area, kind, residual. |
 | `stitch_job.json` | Persistent job status, settings, result paths, timestamps, retained logs. |
 
 `positions.json` coordinates are original-image pixels anchored to the first tile, not final PNG coordinates. To locate a tile on the unresized output, subtract the minimum x/y across all solved positions. If maximum output size resized the mosaic, multiply by that additional scale. The batch positions file does not explicitly store the canvas origin or final output scale.
+
+The original-color version uses the same absence of photometric correction as the live preview, but composites the full-resolution tiles. Registration runs once for both variants. The adjusted canvas is released before rendering the original-color canvas to avoid keeping two full mosaics in memory; if both corrections were already disabled, the same canvas is reused. Output-size limits apply identically to both variants. Spatial resampling and overlap blending still apply, and capture-time camera or dust corrections already present in the saved tiles are retained.
 
 Despite the CLI help saying positions can be reused, this batch path writes `positions.json`; it does not read it to bypass registration on a subsequent Scan stitch. Re-stitching recomputes placement, while valid `dowscaled/` copies can be reused.
 
@@ -301,9 +322,9 @@ Despite the CLI help saying positions can be reused, this batch path writes `pos
 
 `coverage_report()` estimates uncovered area at 4% scale within the convex hull of tile centers. Above 0.05% uncovered area, it warns that the scan contains gaps. This is a diagnostic based on the solved layout, not a correction operation or independent proof of motor movement accuracy.
 
-The launcher considers a normal build successful when Python exits successfully and `stitched.png` exists. It returns any existing preview, positions, and report paths. Warnings do not automatically make a job fail. Old artifacts are not cleared before re-stitching; for example, an old preview can remain even if a new smaller mosaic no longer generates one.
+The launcher considers a normal build successful when Python exits successfully and `stitched.png` exists. It returns the adjusted and original-color PNG/JPEG/preview paths plus positions and report paths. Each full-size JPEG is encoded from the same in-memory mosaic as its PNG after any maximum-size resize. If JPEG encoding fails (for example, the mosaic exceeds the codec's dimension limit), the PNG is retained, the reason is logged, and partial or stale full-size JPEGs are removed. Warnings do not automatically make a job fail. A preview from an earlier build is removed when the new output no longer needs a reduced preview.
 
-For a job associated with a slide, successful completion creates or updates an `a_o_map` record with kind `scan`, output/preview/folder paths, and `b_primary=true`; other primary maps for that slide are unset. Map dimensions are initially recorded as zero in this callback. Library-link failure is logged without changing successful stitching into a failed job. The Scan UI displays the preview if present, otherwise the full mosaic, and offers the full image through `/api/file`.
+For a job associated with a slide, successful completion creates or updates an `a_o_map` record with kind `scan`, output/preview/folder paths, and `b_primary=true`; other primary maps for that slide are unset. Map dimensions are initially recorded as zero in this callback. Library-link failure is logged without changing successful stitching into a failed job. The Scan UI prefers the original-color preview (or its full-size JPEG/PNG), links the thumbnail to the original-color PNG, and offers both **Original colors** and **Adjusted** PNG/JPEG versions through `/api/file`. Older jobs without an original-color version retain their existing links and preview until stitched again.
 
 ## 10. What was verified
 

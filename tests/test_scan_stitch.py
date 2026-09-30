@@ -11,6 +11,43 @@ import stitch
 
 
 class ScanStitchTest(unittest.TestCase):
+    def test_original_color_copy_preserves_tiles_with_corrections_enabled(self):
+        rng = np.random.default_rng(42)
+        texture = cv2.GaussianBlur(rng.integers(0, 80, (240, 500), dtype=np.uint8), (0, 0), 2)
+        # Deliberately colored material must not be mistaken for a color cast.
+        scene = np.stack([texture + 15, texture + 65, texture + 145], axis=2)
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for col, x in enumerate((0, 160)):
+                cv2.imwrite(str(root / f'tile_r00_c{col:02}.png'), scene[:, x:x+340])
+            common = [folder, '--pattern', r'^tile_r\d+_c\d+\.png$',
+                      '--registration-max-width', '256', '--jobs', '1', '--passes', '1',
+                      '--no-subpixel', '--original-colors-copy', '--jpeg-copy',
+                      '--preview', '128', '-o', str(root / 'stitched.png')]
+            with patch.object(stitch, 'register_pair', wraps=stitch.register_pair) as register:
+                self.assertEqual(stitch.main(common), 0)
+                self.assertEqual(register.call_count, 1, 'Color variants must reuse the same alignment')
+            adjusted = cv2.imread(str(root / 'stitched.png'))
+            original = cv2.imread(str(root / 'stitched_original_colors.png'))
+            self.assertEqual(original.shape, adjusted.shape)
+            self.assertGreater(original.shape[1], 490)
+            np.testing.assert_array_equal(original[30:100, 30:100], scene[30:100, 30:100])
+            self.assertGreater(np.abs(adjusted.astype(float) - original.astype(float)).mean(), 15)
+            jpeg = cv2.imread(str(root / 'stitched_original_colors.jpg'))
+            self.assertEqual(jpeg.shape, original.shape)
+            self.assertLess(np.abs(jpeg.astype(float) - original.astype(float)).mean(), 5)
+            preview = cv2.imread(str(root / 'stitched_original_colors_preview.jpg'))
+            self.assertEqual(max(preview.shape[:2]), 128)
+            self.assertLess(np.abs(preview.mean(axis=(0, 1)) - original.mean(axis=(0, 1))).max(), 5)
+            # Both variants obey the same output size; stale previews are removed.
+            self.assertEqual(stitch.main(common + ['--max-dim', '64']), 0)
+            for stem in ['stitched', 'stitched_original_colors']:
+                png = cv2.imread(str(root / (stem + '.png')))
+                jpeg = cv2.imread(str(root / (stem + '.jpg')))
+                self.assertEqual(png.shape, jpeg.shape)
+                self.assertEqual(max(png.shape[:2]), 64)
+                self.assertFalse((root / (stem + '_preview.jpg')).exists())
+
     def test_live_partial_grid_cache_and_finalization(self):
         rng = np.random.default_rng(28)
         scene = cv2.GaussianBlur(rng.integers(0, 256, (400, 600, 3), dtype=np.uint8), (0, 0), 2)
@@ -33,9 +70,13 @@ class ScanStitchTest(unittest.TestCase):
                 self.assertEqual(register.call_count, 2)
                 self.assertEqual(stitch.main([folder] + common + [
                     '--pattern', r'^tile_r\d+_c\d+\.png$', '--no-flatfield', '--no-gain-comp',
-                    '-o', str(root / 'stitched.png')]), 0)
+                    '--jpeg-copy', '--original-colors-copy', '-o', str(root / 'stitched.png')]), 0)
                 self.assertEqual(register.call_count, 2, 'final build should reuse live registrations')
                 self.assertGreater(cv2.imread(str(root / 'stitched.png')).shape[1], 490)
+                self.assertEqual(cv2.imread(str(root / 'stitched.jpg')).shape,
+                                 cv2.imread(str(root / 'stitched.png')).shape)
+                np.testing.assert_array_equal(cv2.imread(str(root / 'stitched_original_colors.png')),
+                                              cv2.imread(str(root / 'stitched.png')))
                 # Replacing an original invalidates only incident edges.
                 image = cv2.imread(files[1])
                 cv2.imwrite(files[1], image)
@@ -79,7 +120,7 @@ class ScanStitchTest(unittest.TestCase):
             self.assertEqual(stitch.main([
                 folder, '--registration-max-width', '256', '--jobs', '2',
                 '--no-flatfield', '--no-gain-comp', '--no-subpixel',
-                '--blend', 'none', '--preview', '0', '-o', str(output),
+                '--blend', 'none', '--preview', '0', '--jpeg-copy', '-o', str(output),
                 '--positions', str(positions),
             ]), 0)
             result = json.loads(positions.read_text())
@@ -89,6 +130,25 @@ class ScanStitchTest(unittest.TestCase):
             self.assertAlmostEqual(mosaic.shape[1], 1701, delta=4)
             self.assertAlmostEqual(mosaic.shape[0], 777, delta=4)
             np.testing.assert_array_equal(mosaic[30:100, 30:100], scene[30:100, 30:100])
+            jpeg = root / 'stitched.jpg'
+            self.assertEqual(cv2.imread(str(jpeg)).shape, mosaic.shape)
+            self.assertLess(jpeg.stat().st_size, output.stat().st_size)
+            self.assertFalse((root / 'stitched_preview.jpg').exists())
+
+    def test_jpeg_dimension_limit_preserves_png_and_removes_stale_copy(self):
+        with tempfile.TemporaryDirectory() as folder:
+            output = Path(folder) / 'stitched.png'
+            # A narrow image exercises the codec limit without a huge allocation.
+            mosaic = np.zeros((1, 65536, 3), np.uint8)
+            stitch.write_image(str(output), mosaic, 92)
+            jpeg = output.with_suffix('.jpg')
+            jpeg.write_bytes(b'old JPEG from a previous stitch')
+            with patch.object(stitch, 'warn') as warn:
+                stitch.write_jpeg_copy(str(output), mosaic, 92)
+            warn.assert_called_once()
+            self.assertFalse(jpeg.exists())
+            self.assertFalse(Path(str(jpeg) + '.tmp.jpg').exists())
+            np.testing.assert_array_equal(cv2.imread(str(output)), mosaic)
 
     def test_small_images_are_not_enlarged(self):
         with tempfile.TemporaryDirectory() as folder:

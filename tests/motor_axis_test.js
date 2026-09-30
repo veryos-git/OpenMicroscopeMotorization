@@ -9,6 +9,20 @@ async function component(name, bindings) {
     return new Function(...Object.keys(bindings), source + '\nreturn o_component__' + name)(...Object.values(bindings));
 }
 
+Deno.test('scan motor timeout stops motion and rejects the move', async () => {
+    const stopped = [];
+    const scan = await component('scan', {
+        o_state: { b_connected__esp: true, a_o_motor: [{n_position:10}] },
+        f_send_esp_move_step: () => new Promise(() => {}),
+        f_send_esp_stop: motor => stopped.push(motor),
+        setTimeout: callback => setTimeout(callback, 0),
+    });
+    const state = {b_stop_requested:false};
+    await assert.rejects(() => scan.methods.f_move_motor_n_step.call(state, 0, 20), /timed out/);
+    assert.deepEqual(stopped, [0]);
+    assert.equal(state.b_stop_requested, true);
+});
+
 Deno.test('axis assignment swaps motors, persists mappings and preserves directions', async () => {
     const state = { o_motor__axis: { x: 0, y: 1, z: 2 } };
     for (const key of ['a', 'd', 'w', 's', 'q', 'e', 'mouse_right']) {

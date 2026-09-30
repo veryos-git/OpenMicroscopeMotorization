@@ -53,7 +53,11 @@ let f_o_stitch_run = async function(o_option, f_on_line) {
 
     const live = o_option.b_live_preview === true;
     let s_path_output = `${s_path_folder}${s_ds}${live ? 'live_preview.jpg' : 'stitched.png'}`;
+    let s_path_jpeg = `${s_path_folder}${s_ds}stitched.jpg`;
     let s_path_preview = `${s_path_folder}${s_ds}stitched_preview.jpg`;
+    const s_path_original_colors = `${s_path_folder}${s_ds}stitched_original_colors.png`;
+    const s_path_original_colors_jpeg = `${s_path_folder}${s_ds}stitched_original_colors.jpg`;
+    const s_path_original_colors_preview = `${s_path_folder}${s_ds}stitched_original_colors_preview.jpg`;
     let s_path_position = `${s_path_folder}${s_ds}positions.json`;
     let s_path_report = `${s_path_folder}${s_ds}report.json`;
 
@@ -66,9 +70,12 @@ let f_o_stitch_run = async function(o_option, f_on_line) {
         '--registration-max-width', '256',
         '--jobs', live ? '1' : '2',
     ];
+    if (!live) {
+        const pattern = o_option.b_live_scan ? '^tile_r[0-9]+_c[0-9]+\\.png$' : '^tile_r[0-9]+_c[0-9]+.*\\.(png|jpe?g|tiff?)$';
+        a_s_arg.push('--jpeg-copy', '--original-colors-copy', '--pattern', pattern);
+    }
     if (o_option.b_live_scan) {
         a_s_arg.push('--scan-live-cache', `${s_path_folder}${s_ds}live_alignment.json`);
-        if (!live) a_s_arg.push('--pattern', '^tile_r[0-9]+_c[0-9]+\\.png$');
     }
     if (live) a_s_arg.push('--live-preview', '--passes', '1');
     if(o_option.n_score__min) a_s_arg.push('--min-score', String(o_option.n_score__min));
@@ -121,7 +128,11 @@ let f_o_stitch_run = async function(o_option, f_on_line) {
     let o_result = {
         b_success: o_status.success && (b_output || o_option.b_dry_run === true),
         s_path_output: b_output ? s_path_output : '',
+        s_path_jpeg: !live && await f_b_path_exists(s_path_jpeg) ? s_path_jpeg : '',
         s_path_preview: b_preview ? s_path_preview : '',
+        s_path_original_colors: !live && await f_b_path_exists(s_path_original_colors) ? s_path_original_colors : '',
+        s_path_original_colors_jpeg: !live && await f_b_path_exists(s_path_original_colors_jpeg) ? s_path_original_colors_jpeg : '',
+        s_path_original_colors_preview: !live && await f_b_path_exists(s_path_original_colors_preview) ? s_path_original_colors_preview : '',
         s_path_position: await f_b_path_exists(s_path_position) ? s_path_position : '',
         s_path_report: await f_b_path_exists(s_path_report) ? s_path_report : '',
         a_s_line: a_s_line,

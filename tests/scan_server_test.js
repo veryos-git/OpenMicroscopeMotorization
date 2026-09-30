@@ -12,7 +12,13 @@ Deno.test('scan server acknowledges background jobs, accepts another scan, and e
     try {
         await Deno.symlink(repo + '/venv', root + '/venv');
         await Deno.symlink(repo + '/stitch.py', root + '/stitch.py');
+        // Record desktop launches without opening a real window during the test.
+        await Deno.mkdir(root + '/bin');
+        const opener = root + '/bin/' + (Deno.build.os === 'darwin' ? 'open' : 'xdg-open');
+        await Deno.writeTextFile(opener, '#!/bin/sh\nprintf "%s\\n" "$#" "$@" > "$SCAN_OPEN_LOG"\nif [ -e "$SCAN_OPEN_FAIL" ]; then echo "file browser unavailable" >&2; exit 1; fi\n');
+        await Deno.chmod(opener, 0o755);
         child = new Deno.Command(Deno.execPath(), { args: ['run', '-A', repo + '/webserver_denojs.js', '--port', String(port), '--db', root + '/app.db'],
+            env: { PATH: root + '/bin:' + Deno.env.get('PATH'), SCAN_OPEN_LOG: root + '/opened.txt', SCAN_OPEN_FAIL: root + '/open-fail' },
             cwd: root, stdout: 'null', stderr: 'piped' }).spawn();
         const stderr = new Response(child.stderr).text();
         for (let i = 0; i < 100; i++) {
@@ -80,6 +86,36 @@ for col,x in enumerate((0,160)): cv2.imwrite(sys.argv[1]+'/tile_r00_c0'+str(col)
         }
         assert.equal(liveJob.s_status, 'complete', JSON.stringify(liveJob));
         assert.ok(liveJob.a_s_line.some(line => line.includes('reused 1/1 pairs')), JSON.stringify(liveJob));
+        for (const completed of [job, liveJob]) {
+            assert.equal(completed.o_result.s_path_jpeg, completed.s_path_folder + '/stitched.jpg');
+            const jpegResponse = await fetch(origin + '/api/file?path=' + encodeURIComponent(completed.o_result.s_path_jpeg));
+            assert.equal(jpegResponse.status, 200);
+            assert.equal(jpegResponse.headers.get('content-type'), 'image/jpeg');
+            assert.ok((await jpegResponse.arrayBuffer()).byteLength > 100);
+            const pngSize = (await Deno.stat(completed.o_result.s_path_output)).size;
+            assert.ok((await Deno.stat(completed.o_result.s_path_jpeg)).size < pngSize);
+            for (const [field, filename, type] of [
+                ['s_path_original_colors', 'stitched_original_colors.png', 'image/png'],
+                ['s_path_original_colors_jpeg', 'stitched_original_colors.jpg', 'image/jpeg'],
+            ]) {
+                assert.equal(completed.o_result[field], completed.s_path_folder + '/' + filename);
+                const originalResponse = await fetch(origin + '/api/file?path=' + encodeURIComponent(completed.o_result[field]));
+                assert.equal(originalResponse.status, 200);
+                assert.equal(originalResponse.headers.get('content-type'), type);
+                assert.ok((await originalResponse.arrayBuffer()).byteLength > 100);
+            }
+        }
+        // Generated PNG/JPEG outputs must not become inputs when stitching again.
+        await request('stitch_run', { s_path_folder: folder, b_no_flatfield: true });
+        for (let i = 0; i < 100; i++) {
+            job = (await request('scan_jobs_list')).find(j => j.s_path_folder === folder);
+            if (['complete', 'failed'].includes(job.s_status)) break;
+            await new Promise(r => setTimeout(r, 100));
+        }
+        assert.equal(job.s_status, 'complete', JSON.stringify(job));
+        assert.equal(job.o_result.s_path_original_colors, folder + '/stitched_original_colors.png');
+        const positions = JSON.parse(await Deno.readTextFile(job.o_result.s_path_position));
+        assert.equal(positions.tiles.length, 2);
         const response = await fetch(origin + '/api/file?path=' + encodeURIComponent(job.o_result.s_path_output));
         assert.equal(response.status, 200);
         await response.arrayBuffer();
@@ -88,6 +124,26 @@ for col,x in enumerate((0,160)): cv2.imwrite(sys.argv[1]+'/tile_r00_c0'+str(col)
         const denied = await fetch(origin + '/api/scans/folder?path=' + encodeURIComponent(root));
         assert.equal(denied.status, 400);
         await denied.text();
+        const specialFolder = folder + "/space & 'quote";
+        await Deno.mkdir(specialFolder);
+        const openUrl = origin + '/api/scans/open_folder?path=';
+        const opened = await fetch(openUrl + encodeURIComponent(specialFolder), { method: 'POST' });
+        assert.equal(opened.status, 204);
+        assert.equal(await Deno.readTextFile(root + '/opened.txt'), '1\n' + await Deno.realPath(specialFolder) + '\n');
+        await Deno.remove(root + '/opened.txt');
+        const getOpen = await fetch(openUrl + encodeURIComponent(folder));
+        assert.equal(getOpen.status, 405);
+        await getOpen.text();
+        for (const invalid of [root, folder + '/stitched.png', folder + '/missing']) {
+            const rejected = await fetch(openUrl + encodeURIComponent(invalid), { method: 'POST' });
+            assert.equal(rejected.status, 400, invalid);
+            await rejected.text();
+        }
+        await assert.rejects(() => Deno.stat(root + '/opened.txt'), Deno.errors.NotFound);
+        await Deno.writeTextFile(root + '/open-fail', '');
+        const failedOpen = await fetch(openUrl + encodeURIComponent(folder), { method: 'POST' });
+        assert.equal(failedOpen.status, 500);
+        assert.match(await failedOpen.text(), /Could not open scan folder: file browser unavailable/);
         socket.close();
         child.kill('SIGTERM');
         await child.status;
