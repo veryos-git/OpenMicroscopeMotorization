@@ -33,10 +33,18 @@ let o_component__scan = {
                                 :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_original_colors) + '&v=' + job.n_finished" target="_blank" rel="noopener">Original colors PNG</a>
                             <a v-if="job.s_status === 'complete' && job.o_result?.s_path_original_colors_jpeg" class="btn-small"
                                 :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_original_colors_jpeg) + '&v=' + job.n_finished" target="_blank" rel="noopener">Original colors JPEG</a>
+                            <a v-if="job.s_status === 'complete' && job.o_result?.s_path_flatfield" class="btn-small"
+                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_flatfield) + '&v=' + job.n_finished" target="_blank" rel="noopener">Flat-field only PNG</a>
+                            <a v-if="job.s_status === 'complete' && job.o_result?.s_path_flatfield_jpeg" class="btn-small"
+                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_flatfield_jpeg) + '&v=' + job.n_finished" target="_blank" rel="noopener">Flat-field only JPEG</a>
+                            <a v-if="job.s_status === 'complete' && job.o_result?.s_path_exposure" class="btn-small"
+                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_exposure) + '&v=' + job.n_finished" target="_blank" rel="noopener">Exposure only PNG</a>
+                            <a v-if="job.s_status === 'complete' && job.o_result?.s_path_exposure_jpeg" class="btn-small"
+                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_exposure_jpeg) + '&v=' + job.n_finished" target="_blank" rel="noopener">Exposure only JPEG</a>
                             <a v-if="job.s_status === 'complete' && job.o_result?.s_path_output" class="btn-small"
-                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_output) + '&v=' + job.n_finished" target="_blank" rel="noopener">{{ job.o_result.s_path_original_colors ? 'Adjusted PNG' : 'Open mosaic' }}</a>
+                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_output) + '&v=' + job.n_finished" target="_blank" rel="noopener">{{ job.o_result.s_path_flatfield ? 'Both corrections PNG' : job.o_result.s_path_original_colors ? 'Adjusted PNG' : 'Open mosaic' }}</a>
                             <a v-if="job.s_status === 'complete' && job.o_result?.s_path_jpeg" class="btn-small"
-                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_jpeg) + '&v=' + job.n_finished" target="_blank" rel="noopener">{{ job.o_result.s_path_original_colors ? 'Adjusted JPEG' : 'Open JPEG' }}</a>
+                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_jpeg) + '&v=' + job.n_finished" target="_blank" rel="noopener">{{ job.o_result.s_path_flatfield ? 'Both corrections JPEG' : job.o_result.s_path_original_colors ? 'Adjusted JPEG' : 'Open JPEG' }}</a>
                             <button class="btn-small" v-if="!['capturing', 'queued', 'running'].includes(job.s_status)"
                                 :disabled="job.n_tiles < 2 || b_queueing" @click="f_stitch(job)">{{ job.s_status === 'ready' ? 'Stitch' : 'Stitch again' }}</button>
                         </div>
@@ -305,11 +313,7 @@ let o_component__scan = {
                             <input type="checkbox" v-model="b_feather" @change="f_save_config" />
                             <span>Feather blending</span>
                         </label>
-                        <label class="scan-toggle">
-                            <input type="checkbox" v-model="b_flatfield" @change="f_save_config" />
-                            <span>Flat-field / vignetting correction</span>
-                        </label>
-                        <div class="scan-hint">Every stitch also saves an original-color PNG and JPEG without flat-field correction or exposure equalization.</div>
+                        <div class="scan-hint">Every stitch saves four versions as PNG and JPEG: original colors, flat-field only, exposure only, and both corrections.</div>
                         <label class="scan-toggle">
                             <input type="checkbox" v-model="b_matcher__loftr" @change="f_save_config" />
                             <span>LoFTR rescue matcher (slow)</span>
@@ -437,7 +441,6 @@ let o_component__scan = {
             n_score__min: 0.3,
             n_dim__max: 0,
             b_feather: true,
-            b_flatfield: true,
             b_matcher__loftr: false,
             // return the motors to their start position once the scan finishes
             b_return__after_scan: true,
@@ -629,7 +632,6 @@ let o_component__scan = {
                     if (typeof o_config.n_ms__focus_settle === 'number') o_self.n_ms__focus_settle = o_config.n_ms__focus_settle;
                     if (typeof o_config.b_stitch__after_scan === 'boolean') o_self.b_stitch__after_scan = o_config.b_stitch__after_scan;
                     if (typeof o_config.b_feather === 'boolean') o_self.b_feather = o_config.b_feather;
-                    if (typeof o_config.b_flatfield === 'boolean') o_self.b_flatfield = o_config.b_flatfield;
                     if (typeof o_config.b_matcher__loftr === 'boolean') o_self.b_matcher__loftr = o_config.b_matcher__loftr;
                     if (typeof o_config.b_return__after_scan === 'boolean') o_self.b_return__after_scan = o_config.b_return__after_scan;
                 } catch (e) { /* ignore parse errors */ }
@@ -653,7 +655,6 @@ let o_component__scan = {
                 n_score__min: this.n_score__min,
                 n_dim__max: this.n_dim__max,
                 b_feather: this.b_feather,
-                b_flatfield: this.b_flatfield,
                 b_matcher__loftr: this.b_matcher__loftr,
                 b_return__after_scan: this.b_return__after_scan,
             });
@@ -945,7 +946,7 @@ let o_component__scan = {
             return {
                 n_score__min: this.n_score__min, n_dim__max: this.n_dim__max,
                 s_blend: this.b_feather ? 'feather' : 'none',
-                b_no_flatfield: !this.b_flatfield, b_matcher__loftr: this.b_matcher__loftr,
+                b_matcher__loftr: this.b_matcher__loftr,
             };
         },
         f_start_scan: async function(b_live = false) {

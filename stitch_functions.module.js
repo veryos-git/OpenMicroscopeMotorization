@@ -29,7 +29,7 @@ let f_b_path_exists = async function(s_path) {
 
 // o_option: {
 //   s_path_folder, n_score__min, n_dim__max, s_blend,
-//   b_no_flatfield, b_matcher__loftr, b_dry_run
+//   b_matcher__loftr, b_dry_run
 // }
 // f_on_line: called with every log line while stitch.py runs (may be omitted)
 let f_o_stitch_run = async function(o_option, f_on_line) {
@@ -58,6 +58,12 @@ let f_o_stitch_run = async function(o_option, f_on_line) {
     const s_path_original_colors = `${s_path_folder}${s_ds}stitched_original_colors.png`;
     const s_path_original_colors_jpeg = `${s_path_folder}${s_ds}stitched_original_colors.jpg`;
     const s_path_original_colors_preview = `${s_path_folder}${s_ds}stitched_original_colors_preview.jpg`;
+    const s_path_flatfield = `${s_path_folder}${s_ds}stitched_flatfield.png`;
+    const s_path_flatfield_jpeg = `${s_path_folder}${s_ds}stitched_flatfield.jpg`;
+    const s_path_flatfield_preview = `${s_path_folder}${s_ds}stitched_flatfield_preview.jpg`;
+    const s_path_exposure = `${s_path_folder}${s_ds}stitched_exposure.png`;
+    const s_path_exposure_jpeg = `${s_path_folder}${s_ds}stitched_exposure.jpg`;
+    const s_path_exposure_preview = `${s_path_folder}${s_ds}stitched_exposure_preview.jpg`;
     let s_path_position = `${s_path_folder}${s_ds}positions.json`;
     let s_path_report = `${s_path_folder}${s_ds}report.json`;
 
@@ -72,7 +78,7 @@ let f_o_stitch_run = async function(o_option, f_on_line) {
     ];
     if (!live) {
         const pattern = o_option.b_live_scan ? '^tile_r[0-9]+_c[0-9]+\\.png$' : '^tile_r[0-9]+_c[0-9]+.*\\.(png|jpe?g|tiff?)$';
-        a_s_arg.push('--jpeg-copy', '--original-colors-copy', '--pattern', pattern);
+        a_s_arg.push('--jpeg-copy', '--all-color-variants', '--pattern', pattern);
     }
     if (o_option.b_live_scan) {
         a_s_arg.push('--scan-live-cache', `${s_path_folder}${s_ds}live_alignment.json`);
@@ -81,7 +87,6 @@ let f_o_stitch_run = async function(o_option, f_on_line) {
     if(o_option.n_score__min) a_s_arg.push('--min-score', String(o_option.n_score__min));
     if(o_option.n_dim__max) a_s_arg.push('--max-dim', String(o_option.n_dim__max));
     if(o_option.s_blend === 'none') a_s_arg.push('--blend', 'none');
-    if(o_option.b_no_flatfield) a_s_arg.push('--no-flatfield');
     if(o_option.b_matcher__loftr && !live) a_s_arg.push('--matcher', 'loftr');
     if(o_option.b_dry_run) a_s_arg.push('--dry-run');
 
@@ -133,6 +138,12 @@ let f_o_stitch_run = async function(o_option, f_on_line) {
         s_path_original_colors: !live && await f_b_path_exists(s_path_original_colors) ? s_path_original_colors : '',
         s_path_original_colors_jpeg: !live && await f_b_path_exists(s_path_original_colors_jpeg) ? s_path_original_colors_jpeg : '',
         s_path_original_colors_preview: !live && await f_b_path_exists(s_path_original_colors_preview) ? s_path_original_colors_preview : '',
+        s_path_flatfield: !live && await f_b_path_exists(s_path_flatfield) ? s_path_flatfield : '',
+        s_path_flatfield_jpeg: !live && await f_b_path_exists(s_path_flatfield_jpeg) ? s_path_flatfield_jpeg : '',
+        s_path_flatfield_preview: !live && await f_b_path_exists(s_path_flatfield_preview) ? s_path_flatfield_preview : '',
+        s_path_exposure: !live && await f_b_path_exists(s_path_exposure) ? s_path_exposure : '',
+        s_path_exposure_jpeg: !live && await f_b_path_exists(s_path_exposure_jpeg) ? s_path_exposure_jpeg : '',
+        s_path_exposure_preview: !live && await f_b_path_exists(s_path_exposure_preview) ? s_path_exposure_preview : '',
         s_path_position: await f_b_path_exists(s_path_position) ? s_path_position : '',
         s_path_report: await f_b_path_exists(s_path_report) ? s_path_report : '',
         a_s_line: a_s_line,

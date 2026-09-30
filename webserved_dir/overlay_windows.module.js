@@ -84,6 +84,7 @@ export function f_install_overlay_windows(o_document = document) {
     o_document.addEventListener('lostpointercapture', f_stop, true);
     o_window.addEventListener('blur', f_stop);
     o_window.addEventListener('resize', f_resize);
+    o_window.addEventListener('toolbar-resize', f_resize);
     return function() {
         f_stop();
         o_observer.disconnect();
@@ -95,5 +96,6 @@ export function f_install_overlay_windows(o_document = document) {
         o_document.removeEventListener('lostpointercapture', f_stop, true);
         o_window.removeEventListener('blur', f_stop);
         o_window.removeEventListener('resize', f_resize);
+        o_window.removeEventListener('toolbar-resize', f_resize);
     };
 }

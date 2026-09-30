@@ -10,3 +10,13 @@ pen, or touch. Selecting a window brings it forward; header buttons and fields
 remain interactive. Positions are kept while panels are hidden/reopened, and moved
 windows are kept within the viewport when it changes size. Digital zoom keeps its
 existing position handling. General window resizing remains a separate task.
+
+
+
+problem: 
+- the UI is simply to crowded. for advanced users it makes sense to see all details but for a quick look it is overwhelming. 
+possible solution: 
+- provide the most accessed functions on the first layer of the GUI, so that no overlay has to be opened. 
+- use icons/pictograms. they often tell a lot more than having to read complex long text 
+- use tool tip text when hovering over an item with complex functionality (buttons with icons , and others)
+

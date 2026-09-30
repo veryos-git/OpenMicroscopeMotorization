@@ -2118,6 +2118,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                    help="also save a full-size JPEG beside the output PNG")
     g.add_argument("--original-colors-copy", action="store_true",
                    help="also save an _original_colors.png mosaic without flat-field or exposure adjustments")
+    g.add_argument("--all-color-variants", action="store_true",
+                   help="save all four flat-field/exposure combinations; the primary output uses both corrections")
     g.add_argument("--positions", help="JSON file to write (and reuse) tile positions")
     g.add_argument("--report", help="JSON file with per-pair registration quality")
     g.add_argument("--dry-run", action="store_true",
@@ -2163,6 +2165,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     p.add_argument('--scan-live-cache', help='reuse first-pass scan neighbor registrations')
     p.add_argument('--live-preview', action='store_true', help='render provisional reduced scan mosaic')
     args = p.parse_args(argv)
+    if args.all_color_variants:
+        # Full export supersedes individual correction switches, including old presets.
+        args.no_flatfield = args.no_gain_comp = False
+        args.original_colors_copy = True
     if args.registration_max_width < 0:
         p.error("--registration-max-width must be non-negative")
     _VERBOSE = not args.quiet
@@ -2585,6 +2591,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         n_ms__t2 = time.perf_counter()
         write_mosaic_outputs(original_path, mosaic, args)
         n_ms__write += (time.perf_counter() - n_ms__t2) * 1000
+
+    if args.all_color_variants:
+        # Exposure-only gains must be measured on the uncorrected tiles.
+        n_ms__t2 = time.perf_counter()
+        log("computing exposure gains without flat-field correction")
+        gains_original = compute_gains(tiles, [e for e in used if e.kind == "measured"],
+                                      None, (h, w))
+        n_ms__gain += (time.perf_counter() - n_ms__t2) * 1000
+        for suffix, variant_field, variant_gains in [
+            ("flatfield", field, None),
+            ("exposure", None, gains_original),
+        ]:
+            del mosaic
+            n_ms__t2 = time.perf_counter()
+            log(f"compositing {suffix}-only version")
+            mosaic, _ = composite(tiles, pos, (h, w), args, variant_field, variant_gains)
+            n_ms__comp += (time.perf_counter() - n_ms__t2) * 1000
+            n_ms__t2 = time.perf_counter()
+            write_mosaic_outputs(os.path.splitext(out_path)[0] + f"_{suffix}.png", mosaic, args)
+            n_ms__write += (time.perf_counter() - n_ms__t2) * 1000
 
     a_s_timing = [
         f"register {f_s_dur(n_ms__reg1 / 1000)}",

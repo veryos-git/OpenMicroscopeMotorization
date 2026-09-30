@@ -94,13 +94,17 @@ try {
     const input = await rect('.panel-gamepad input');
     await drag(input.x + 10, input.y + 10, 30, 10);
     assert.deepEqual(await rect(), after);
+    // Expanding quick settings must keep a previously dragged header reachable.
+    await evaluate("document.documentElement.style.setProperty('--topbar-h', '220px'); window.dispatchEvent(new Event('toolbar-resize'))");
+    assert.equal((await rect()).y, 220);
+    await evaluate("document.documentElement.style.setProperty('--topbar-h', '56px'); window.dispatchEvent(new Event('toolbar-resize'))");
     await evaluate("document.querySelector('.panel-gamepad').classList.remove('visible')");
     await viewport(600, 500);
     await evaluate("document.querySelector('.panel-gamepad').classList.add('visible')");
     await evaluate('new Promise(requestAnimationFrame)');
     after = await rect();
     assert.ok(after.x >= 0 && after.x + after.width <= 600);
-    assert.ok(after.y >= 88 && after.y + after.height <= 500);
+    assert.ok(after.y >= 56 && after.y + after.height <= 500);
     // Touch dragging and cancellation, with responsive CSS active.
     await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: after.x + 40, y: after.y + 20 }] });
     await send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: after.x + 30, y: after.y + 50 }] });

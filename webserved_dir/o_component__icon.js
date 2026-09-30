@@ -1,0 +1,40 @@
+// Local SVG pictograms: no font, network request, or platform emoji dependency.
+const o_path = {
+    camera: 'M3 7h4l2-3h6l2 3h4v13H3z M16 13a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
+    scan: 'M8 3H3v5 M16 3h5v5 M3 16v5h5 M21 16v5h-5 M7 7h10v10H7z M12 7v10 M7 12h10',
+    focus: 'M8 3H3v5 M16 3h5v5 M3 16v5h5 M21 16v5h-5 M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0 M12 10v4 M10 12h4',
+    zoom: 'M16 10a6 6 0 1 1-12 0 6 6 0 0 1 12 0 M15 15l6 6 M7 10h6 M10 7v6',
+    move: 'M12 3v18 M3 12h18 M8 7l4-4 4 4 M8 17l4 4 4-4 M7 8l-4 4 4 4 M17 8l4 4-4 4',
+    stop: 'M6 6h12v12H6z',
+    search: 'M16 10a6 6 0 1 1-12 0 6 6 0 0 1 12 0 M15 15l6 6',
+    settings: 'M3 6h4 M11 6h10 M3 12h10 M17 12h4 M3 18h4 M11 18h10 M7 3v6 M17 9v6 M7 15v6',
+    tools: 'M3 3h6v6H3z M15 3h6v6h-6z M3 15h6v6H3z M15 15h6v6h-6z',
+    setup: 'M14 4a6 6 0 0 0-7 8l-4 5a3 3 0 0 0 4 4l5-5a6 6 0 0 0 8-7l-4 4-5-5z',
+    fullscreen: 'M8 3H3v5 M16 3h5v5 M3 16v5h5 M21 16v5h-5',
+    restore: 'M3 8h5V3 M21 8h-5V3 M8 21v-5H3 M16 21v-5h5',
+    close: 'M6 6l12 12 M6 18 18 6',
+    stack: 'M3 7l9-4 9 4-9 4z M3 12l9 4 9-4 M3 17l9 4 9-4',
+    record: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M12 7v5l3 2',
+    video: 'M3 6h12v12H3z M15 10l6-4v12l-6-4',
+    folder: 'M3 5h7l2 3h9v12H3z',
+    map: 'M3 5l6-2 6 2 6-2v16l-6 2-6-2-6 2z M9 3v16 M15 5v16',
+    slide: 'M3 6h18v12H3z M7 6v12 M17 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0',
+    filter: 'M3 4h18l-7 8v7l-4 2v-9z',
+    flat: 'M12 3v2 M12 19v2 M3 12h2 M19 12h2 M5 5l2 2 M17 17l2 2 M5 19l2-2 M17 7l2-2 M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
+    scale: 'M3 7h18v10H3z M7 7v5 M12 7v3 M17 7v5',
+    cell: 'M7 4c5-4 13 1 14 7s-8 13-14 9S0 7 7 4z M14 11a3 3 0 1 1-6 0 3 3 0 0 1 6 0',
+    training: 'M12 3l9 5-9 5-9-5z M6 10v7l6 4 6-4v-7 M21 8v8',
+    detection: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0',
+    gamepad: 'M7 7h10c4 0 6 13 2 13l-4-4H9l-4 4C1 20 3 7 7 7z M6 11v4 M4 13h4 M16 11h1 M18 14h1 M12 7V3',
+    macro: 'M6 3h12v18H6z M9 7h6 M9 11h6 M9 15h3',
+    auto: 'M8 3v4h8v4 M12 7l4 4 4-4 M16 21v-4H8v-4 M4 17l4-4 4 4',
+    stats: 'M3 3v18h18 M7 17v-4 M12 17V8 M17 17V4',
+    refresh: 'M20 10a8 8 0 0 0-14-4L3 9 M3 3v6h6 M4 14a8 8 0 0 0 14 4l3-3 M15 15h6v6',
+};
+
+export const o_component__icon = {
+    props: { s_name: { type: String, required: true } },
+    computed: { s_path() { return o_path[this.s_name] || o_path.tools; } },
+    template: `<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path :d="s_path" /></svg>`,
+};

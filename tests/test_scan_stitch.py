@@ -11,6 +11,48 @@ import stitch
 
 
 class ScanStitchTest(unittest.TestCase):
+    def test_all_color_variants_match_individual_correction_runs(self):
+        rng = np.random.default_rng(73)
+        texture = cv2.GaussianBlur(rng.integers(0, 80, (240, 500), dtype=np.uint8), (0, 0), 2)
+        scene = np.stack([texture + 15, texture + 65, texture + 145], axis=2)
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for col, x in enumerate((0, 160)):
+                tile = scene[:, x:x+340]
+                if col:
+                    tile = (tile.astype(float) * .78).astype(np.uint8)
+                cv2.imwrite(str(root / f'tile_r00_c{col:02}.png'), tile)
+            common = [folder, '--pattern', r'^tile_r\d+_c\d+\.png$',
+                      '--registration-max-width', '256', '--jobs', '1', '--passes', '1', '--no-subpixel']
+            with patch.object(stitch, 'register_pair', wraps=stitch.register_pair) as register:
+                self.assertEqual(stitch.main(common + [
+                    '--all-color-variants', '--jpeg-copy', '--preview', '128',
+                    '--no-flatfield', '--no-gain-comp', '-o', str(root / 'stitched.png')]), 0)
+                self.assertEqual(register.call_count, 1, 'All color variants must share one alignment')
+            variants = [
+                ('stitched', []),
+                ('stitched_original_colors', ['--no-flatfield', '--no-gain-comp']),
+                ('stitched_flatfield', ['--no-gain-comp']),
+                ('stitched_exposure', ['--no-flatfield']),
+            ]
+            outputs = []
+            for stem, flags in variants:
+                with self.subTest(variant=stem):
+                    png = cv2.imread(str(root / (stem + '.png')))
+                    jpeg = cv2.imread(str(root / (stem + '.jpg')))
+                    preview = cv2.imread(str(root / (stem + '_preview.jpg')))
+                    self.assertEqual(png.shape, jpeg.shape)
+                    self.assertGreater(png.shape[1], 490)
+                    self.assertEqual(max(preview.shape[:2]), 128)
+                    reference = root / ('reference_' + stem + '.png')
+                    self.assertEqual(stitch.main(common + flags + ['--preview', '0', '-o', str(reference)]), 0)
+                    np.testing.assert_array_equal(png, cv2.imread(str(reference)))
+                    outputs.append(png)
+            for i, png in enumerate(outputs):
+                self.assertEqual(png.shape, outputs[0].shape)
+                for other in outputs[i+1:]:
+                    self.assertFalse(np.array_equal(png, other), 'Fixture should distinguish every correction combination')
+
     def test_original_color_copy_preserves_tiles_with_corrections_enabled(self):
         rng = np.random.default_rng(42)
         texture = cv2.GaussianBlur(rng.integers(0, 80, (240, 500), dtype=np.uint8), (0, 0), 2)

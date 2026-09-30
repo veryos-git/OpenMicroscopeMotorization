@@ -444,7 +444,15 @@ relinking condition of those licences is met.
 
 ### Actions and input bindings
 
-Open **find (ctrl+f)** in the toolbar, or press **Ctrl+F** / **F3**. Search by
+The compact toolbar keeps capture, scan, focus, zoom, mouse movement, Stop,
+camera selection and movement speeds within reach. Hover over an icon for its
+description. **Tools** groups the remaining panels by task. **Quick settings**
+(sliders icon) expands camera tuning, speed sliders, project/slide/map selection
+and hardware details; this expanded view is remembered in the current browser.
+Running recordings and flat-field correction remain visible in the compact view.
+The corner-frame icon enters or exits fullscreen.
+
+Open **Search actions** (magnifying glass) in the toolbar, or press **Ctrl+F** / **F3**. Search by
 name, category, description, or keyword; use arrow keys and Enter to invoke a
 result. **Capture Image** downloads the current camera frame (Ctrl+Shift+I or
 gamepad button 0 by default). Manual stitch capture uses Ctrl+Shift+F; R runs

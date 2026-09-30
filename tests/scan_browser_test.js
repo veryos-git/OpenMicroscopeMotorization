@@ -74,6 +74,8 @@ async function runScanBrowserTest(cornerFocus = false) {
                 vm.n_tile_x=2;vm.n_tile_y=1;vm.f_delay=async()=>{};vm.f_move_motor_n_step=async()=>{};
                 assert(document.body.textContent.includes('Start classical scan'),'Classical button missing');
                 assert(document.body.textContent.includes('Start live scan'),'Live button missing');
+                assert(![...document.querySelectorAll('label.scan-toggle')].some(label=>label.textContent.includes('Flat-field')),'Obsolete flat-field checkbox remains');
+                assert(!('b_no_flatfield' in vm.f_stitch_options()),'Scan still requests an optional flat-field setting');
                 vm.f_return_to_start=async()=>{
                     assert(o_state.b_scanning,'Capture lock released before return');
                     if (vm.b_live_scan) {
@@ -116,6 +118,18 @@ async function runScanBrowserTest(cornerFocus = false) {
                 assert(document.querySelector('a[href*="scan_0%2Fstitched_original_colors.png"]')?.textContent==='Original colors PNG','Original-color PNG link missing');
                 assert(document.querySelector('a[href*="scan_0%2Fstitched_original_colors.jpg"]')?.textContent==='Original colors JPEG','Original-color JPEG link missing');
                 assert(document.querySelector('a[href*="scan_0%2Fstitched.png"]')?.textContent==='Adjusted PNG','Adjusted output must remain available');
+                Object.assign(jobs[0].o_result, {
+                    s_path_flatfield:'/scans/scan_0/stitched_flatfield.png',
+                    s_path_flatfield_jpeg:'/scans/scan_0/stitched_flatfield.jpg',
+                    s_path_exposure:'/scans/scan_0/stitched_exposure.png',
+                    s_path_exposure_jpeg:'/scans/scan_0/stitched_exposure.jpg',
+                });
+                await vm.f_refresh_jobs();await nextTick();
+                for (const [stem,label] of [['stitched_flatfield','Flat-field only'],['stitched_exposure','Exposure only'],['stitched','Both corrections']]) {
+                    for (const [ext,format] of [['png','PNG'],['jpg','JPEG']]) {
+                        assert(document.querySelector('a[href*="scan_0%2F'+stem+'.'+ext+'"]')?.textContent===label+' '+format,'Missing '+label+' '+format+' link');
+                    }
+                }
                 const thumbnail=document.querySelector('img[alt="Stitched scan — original colors"]');
                 assert(thumbnail?.src.includes('stitched_original_colors_preview.jpg'),'Thumbnail must show original colors');
                 assert(thumbnail.parentElement.href.includes('stitched_original_colors.png'),'Thumbnail must open the full-size original-color image');

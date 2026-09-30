@@ -20,3 +20,14 @@ problem:
 the usb camera is very good and has a resolution of 3840×2160 or larger. the app does not make use of this good quality
 possible solution: 
 adjust the live camera image size depending on the monitor 
+
+
+problem: 
+the usb camera hardware settings are difficult to change
+possible solution: 
+- for now , just provide the most simple settings
+
+
+
+# help 
+https://www.kumgit.com/webcam-info/?utm_source=chatgpt.com

@@ -214,6 +214,7 @@ let o_component__zoom = {
         o_self._f_on_keyup = function(o_evt){ o_self.f_on_keyup(o_evt); };
         o_self._f_on_blur = function(){ o_self.b_ctrl = false; o_self.f_cancel_drag(); };
         window.addEventListener('resize', o_self._f_on_resize);
+        window.addEventListener('toolbar-resize', o_self._f_on_resize);
         window.addEventListener('keydown', o_self._f_on_keydown);
         window.addEventListener('keyup', o_self._f_on_keyup);
         window.addEventListener('blur', o_self._f_on_blur);
@@ -222,6 +223,7 @@ let o_component__zoom = {
     beforeUnmount: function() {
         let o_self = this;
         if(o_self._f_on_resize) window.removeEventListener('resize', o_self._f_on_resize);
+        if(o_self._f_on_resize) window.removeEventListener('toolbar-resize', o_self._f_on_resize);
         if(o_self._f_on_keydown) window.removeEventListener('keydown', o_self._f_on_keydown);
         if(o_self._f_on_keyup) window.removeEventListener('keyup', o_self._f_on_keyup);
         if(o_self._f_on_blur) window.removeEventListener('blur', o_self._f_on_blur);

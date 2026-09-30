@@ -10,6 +10,8 @@ try {
     page.on('pageerror', e => errors.push(e.message));
     await page.goto(process.env.BASE_URL || 'http://127.0.0.1:18895');
     await page.waitForFunction(() => window.o_state?.b_connected__server);
+    const quickSettings = page.getByRole('button', { name: 'Quick settings', exact: true });
+    if (await quickSettings.getAttribute('aria-expanded') !== 'true') await quickSettings.click();
     const bar = page.locator('.toolbar-row--speed');
     await bar.locator('#toolbar-speed-z').waitFor();
     await page.evaluate(() => { o_state.o_panel_visibility.setup = false; o_state.o_panel_visibility.gamepad = false; });
@@ -31,6 +33,7 @@ try {
     assert.equal(await page.locator('#setup-speed-z').inputValue(), '0.25');
     assert.equal(await page.locator('#setup-speed-xy').inputValue(), '7.5');
     await page.getByRole('button', { name: 'Close Setup', exact: true }).click();
+    await page.getByRole('button', { name: 'All tools', exact: true }).click();
     await page.getByRole('button', { name: 'Gamepad', exact: true }).click();
     assert.equal(await page.locator('#gamepad-speed-z').inputValue(), '0.25');
     await page.getByRole('button', { name: 'Close Gamepad', exact: true }).click();

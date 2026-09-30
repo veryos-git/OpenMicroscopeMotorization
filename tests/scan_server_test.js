@@ -97,6 +97,10 @@ for col,x in enumerate((0,160)): cv2.imwrite(sys.argv[1]+'/tile_r00_c0'+str(col)
             for (const [field, filename, type] of [
                 ['s_path_original_colors', 'stitched_original_colors.png', 'image/png'],
                 ['s_path_original_colors_jpeg', 'stitched_original_colors.jpg', 'image/jpeg'],
+                ['s_path_flatfield', 'stitched_flatfield.png', 'image/png'],
+                ['s_path_flatfield_jpeg', 'stitched_flatfield.jpg', 'image/jpeg'],
+                ['s_path_exposure', 'stitched_exposure.png', 'image/png'],
+                ['s_path_exposure_jpeg', 'stitched_exposure.jpg', 'image/jpeg'],
             ]) {
                 assert.equal(completed.o_result[field], completed.s_path_folder + '/' + filename);
                 const originalResponse = await fetch(origin + '/api/file?path=' + encodeURIComponent(completed.o_result[field]));
@@ -114,6 +118,10 @@ for col,x in enumerate((0,160)): cv2.imwrite(sys.argv[1]+'/tile_r00_c0'+str(col)
         }
         assert.equal(job.s_status, 'complete', JSON.stringify(job));
         assert.equal(job.o_result.s_path_original_colors, folder + '/stitched_original_colors.png');
+        assert.equal(job.o_result.s_path_flatfield, folder + '/stitched_flatfield.png');
+        assert.equal(job.o_result.s_path_exposure, folder + '/stitched_exposure.png');
+        assert.ok(job.a_s_line.some(line => line.includes('estimating flat-field')),
+            'Old b_no_flatfield settings must not suppress any variant on re-stitch');
         const positions = JSON.parse(await Deno.readTextFile(job.o_result.s_path_position));
         assert.equal(positions.tiles.length, 2);
         const response = await fetch(origin + '/api/file?path=' + encodeURIComponent(job.o_result.s_path_output));
