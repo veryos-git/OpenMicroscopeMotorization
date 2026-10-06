@@ -46,6 +46,9 @@ let o_component__training = {
             <text :x="o_box.n_x*n_scl_x+3" :y="o_box.n_y*n_scl_y+12*n_scl_x/o_view.o_full.n_scl_x" fill="#00cfff" :font-size="12*n_scl_x/o_view.o_full.n_scl_x">{{ o_box.s_label }} {{ Math.round(o_box.n_confidence*100) }}%</text>
         </g>
         <g v-for="o_box in a_o_box__display" :key="o_box.s_id">
+            <path v-if="b_sam && o_box.o_segmentation" :d="f_s_sam_path(o_box.o_segmentation)"
+                :fill="o_box.s_color" fill-opacity="0.3" :stroke="o_box.s_color" stroke-width="1"
+                fill-rule="evenodd" vector-effect="non-scaling-stroke" class="training-sam-mask" />
             <rect :x="o_box.n_x*n_scl_x" :y="o_box.n_y*n_scl_y" :width="o_box.n_scl_x*n_scl_x" :height="o_box.n_scl_y*n_scl_y"
                 fill="transparent" :stroke="o_box.s_color" stroke-width="2" vector-effect="non-scaling-stroke" />
             <text :x="o_box.n_x*n_scl_x+3" :y="o_box.n_y*n_scl_y+12*n_scl_y/o_view.o_full.n_scl_y" :fill="o_box.s_color" :font-size="12*n_scl_x/o_view.o_full.n_scl_x">{{ o_box.s_label }}</text>
@@ -109,6 +112,13 @@ let o_component__training = {
                 </div>
                 <p v-if="b_crop">{{ o_crop_start ? 'Click the opposite corner to finish the crop.' : 'Click the first corner of the crop on either live view.' }} Escape cancels.</p>
                 <small>Only the crop is saved and used for YOLO. Annotate every target inside it. Changing the crop clears unsaved boxes.</small>
+                <details class="training-settings">
+                    <summary>Annotation settings</summary>
+                    <label><input type="checkbox" v-model="b_sam" @change="f_sam_setting"> Automatically segment boxes with SAM</label>
+                    <p>Shows selected pixels after drawing or editing a box. Capture saves a new mask for each focus plane. The first use downloads the model.</p>
+                </details>
+                <small v-if="n_sam_pending" role="status">SAM is segmenting {{ n_sam_pending }} box(es)…</small>
+                <p v-if="s_sam_error" class="record-error" role="alert">{{ s_sam_error }}</p>
                 <p>Hold Ctrl and drag on the live image or zoom preview to draw. Number keys select labels. Drag the bottom-left square to resize; Shift-drag a box to move it. Plain dragging in the zoom preview pans.</p>
                 <div v-for="(o_box,n_idx) in a_o_box" :key="o_box.s_id" class="training-label">
                     <span :style="{color:o_box.s_color}">{{ n_idx+1 }}. {{ o_box.s_label }}</span>
@@ -131,6 +141,10 @@ let o_component__training = {
                 <div class="training-filmstrip">
                     <svg :viewBox="'0 0 ' + o_saved.n_scl_x + ' ' + o_saved.n_scl_y" aria-label="Annotated capture">
                         <image :href="f_s_image(o_saved)" :width="o_saved.n_scl_x" :height="o_saved.n_scl_y" />
+                        <template v-for="o_box in o_saved.a_o_box" :key="'mask-'+o_box.s_id">
+                            <path v-if="o_box.o_segmentation" :d="f_s_sam_path(o_box.o_segmentation, o_saved.n_scl_x, o_saved.n_scl_y)"
+                                :fill="o_box.s_color" fill-opacity="0.3" fill-rule="evenodd" />
+                        </template>
                         <rect v-for="o_box in o_saved.a_o_box" :key="o_box.s_id"
                             :x="o_box.n_x * o_saved.n_scl_x" :y="o_box.n_y * o_saved.n_scl_y"
                             :width="o_box.n_scl_x * o_saved.n_scl_x" :height="o_box.n_scl_y * o_saved.n_scl_y"
@@ -188,6 +202,9 @@ let o_component__training = {
             s_name__dataset: '',
             b_dataset_loading: false,
             b_busy: false,
+            b_sam: localStorage.getItem('omm.training.sam') === 'true',
+            n_sam_pending: 0,
+            s_sam_error: '',
             s_error: '',
             s_message: '',
             n_revision: 0,
@@ -392,6 +409,7 @@ let o_component__training = {
         this.f_visibility(o_state.o_panel_visibility.training);
     },
     beforeUnmount: function () {
+        this._o_sam_version = new Map();
         this.f_stop();
         cancelAnimationFrame(this._n_frame);
         document.body.classList.remove('training-mode');
@@ -405,6 +423,59 @@ let o_component__training = {
         }
     },
     methods: {
+        f_sam_setting() {
+            localStorage.setItem('omm.training.sam', String(this.b_sam));
+            this.s_sam_error = '';
+            this._o_sam_version = new Map();
+            if (this.b_sam) for (let o_box of this.a_o_box) this.f_sam_box(o_box);
+        },
+        f_s_sam_path(o_segmentation, n_width = this.n_scl_x, n_height = this.n_scl_y) {
+            return o_segmentation.a_a_n_polygon.map(a =>
+                a.map(([x,y], i) => `${i ? 'L' : 'M'}${x*n_width},${y*n_height}`).join(' ') + ' Z'
+            ).join(' ');
+        },
+        async f_sam_infer(o_capture, a_o_box) {
+            let o_form = new FormData();
+            o_form.append('image', o_capture.o_blob, 'frame.png');
+            o_form.append('boxes', JSON.stringify(a_o_box.map(({ o_segmentation, ...o_box }) => o_box)));
+            let o_result = await f_o_request('sam/infer', { method: 'POST', body: o_form });
+            if (o_result.n_scl_x !== o_capture.n_scl_x || o_result.n_scl_y !== o_capture.n_scl_y ||
+                o_result.a_o_box.length !== a_o_box.length) throw new Error('SAM returned incompatible masks');
+            return a_o_box.map(o_box => {
+                let o_mask = o_result.a_o_box.find(o => o.s_id === o_box.s_id)?.o_segmentation;
+                if (!o_mask) throw new Error('SAM did not return a mask for every box');
+                return { ...o_box, o_segmentation: o_mask };
+            });
+        },
+        async f_sam_box(o_box) {
+            if (!this.b_sam) return;
+            this._o_sam_version ||= new Map();
+            let o_token = {};
+            this._o_sam_version.set(o_box.s_id, o_token);
+            let n_revision = this.n_revision, s_dataset = this.s_dataset;
+            let o_geometry = { ...o_box };
+            delete o_geometry.o_segmentation;
+            this.n_sam_pending++;
+            this.s_sam_error = '';
+            const f_current = () => this.b_sam && n_revision === this.n_revision &&
+                s_dataset === this.s_dataset && this._o_sam_version.get(o_box.s_id) === o_token;
+            try {
+                // Capture raw full-frame pixels immediately when the box is released.
+                let o_capture = await f_o_capture__frame({ b_flat: false, b_flash: false });
+                if (!f_current()) return;
+                if (o_capture.n_scl_x !== this.n_scl_x || o_capture.n_scl_y !== this.n_scl_y) throw new Error('Camera geometry changed during SAM capture');
+                let [o_result] = await this.f_sam_infer(o_capture, [o_geometry]);
+                let o_current = this.a_o_box.find(o => o.s_id === o_box.s_id);
+                if (f_current() && o_current && this.o_edit?.o_original.s_id !== o_box.s_id &&
+                    ['n_x','n_y','n_scl_x','n_scl_y'].every(s => o_current[s] === o_geometry[s])) {
+                    o_current.o_segmentation = o_result.o_segmentation;
+                }
+            } catch (error) {
+                if (f_current() && this.a_o_box.some(o => o.s_id === o_box.s_id)) this.s_sam_error = 'SAM: ' + error.message;
+            } finally {
+                this.n_sam_pending--;
+            }
+        },
         f_toggle_crop() {
             this.f_cancel_drag();
             this.b_crop = !this.b_crop;
@@ -511,6 +582,7 @@ let o_component__training = {
                 });
             }
             this.a_o_prediction = [];
+            if (this.b_sam) for (let o_box of this.a_o_box) this.f_sam_box(o_box);
         },
         f_s_image: function (o) {
             return '/api/training/image?id=' + encodeURIComponent(o.s_id) + '&dataset=' +
@@ -631,6 +703,8 @@ let o_component__training = {
             return null;
         },
         f_invalidate: function (s_message) {
+            this._o_sam_version = new Map();
+            this.s_sam_error = '';
             this.b_crop = false;
             this.o_crop_start = null;
             this.a_o_prediction = [];
@@ -730,22 +804,26 @@ let o_component__training = {
                         ),
                         this.o_crop_bounds,
                     );
+                    delete this.a_o_box[n_idx].o_segmentation;
                 }
             }
         },
         f_up: function (o_event, o_view) {
             if (!this.o_start || this._n_pointer !== o_event.pointerId) return;
             this.f_move(o_event, o_view);
+            let o_finished = this.o_edit ? this.a_o_box.find(o => o.s_id === this.o_edit.o_original.s_id) : null;
             if (!this.o_edit) {
                 let o_label = this.a_o_label.find((o) => o.s_id === this.s_label);
                 if (o_label) {
                     let o_box = f_o_box(this.o_start, this.o_end, o_label);
                     if (o_box.n_scl_x * this.n_scl_x >= 2 && o_box.n_scl_y * this.n_scl_y >= 2) {
                         this.a_o_box.push(o_box);
+                        o_finished = o_box;
                     }
                 }
             }
             this.f_cancel_drag(false);
+            if (o_finished) this.f_sam_box(o_finished);
         },
         f_run: async function (f_work) {
             if (this.b_busy) return;
@@ -924,7 +1002,8 @@ let o_component__training = {
                 this.f_anchor();
                 let n_previous = this.f_position('z'), n_revision = this.n_revision;
                 let o_crop = this.o_crop ? { ...this.o_crop } : null;
-                let a_o_box = this.a_o_box.map((o) => f_o_box_to_crop(o, this.o_crop_bounds)),
+                let b_sam = this.b_sam;
+                let a_o_box = this.a_o_box.map(({ o_segmentation, ...o }) => f_o_box_to_crop(o, this.o_crop_bounds)),
                     s_set = crypto.randomUUID(),
                     o_track = f_o_camera_track();
                 let n_done = 0;
@@ -975,6 +1054,12 @@ let o_component__training = {
                             o_capture.n_scl_y__video !== this.n_scl_y
                         ) throw new Error('Image geometry changed during capture');
                         Object.assign(o_sample, { n_scl_x: o_capture.n_scl_x, n_scl_y: o_capture.n_scl_y });
+                        if (b_sam) {
+                            this.s_message = 'Segmenting captured plane ' + (n_plane + 1) + ' with SAM…';
+                            o_sample.a_o_box = await this.f_sam_infer(o_capture, a_o_box);
+                            this.f_check();
+                            if (n_revision !== this.n_revision || o_track !== f_o_camera_track()) throw new Error('XY or camera changed during SAM segmentation');
+                        }
                         f_validate_sample(o_sample);
                         let o_form = new FormData();
                         o_form.append('metadata', JSON.stringify(o_sample));

@@ -1437,6 +1437,13 @@ input[type="range"]::-moz-range-thumb {
   font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--text);
 }
 .filter-check input { accent-color: var(--accent-1); cursor: pointer; }
+.exposure-histogram { margin: 10px 0; }
+.exposure-histogram svg { display: block; width: 100%; height: 100px; background: #09090c; border: 1px solid var(--border); }
+.exposure-histogram-axis { display: flex; justify-content: space-between; color: var(--dim); font-size: 0.6rem; margin-top: 4px; }
+.exposure-low { color: #5b8def; }
+.exposure-high { color: #ff4757; }
+.exposure-thresholds { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; font-size: 0.75rem; }
+.exposure-thresholds input { width: 4.5em; background: var(--bg); color: var(--text); border: 1px solid var(--border); padding: 4px; }
 /* toolbar button marks a running filter even when the panel is closed */
 .toolbar-toggle.running { border-color: var(--accent-1); color: var(--accent-1); }
 

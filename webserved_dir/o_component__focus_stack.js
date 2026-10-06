@@ -2,6 +2,7 @@ import { f_n_motor__axis, o_state, f_send_esp_move_step, f_send_esp_stop, f_send
 import { f_o_wsmsg } from './constructors.module.js';
 import { f_n_score__video, f_o_focus__fast } from './focus_search.module.js';
 import { f_o_capture__frame, f_save_image } from './o_capture.module.js';
+import { f_a_stack_plane } from './focus_stack_plan.module.js';
 
 // a stack moves gently and settles between depths; capture the frame first,
 // then advance so every depth is approached from the same side
@@ -22,18 +23,34 @@ let o_component__focus_stack = {
 
                 <!-- ── Config / run (idle) ─────────────────────── -->
                 <template v-if="s_status === 'idle'">
-                    <div class="focus-note">
+                    <div class="focus-field">
+                        <label for="focus-stack-mode">Mode</label>
+                        <select id="focus-stack-mode" v-model="o_config.s_mode" @change="f_save_config">
+                            <option value="easy">Easy</option><option value="expert">Expert</option>
+                        </select>
+                    </div>
+                    <div class="focus-note" v-if="o_config.s_mode === 'easy'">
+                        Adjust focus with the Z controls and save each end of the range.
+                        Choose the number of images, then start to combine them into one all-in-focus image.
+                    </div>
+                    <div class="focus-note" v-else>
                         finds focus first, then sweeps the focus motor around it and
                         saves one frame per depth before blending them into a single
                         all-in-focus image. the stack is centered on the found focus.
                     </div>
 
                     <div class="focus-config">
+                        <template v-if="o_config.s_mode === 'easy'">
+                            <div class="focus-field" v-for="n_point in [1,2]" :key="n_point">
+                                <button class="btn-small" @click="f_set_focus(n_point)" :disabled="!b_hardware_ready">Set focus position {{ n_point }} here</button>
+                                <span>{{ a_n_focus[n_point-1] === null ? 'Not set' : 'Z ' + a_n_focus[n_point-1] + ' steps' }}</span>
+                            </div>
+                        </template>
                         <div class="focus-field">
                             <label>Focus motor</label>
                             <span>{{ s_motor__focus_label }}</span>
                         </div>
-                        <div class="focus-field">
+                        <div class="focus-field" v-if="o_config.s_mode === 'expert'">
                             <label>Step size</label>
                             <input type="number" min="1" v-model.number="o_config.n_step" @change="f_save_config">
                         </div>
@@ -41,27 +58,27 @@ let o_component__focus_stack = {
                             <label>Images</label>
                             <input type="number" min="2" max="200" v-model.number="o_config.n_its" @change="f_save_config">
                         </div>
-                        <div class="focus-field">
+                        <div class="focus-field" v-if="o_config.s_mode === 'expert'">
                             <label>Settle (ms)</label>
                             <input type="number" min="0" step="50" v-model.number="o_config.n_ms__settle" @change="f_save_config">
                         </div>
-                        <div class="focus-field">
+                        <div class="focus-field" v-if="o_config.s_mode === 'expert'">
                             <label>Max. output (px, 0 = full)</label>
                             <input type="number" min="0" step="500" v-model.number="o_config.n_dim__max" @change="f_save_config">
                         </div>
-                        <div class="focus-field">
+                        <div class="focus-field" v-if="o_config.s_mode === 'expert'">
                             <label>Align frames</label>
                             <input type="checkbox" v-model="o_config.b_align" @change="f_save_config">
                         </div>
-                        <div class="focus-field">
+                        <div class="focus-field" v-if="o_config.s_mode === 'expert'">
                             <label>Autofocus first</label>
                             <input type="checkbox" v-model="o_config.b_autofocus" @change="f_save_config">
                         </div>
-                        <div class="focus-field" v-if="o_config.b_autofocus">
+                        <div class="focus-field" v-if="o_config.s_mode === 'expert' && o_config.b_autofocus">
                             <label>Focus search step</label>
                             <input type="number" min="1" v-model.number="o_config.n_step__focus" @change="f_save_config">
                         </div>
-                        <div class="focus-field" v-if="o_config.b_autofocus">
+                        <div class="focus-field" v-if="o_config.s_mode === 'expert' && o_config.b_autofocus">
                             <label>Focus max travel</label>
                             <input type="number" min="10" step="10" v-model.number="o_config.n_step__focus_max" @change="f_save_config">
                         </div>
@@ -71,12 +88,13 @@ let o_component__focus_stack = {
                         class="btn-scan-start"
                         @click="f_run"
                         :disabled="!b_ready"
-                    >Start Stack</button>
+                    >Start</button>
 
                     <div class="focus-note" v-if="!o_state.b_connected__esp">connect the ESP32 first</div>
                     <div class="focus-note" v-else-if="!o_state.b_streaming__webcam">start a camera first</div>
                     <div class="focus-note" v-else>
-                        {{ o_config.n_its }} images over {{ (o_config.n_its - 1) * o_config.n_step }} steps.
+                        <template v-if="s_validation">{{ s_validation }}</template>
+                        <template v-else>{{ o_config.n_its }} images over {{ o_config.s_mode === 'easy' ? Math.abs(a_n_focus[1]-a_n_focus[0]) : (o_config.n_its - 1) * o_config.n_step }} steps.</template>
                         switch the camera to manual exposure in the Cam panel so the
                         brightness does not drift across the stack.
                     </div>
@@ -148,8 +166,9 @@ let o_component__focus_stack = {
             n_ts_ms__start: 0,
             n_ts_ms__stack_line: 0,
             f_unregister__stack_progress: null,
+            a_n_focus: [null, null],
             o_config: {
-
+                s_mode: 'easy',
                 n_step: 40,
                 n_its: 20,
                 n_ms__settle: 350,
@@ -168,7 +187,30 @@ let o_component__focus_stack = {
             return n_motor === null ? 'No focus motor — configure Z in Setup → motor cards.' : 'Motor ' + (n_motor + 1) + ' (Z axis, set in Setup)';
         },
         b_ready: function() {
-            return f_n_motor__axis('z') !== null && o_state.b_connected__esp && o_state.b_streaming__webcam && !o_state.b_scanning;
+            if (f_n_motor__axis('z') === null || !o_state.b_connected__esp || !o_state.b_streaming__webcam || o_state.b_scanning || o_state.b_training_busy) return false;
+            return this.b_hardware_ready && !this.s_validation;
+        },
+        b_hardware_ready: function() {
+            let motor = f_n_motor__axis('z');
+            return motor !== null && o_state.b_connected__esp && o_state.b_streaming__webcam &&
+                !o_state.b_scanning && !o_state.b_training_busy && !o_state.a_o_motor[motor]?.b_running && !this.b_running;
+        },
+        s_focus_reference: function() {
+            return String(f_n_motor__axis('z')) + ':' + o_state.b_connected__esp;
+        },
+        s_validation: function() {
+            if (this.o_config.s_mode === 'easy') {
+                try { f_a_stack_plane(this.a_n_focus[0], this.a_n_focus[1], this.o_config.n_its); }
+                catch (error) { return error.message; }
+            } else {
+                if (!Number.isInteger(this.o_config.n_its) || this.o_config.n_its < 2 || this.o_config.n_its > 200) return 'Choose 2–200 images';
+                if (!Number.isSafeInteger(this.o_config.n_step) || this.o_config.n_step < 1) return 'Choose a positive whole-number step size';
+                if (!Number.isFinite(this.o_config.n_ms__settle) || this.o_config.n_ms__settle < 0) return 'Choose a nonnegative settle time';
+                if (!Number.isSafeInteger(this.o_config.n_dim__max) || this.o_config.n_dim__max < 0) return 'Choose a nonnegative output size';
+                if (this.o_config.b_autofocus && (!Number.isSafeInteger(this.o_config.n_step__focus) || this.o_config.n_step__focus < 1 ||
+                    !Number.isSafeInteger(this.o_config.n_step__focus_max) || this.o_config.n_step__focus_max < this.o_config.n_step__focus)) return 'Choose valid autofocus step and travel values';
+            }
+            return '';
         },
         s_path__preview__shown: function() {
             return this.s_path__preview || this.s_path__stacked_image;
@@ -180,7 +222,28 @@ let o_component__focus_stack = {
             return Math.max(0, Math.min(100, (o_self.n_cnt__captured / o_self.o_config.n_its) * 100));
         },
     },
+    watch: {
+        s_focus_reference: {
+            flush: 'sync',
+            handler: function() {
+                this.a_n_focus = [null, null];
+                if (this.s_status === 'capturing') this.f_stop();
+            },
+        },
+        'o_state.n_cnt__stop_all': {
+            flush: 'sync',
+            handler: function() {
+                if (this.s_status === 'capturing') this.f_stop();
+            },
+        },
+    },
     methods: {
+        f_set_focus: function(n_point) {
+            if (!this.b_hardware_ready) return;
+            let n_position = o_state.a_o_motor[f_n_motor__axis('z')]?.n_position;
+            if (!Number.isSafeInteger(n_position)) return;
+            this.a_n_focus[n_point - 1] = n_position;
+        },
         f_close: function() {
             if(this.b_running) return;
             o_state.o_panel_visibility.focus_stack = false;
@@ -198,6 +261,7 @@ let o_component__focus_stack = {
             try {
                 Object.assign(o_self.o_config, JSON.parse(o_setting.s_value));
                 delete o_self.o_config.s_motor;
+                if (!['easy', 'expert'].includes(o_self.o_config.s_mode)) o_self.o_config.s_mode = 'easy';
             } catch(e) { /* ignore parse errors */ }
         },
 
@@ -208,17 +272,33 @@ let o_component__focus_stack = {
         },
         f_move: async function(n_step) {
             let o_self = this;
+            o_self.f_check_motion();
+            let n_motor = o_self._n_motor__run ?? f_n_motor__axis('z');
+            if (!Number.isSafeInteger(n_step)) throw new Error('Invalid focus movement');
             if(n_step === 0) return;
-            let n_motor = f_n_motor__axis('z');
-            let o_promise__move = f_send_esp_move_step(n_motor, n_step, N_RPM__STACK);
-            let o_promise__timeout = new Promise(function(resolve){
-                setTimeout(function(){ resolve('timeout'); }, N_MS__MOVE_TIMEOUT);
-            });
-            let v_result = await Promise.race([o_promise__move, o_promise__timeout]);
-            if(v_result === 'timeout'){
-                console.warn('focus stack move timeout on motor', n_motor);
-                f_send_esp_stop(n_motor);
+            let n_target = o_state.a_o_motor[n_motor].n_position + n_step;
+            let timer;
+            try {
+                let result = await Promise.race([
+                    f_send_esp_move_step(n_motor, n_step, N_RPM__STACK),
+                    new Promise((_, reject) => { timer = setTimeout(() => {
+                        f_send_esp_stop(n_motor);
+                        reject(new Error('Focus motor movement timed out'));
+                    }, N_MS__MOVE_TIMEOUT); }),
+                ]);
+                o_self.f_check_motion();
+                if (!Number.isSafeInteger(result) || result !== n_target) throw new Error('Focus motor stopped before reaching its target');
+                o_state.a_o_motor[n_motor].n_position = result;
+            } finally {
+                clearTimeout(timer);
             }
+        },
+        f_check_motion: function() {
+            if (this.b_stop_requested) throw new Error('stopped');
+            if (!o_state.b_connected__esp) throw new Error('Controller disconnected');
+            let motor = f_n_motor__axis('z');
+            if (motor === null || (this._n_motor__run !== undefined && this._n_motor__run !== motor)) throw new Error('Focus motor assignment changed');
+            if (!Number.isSafeInteger(o_state.a_o_motor[motor]?.n_position)) throw new Error('Focus motor position unavailable');
         },
 
         // ── Autofocus before the stack ───────────────────────────
@@ -276,6 +356,11 @@ let o_component__focus_stack = {
         f_run: async function() {
             let o_self = this;
             if(o_self.b_running || !o_self.b_ready) return;
+            const b_easy = o_self.o_config.s_mode === 'easy';
+            const o_config = { ...o_self.o_config,
+                ...(b_easy ? { n_ms__settle: 350, b_align: true, n_dim__max: 0, b_autofocus: false } : {}) };
+            let a_n_plane = b_easy ? f_a_stack_plane(o_self.a_n_focus[0], o_self.a_n_focus[1], o_config.n_its) : null;
+            o_self._n_motor__run = f_n_motor__axis('z');
 
             o_self.b_running = true;
             o_self.b_stop_requested = false;
@@ -300,12 +385,12 @@ let o_component__focus_stack = {
                 }
                 o_self.s_path_folder = o_resp.v_result.s_path_folder;
 
-                let n_step = Math.max(1, Math.round(o_self.o_config.n_step));
-                let n_its = Math.max(2, Math.round(o_self.o_config.n_its));
+                let n_step = o_config.n_step;
+                let n_its = o_config.n_its;
 
                 // find focus first, then center the depth sweep on it so the
                 // stack covers both sides of the in-focus plane
-                if(o_self.o_config.b_autofocus){
+                if(o_config.b_autofocus){
                     o_self.s_status__detail = 'autofocusing...';
                     await o_self.f_o_focus();
                     if(o_self.b_stop_requested) throw new Error('stopped');
@@ -316,6 +401,11 @@ let o_component__focus_stack = {
                     }
                     if(o_self.b_stop_requested) throw new Error('stopped');
                 }
+                o_self.f_check_motion();
+                if (!a_n_plane) {
+                    let start = o_state.a_o_motor[o_self._n_motor__run].n_position;
+                    a_n_plane = Array.from({ length: n_its }, (_, i) => start + i * n_step);
+                }
 
                 for(let n_it = 0; n_it < n_its; n_it++){
                     if(o_self.b_stop_requested) break;
@@ -325,19 +415,18 @@ let o_component__focus_stack = {
                     }
 
                     o_self.n_idx__current = n_it;
+                    o_self.s_status__detail = 'moving to depth ' + (n_it + 1) + ' / ' + n_its;
+                    await o_self.f_move(a_n_plane[n_it] - o_state.a_o_motor[o_self._n_motor__run].n_position);
                     o_self.s_status__detail = 'capturing ' + (n_it + 1) + ' / ' + n_its;
-                    await o_self.f_delay(o_self.o_config.n_ms__settle);
+                    await o_self.f_delay(o_config.n_ms__settle);
+                    o_self.f_check_motion();
 
                     let s_filename = 'z_' + String(n_it + 1).padStart(4, '0') + '.png';
                     let o_cap = await f_o_capture__frame();
+                    o_self.f_check_motion();
                     await f_save_image(o_cap.o_blob, o_self.s_path_folder, s_filename);
                     o_self.n_cnt__captured++;
 
-                    // advance to the next depth (skip after the last image)
-                    if(n_it < n_its - 1){
-                        o_self.s_status__detail = 'moving to depth ' + (n_it + 2) + ' / ' + n_its;
-                        await o_self.f_move(n_step);
-                    }
                 }
 
                 o_self.n_idx__current = -1;
@@ -353,8 +442,8 @@ let o_component__focus_stack = {
                 let o_promise__response = f_send_wsmsg_with_response(
                     f_o_wsmsg('focus_stack_run', {
                         s_path_folder: o_self.s_path_folder,
-                        n_dim__max: o_self.o_config.n_dim__max,
-                        b_no_align: !o_self.o_config.b_align,
+                        n_dim__max: o_config.n_dim__max,
+                        b_no_align: !o_config.b_align,
                     })
                 );
                 let o_promise__watchdog = new Promise(function(resolve){
@@ -389,11 +478,12 @@ let o_component__focus_stack = {
             o_state.b_scanning = false;
             o_self.b_running = false;
             o_self.s_status = 'complete';
+            delete o_self._n_motor__run;
         },
         f_stop: function() {
             let o_self = this;
             o_self.b_stop_requested = true;
-            f_send_esp_stop(f_n_motor__axis('z'));
+            f_send_esp_stop(o_self._n_motor__run ?? f_n_motor__axis('z'));
         },
         f_on_stack_progress: function(o_msg) {
             let o_self = this;

@@ -526,7 +526,7 @@ def _register_pair(task) -> Edge:
             dx0, dy0 = int(round(prior[0])), int(round(prior[1]))
             margin = int(radius)
 
-        # Refine on overlap crops at registration resolution (256px for scans).
+        # Refine on overlap crops at the selected registration resolution.
         n_ms__t1 = time.perf_counter()
         (ax0, ay0, ax1, ay1), (bx0, by0, bx1, by1) = overlap_rects((H, W), dx0, dy0)
         if (ax1 - ax0) * (ay1 - ay0) <= 0:
@@ -2061,7 +2061,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     g = p.add_argument_group("registration")
     g.add_argument("--registration-max-width", type=int, default=0,
-                   help="align only reduced copies in dowscaled/ (scan uses 256); "
+                   help="align only reduced copies in dowscaled/ (scan defaults to 512); "
                         "0 keeps full-resolution refinement")
     g.add_argument("--coarse-scale", type=float, default=0.0,
                    help="downscale for the global search (0 = auto)")

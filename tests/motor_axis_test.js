@@ -81,10 +81,12 @@ Deno.test('all focus tools use the shared Z assignment and ignore legacy selecto
     for (const name of ['focus', 'focus_step', 'focus_stack', 'flat_field', 'scan']) {
         let motor = 0;
         const moves = [];
+        const state = { b_connected__esp: true, b_streaming__webcam: true, b_scanning: false,
+            a_o_motor: [{ n_position: 0 }, { n_position: 0 }] };
         const c = await component(name, {
-            o_state: { b_connected__esp: true, b_streaming__webcam: true, b_scanning: false },
+            o_state: state,
             f_n_motor__axis: () => motor,
-            f_send_esp_move_step: async (n, steps) => moves.push([n, steps]),
+            f_send_esp_move_step: async (n, steps) => { moves.push([n, steps]); return state.a_o_motor[n].n_position + steps; },
             f_o_focus__fast: options => options.f_move(12),
             setTimeout: () => 0,
         });
@@ -92,6 +94,7 @@ Deno.test('all focus tools use the shared Z assignment and ignore legacy selecto
             o_config: { s_motor: '2' }, s_motor__focus: '2',
             f_delay: async () => {},
             f_move_motor_n_step: async (n, steps) => moves.push([n, steps]),
+            f_check_motion: c.methods.f_check_motion,
         };
         for (motor of [0, 1]) {
             if (name === 'scan') await c.methods.f_o_focus.call(ctx);

@@ -1,5 +1,6 @@
 import { o_state, f_save_setting__debounced } from './index.js';
 import { f_b_flat__loaded, f_o_flat } from './o_flatfield.module.js';
+import { f_o_exposure_limits, f_o_exposure_histogram } from './exposure.module.js';
 
 // ─── Shader source ──────────────────────────────────────────────────
 
@@ -35,6 +36,12 @@ let S_SHADER__FRAGMENT = `
     uniform sampler2D u_flat;      // flat-field (dust) image, 0..1
     uniform vec3 u_flat_mean;      // per-channel mean of the flat, 0..1
     uniform float u_flat_enabled;  // 0 off, 1 divide by the flat
+    uniform float u_exposure_high;
+    uniform float u_exposure_low;
+    uniform float u_mark_high;
+    uniform float u_mark_low;
+    uniform float u_checkerboard;
+    uniform float u_pattern_size;
 
     float f_n_luma(vec3 v3_color){
         return dot(v3_color, vec3(0.2126, 0.7152, 0.0722));
@@ -95,6 +102,7 @@ let S_SHADER__FRAGMENT = `
 
     void main(){
         vec3 v3_color = f_v3_sample(vec2(0.0, 0.0));
+        vec3 v3_raw = v3_color;
 
         // flat-field / dust correction: raw * mean / flat. both the flat and
         // its mean are in 0..1, so the result keeps the same brightness scale.
@@ -138,6 +146,17 @@ let S_SHADER__FRAGMENT = `
             v3_color = f_v3_colormap(f_n_luma(v3_color));
         }
 
+        float n_raw_max = max(v3_raw.r, max(v3_raw.g, v3_raw.b));
+        float n_high = u_mark_high * step(u_exposure_high, n_raw_max);
+        float n_low = u_mark_low * step(n_raw_max, u_exposure_low);
+        if(n_high > 0.5 || n_low > 0.5){
+            vec2 v2_grid = gl_FragCoord.xy / u_pattern_size;
+            float n_pattern = u_checkerboard > 0.5
+                ? mod(floor(v2_grid.x) + floor(v2_grid.y), 2.0)
+                : step(0.5, fract((v2_grid.x + v2_grid.y) * 0.5));
+            vec3 v3_mark = n_high > 0.5 ? vec3(1.0, 0.15, 0.2) : vec3(0.15, 0.45, 1.0);
+            v3_color = mix(vec3(0.0), v3_mark, n_pattern);
+        }
         gl_FragColor = vec4(clamp(v3_color, 0.0, 1.0), 1.0);
     }
 `;
@@ -185,6 +204,12 @@ let f_o_filter__default = function(){
         b_grayscale: false,
         b_invert: false,
         s_colormap: 'none',
+        b_histogram: true,
+        b_exposure__high: false,
+        b_exposure__low: false,
+        n_exposure__high: 250,
+        n_exposure__low: 5,
+        s_exposure__pattern: 'zebra',
     };
 };
 
@@ -208,6 +233,44 @@ let o_component__filter = {
                 <div class="filter-note" v-if="s_error">{{ s_error }}</div>
                 <div class="filter-note" v-else-if="!o_state.b_streaming__webcam">
                     start a camera in the top bar to see the filtered image
+                </div>
+
+                <div class="filter-group">
+                    <div class="filter-label">Exposure · raw camera image</div>
+                    <label class="filter-check">
+                        <input type="checkbox" v-model="o_filter.b_histogram" @change="f_on_change">
+                        <span>Show live histogram</span>
+                    </label>
+                    <div v-if="o_filter.b_histogram" class="exposure-histogram">
+                        <svg viewBox="0 0 256 100" role="img" aria-label="Live camera brightness and RGB histogram">
+                            <path v-for="(s_path, n_idx) in a_s_histogram_path" :key="n_idx" :d="s_path"
+                                :stroke="['#ddd','#ff4757','#00d4aa','#5b8def'][n_idx]"
+                                :fill="n_idx===0?'rgba(255,255,255,0.12)':'none'" stroke-width="1" />
+                        </svg>
+                        <div class="exposure-histogram-axis"><span>0 · black</span><span>Brightness / RGB</span><span>255 · white</span></div>
+                        <div class="filter-note">White: brightness. Red, green, blue: camera color channels.</div>
+                        <div class="filter-note" v-if="o_histogram">Sampled pixels: <span class="exposure-low">dark {{ o_histogram.n_pct_low.toFixed(1) }}%</span> · <span class="exposure-high">bright {{ o_histogram.n_pct_high.toFixed(1) }}%</span></div>
+                        <div v-else class="filter-note">Waiting for camera pixels…</div>
+                    </div>
+                    <label class="filter-check">
+                        <input type="checkbox" v-model="o_filter.b_exposure__high" @change="f_on_change">
+                        <span>Mark overexposed pixels (red)</span>
+                    </label>
+                    <label class="filter-check">
+                        <input type="checkbox" v-model="o_filter.b_exposure__low" @change="f_on_change">
+                        <span>Mark underexposed pixels (blue)</span>
+                    </label>
+                    <div class="filter-row">
+                        <label for="exposure-pattern">Pattern</label>
+                        <select id="exposure-pattern" v-model="o_filter.s_exposure__pattern" @change="f_on_change">
+                            <option value="zebra">Zebra stripes</option><option value="checkerboard">Checkerboard</option>
+                        </select>
+                    </div>
+                    <div class="exposure-thresholds">
+                        <label>Dark ≤ <input aria-label="Dark pixel threshold" type="number" min="0" :max="o_filter.n_exposure__high-1" v-model.number="o_filter.n_exposure__low" @change="f_on_change"></label>
+                        <label>Bright ≥ <input aria-label="Bright pixel threshold" type="number" :min="o_filter.n_exposure__low+1" max="255" v-model.number="o_filter.n_exposure__high" @change="f_on_change"></label>
+                    </div>
+                    <div class="filter-note">Bright: any RGB channel meets the threshold. Dark: all channels meet the threshold. These are pixel warnings; dark or bright areas can be intentional. Works with Processing off.</div>
                 </div>
 
                 <div class="filter-group">
@@ -314,6 +377,7 @@ let o_component__filter = {
             n_scl_x__frame: 0,
             n_scl_y__frame: 0,
             n_id__frame: 0,
+            o_histogram: null,
         };
     },
     computed: {
@@ -321,9 +385,19 @@ let o_component__filter = {
             return o_state.o_filter;
         },
         b_visible__canvas: function() {
-            return (o_state.o_filter.b_enabled || o_state.o_flat_field.b_active)
+            return (o_state.o_filter.b_enabled || o_state.o_flat_field.b_active ||
+                o_state.o_filter.b_exposure__high || o_state.o_filter.b_exposure__low)
                 && o_state.b_streaming__webcam
                 && !this.s_error;
+        },
+        a_s_histogram_path: function() {
+            if (!this.o_histogram) return [];
+            let a_a_bin = this.o_histogram.a_a_n_bin;
+            let n_peak = Math.max(1, ...a_a_bin.flat());
+            return a_a_bin.map((a_bin, i) => {
+                let s_line = a_bin.map((n, x) => `${x},${99-98*n/n_peak}`).join(' L ');
+                return (i === 0 ? 'M 0,100 L ' : 'M ') + s_line + (i === 0 ? ' L 255,100 Z' : '');
+            });
         },
     },
     methods: {
@@ -332,7 +406,10 @@ let o_component__filter = {
             f_save_setting__debounced('o_panel_visibility', o_state.o_panel_visibility);
         },
         f_on_change: function() {
+            let { n_low, n_high } = f_o_exposure_limits(o_state.o_filter);
+            Object.assign(o_state.o_filter, { n_exposure__low: n_low, n_exposure__high: n_high });
             f_save_setting__debounced('o_filter', o_state.o_filter);
+            this._n_ts_histogram = 0;
         },
         f_toggle: function() {
             o_state.o_filter.b_enabled = !o_state.o_filter.b_enabled;
@@ -344,6 +421,22 @@ let o_component__filter = {
             o_filter__default.b_enabled = o_state.o_filter.b_enabled;
             Object.assign(o_state.o_filter, o_filter__default);
             o_self.f_on_change();
+        },
+        f_histogram: function(n_now) {
+            if (!o_state.o_filter.b_histogram || !o_state.o_panel_visibility.filter ||
+                !o_state.b_streaming__webcam) { this.o_histogram = null; return; }
+            if (n_now - (this._n_ts_histogram || 0) < 250) return;
+            this._n_ts_histogram = n_now;
+            let video = this.f_el_video();
+            if (!video?.videoWidth || video.readyState < 2) { this.o_histogram = null; return; }
+            this._el_histogram ||= document.createElement('canvas');
+            let canvas = this._el_histogram;
+            canvas.width = Math.min(512, video.videoWidth);
+            canvas.height = Math.max(1, Math.round(video.videoHeight * canvas.width / video.videoWidth));
+            let ctx = canvas.getContext('2d', { willReadFrequently: true });
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            this.o_histogram = f_o_exposure_histogram(ctx.getImageData(0, 0, canvas.width, canvas.height).data, o_state.o_filter);
         },
 
         // ─── WebGL ──────────────────────────────────────────────────
@@ -439,6 +532,12 @@ let o_component__filter = {
                     u_flat:       o_gl.getUniformLocation(o_program, 'u_flat'),
                     u_flat_mean:  o_gl.getUniformLocation(o_program, 'u_flat_mean'),
                     u_flat_enabled: o_gl.getUniformLocation(o_program, 'u_flat_enabled'),
+                    u_exposure_high: o_gl.getUniformLocation(o_program, 'u_exposure_high'),
+                    u_exposure_low: o_gl.getUniformLocation(o_program, 'u_exposure_low'),
+                    u_mark_high: o_gl.getUniformLocation(o_program, 'u_mark_high'),
+                    u_mark_low: o_gl.getUniformLocation(o_program, 'u_mark_low'),
+                    u_checkerboard: o_gl.getUniformLocation(o_program, 'u_checkerboard'),
+                    u_pattern_size: o_gl.getUniformLocation(o_program, 'u_pattern_size'),
                 };
                 o_gl.uniform1i(o_self._o_uniform.u_texture, 0);
                 o_gl.uniform1i(o_self._o_uniform.u_flat, 1);
@@ -473,7 +572,20 @@ let o_component__filter = {
             o_gl.texImage2D(o_gl.TEXTURE_2D, 0, o_gl.RGB, o_gl.RGB, o_gl.UNSIGNED_BYTE, el_video);
 
             let o_filter = o_state.o_filter;
+            // Exposure warnings work independently of display processing.
+            if (!o_filter.b_enabled) o_filter = { ...o_filter, s_kernel: 'none', n_brightness: 0,
+                n_contrast: 1, n_gamma: 1, n_saturation: 1, b_binary__edge: false,
+                b_grayscale: false, b_invert: false, s_colormap: 'none' };
             let o_uniform = o_self._o_uniform;
+            let { n_low, n_high } = f_o_exposure_limits(o_filter);
+            o_gl.uniform1f(o_uniform.u_exposure_high, n_high / 255);
+            o_gl.uniform1f(o_uniform.u_exposure_low, n_low / 255);
+            o_gl.uniform1f(o_uniform.u_mark_high, o_filter.b_exposure__high ? 1 : 0);
+            o_gl.uniform1f(o_uniform.u_mark_low, o_filter.b_exposure__low ? 1 : 0);
+            o_gl.uniform1f(o_uniform.u_checkerboard, o_filter.s_exposure__pattern === 'checkerboard' ? 1 : 0);
+            let rect = el_canvas.getBoundingClientRect();
+            let scale = Math.min(rect.width / el_canvas.width, rect.height / el_canvas.height) || 1;
+            o_gl.uniform1f(o_uniform.u_pattern_size, 8 / scale);
             o_gl.uniform2f(o_uniform.u_texel, 1 / el_canvas.width, 1 / el_canvas.height);
             o_gl.uniform1i(o_uniform.u_kernel, f_n_kernel(o_filter.s_kernel));
             o_gl.uniform1f(o_uniform.u_edge_gain, o_filter.n_edge_gain);
@@ -517,6 +629,7 @@ let o_component__filter = {
         f_tick: function() {
             let o_self = this;
             o_self.n_id__frame = requestAnimationFrame(function(){ o_self.f_tick(); });
+            o_self.f_histogram(performance.now());
             if(!o_self.b_visible__canvas) return;
             o_self.f_render();
         },

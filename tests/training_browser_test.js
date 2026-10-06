@@ -66,6 +66,19 @@ Deno.test('training UI: live annotation, focus sweep, grid, review, cancellation
             }
             return Response.json(o_yolo);
         }
+        if (s_path === '/api/training/sam/infer') {
+            const form = await o_request.formData();
+            const image = new Uint8Array(await form.get('image').arrayBuffer());
+            const header = new DataView(image.buffer);
+            const width = header.getUint32(16), height = header.getUint32(20);
+            const boxes = JSON.parse(form.get('boxes'));
+            return Response.json({ n_scl_x: width, n_scl_y: height, a_o_box: boxes.map(b => ({
+                s_id: b.s_id, o_segmentation: { s_model: 'sam_b', n_scl_x: width, n_scl_y: height,
+                    s_mask_png: btoa(String.fromCharCode(...image)),
+                    a_a_n_polygon: [[[b.n_x,b.n_y],[b.n_x+b.n_scl_x,b.n_y],[b.n_x+b.n_scl_x,b.n_y+b.n_scl_y]]],
+                },
+            })) });
+        }
         if (s_path.startsWith('/api/training/')) return f_o_training_response(o_request, o_catalog);
         let s_text;
         if (s_path === '/') {
@@ -107,6 +120,12 @@ Deno.test('training UI: live annotation, focus sweep, grid, review, cancellation
                 };
                 f_draw(); f_assert(o_vm.a_o_box.length===1, 'draw directly on live image');
                 f_assert(Math.abs(o_vm.a_o_box[0].n_x-.1)<.001,'normalized live x');
+                f_assert(!o_vm.a_o_box[0].o_segmentation, 'SAM defaults off');
+                document.querySelector('.training-settings input').click();
+                while(o_vm.n_sam_pending) await f_pause();
+                await nextTick();
+                f_assert(o_vm.a_o_box[0].o_segmentation && document.querySelector('.training-sam-mask'), 'SAM setting segments existing boxes and shows mask');
+                f_assert(localStorage.getItem('omm.training.sam')==='true', 'SAM setting persists');
                 await nextTick();
                 let o_handle=document.querySelector('.training-resize-handle').getBoundingClientRect();
                 f_assert(Math.abs(o_handle.width-10)<.01 && Math.abs(o_handle.height-10)<.01,'10x10 CSS pixel resize handle');
@@ -222,6 +241,7 @@ Deno.test('training UI: live annotation, focus sweep, grid, review, cancellation
                 await o_vm.f_capture();await nextTick();
                 f_assert(!o_vm.s_error,o_vm.s_error);
                 f_assert(o_vm.a_o_sample.length===3,'capture saves all focus planes');
+                f_assert(o_vm.a_o_sample.every(s=>s.a_o_box.every(b=>b.o_segmentation?.n_scl_x===s.n_scl_x)), 'every focus plane stores its own SAM masks');
                 f_assert(o_state.a_o_motor[2].n_position===12,'return to previous focus');
                 f_assert(o_vm.a_o_box.length===1,'capture preserves live boxes');
                 f_assert(o_vm.a_o_sample.every(o=>o.a_o_box.length===1),'annotations shared across planes');
@@ -290,6 +310,7 @@ Deno.test('training UI: live annotation, focus sweep, grid, review, cancellation
                 f_assert(o_vm.a_o_sample.length===1 && o_vm.a_o_sample[0].s_dataset===s_second_dataset,'capture belongs to selected dataset');
                 let o_cropped=o_vm.a_o_sample[0];
                 f_assert(o_cropped.n_scl_x===128 && o_cropped.n_scl_y===100 && o_cropped.o_crop.n_x===64 && o_cropped.n_scl_x__source===320,'capture stores crop dimensions and source geometry');
+                f_assert(o_cropped.a_o_box[0].o_segmentation.n_scl_x===128 && o_cropped.a_o_box[0].o_segmentation.n_scl_y===100, 'SAM masks match captured crop');
                 f_assert(Math.abs(o_cropped.a_o_box[0].n_x)<.001 && Math.abs(o_cropped.a_o_box[0].n_y)<.001 && Math.abs(o_cropped.a_o_box[0].n_scl_x-.75)<.001,'saved boxes normalized to crop');
                 let o_bitmap=await createImageBitmap(await (await fetch(o_vm.f_s_image(o_cropped))).blob());
                 f_assert(o_bitmap.width===128 && o_bitmap.height===100,'actual PNG is cropped');

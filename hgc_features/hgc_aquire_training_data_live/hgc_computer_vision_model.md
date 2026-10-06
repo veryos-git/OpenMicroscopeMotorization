@@ -17,10 +17,13 @@ there may be other ways and approaches but this will describe the implementation
 - set number of focus planes
 - set start focus
 - set end focus
+- press down 'c' to go to window crop mode:  select a window crop / this step is optional , if no crop is used, the full image is considered as the window
 - press down 'ctrl' to enter bounding box drawing mode: draw bounding boxes on the live image (can use 1,2,3,4,5... the numbers on the keyboard to quickly switch label)
     - label bounding boxes will have colors
+    - after a bounding box is drawn: SAM segment anything model is infered automatically to get a segmentation of the selected pixels: SAM is an option that can be turned on in the settings
     - bounding boxes can be resized (bottom left corner has a 10x10px box hovering over this box makes a arrows resize icon as the curser, then drag and drop can be used to resize) and repositioned (holding down shift makes a hand symbol as the cursor , then drag n drop can be used to reposition)
     - while moving the mouse over the live image there will be overlayed dashed helper guides at the x and y axis position of the mouse 
+
 - click capture button
     - the focus will be set to position 1 and capture images on all focus planes between focus pos 1 and focus pos 2
 - training data apprears in list
@@ -38,13 +41,8 @@ an image of bloodcells can contain thousands of bloodcells. the operator does no
 if the operator only annotes half of the blood cells out of lazyness or not having time, the other not annoted bloodcells are counted as background and the yolo fine tuning fails
 
 possible solution:
-- artificially downscale the usb camera image: define a selected cropped area as the 'image' so that annotation becomes easier  
-    - workflow: 
-        - click a 'crop' button, the cursor changes to a crop icon. 
-        - click point a of the crop bounding box
-        - click point b of the crop bounding box
-        - the area outside the crop bounding box is heavily darkened (alpha 0.8)
-        - annotation outside of the crop bounding box is not possible 
+- the operator needs to select an image crop and then needs only to annote all targets in the image crop
+
 
 
 
@@ -54,5 +52,6 @@ problem:
 the computer freezes or crashes during fine tuning of the model 
 solution: 
 create and store logs during model fine tuning so that after a reboot the problem can be analized 
+
 
 

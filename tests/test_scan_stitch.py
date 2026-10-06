@@ -11,6 +11,16 @@ import stitch
 
 
 class ScanStitchTest(unittest.TestCase):
+    def test_switching_scan_alignment_width_regenerates_reduced_copy(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = str(Path(folder) / 'tile_r00_c00.png')
+            cv2.imwrite(path, np.zeros((777, 1101, 3), np.uint8))
+            for width in (512, 1024, 256, 128, 512):
+                paths, scales = stitch.prepare_registration_images([stitch.Tile(0, path)], (777, 1101), width)
+                height = round(777 * width / 1101)
+                self.assertEqual(cv2.imread(paths[0]).shape[:2], (height, width))
+                self.assertEqual(scales, (width / 1101, height / 777))
+
     def test_all_color_variants_match_individual_correction_runs(self):
         rng = np.random.default_rng(73)
         texture = cv2.GaussianBlur(rng.integers(0, 80, (240, 500), dtype=np.uint8), (0, 0), 2)

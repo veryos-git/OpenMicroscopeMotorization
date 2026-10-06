@@ -275,14 +275,20 @@ let o_component__scan = {
 
                     <div class="scan-section">
                         <div class="scan-label">Stitching</div>
-                        <label class="scan-toggle">
-                            <input type="checkbox" v-model="b_stitch__after_scan" @change="f_save_config" />
-                            <span>Stitch automatically when the scan is done</span>
-                        </label>
+                        <div class="scan-field">
+                            <label for="scan-registration-width">Alignment image width (px)</label>
+                            <select id="scan-registration-width" v-model.number="n_registration__max_width" @change="f_save_config">
+                                <option :value="1024">1024</option>
+                                <option :value="512">512</option>
+                                <option :value="256">256</option>
+                                <option :value="128">128</option>
+                            </select>
+                        </div>
                         <div class="scan-hint">
-                            Alignment uses copies at most 256 pixels wide, saved in
+                            Alignment uses copies at most {{ n_registration__max_width }} pixels wide, saved in
                             dowscaled/. The original images are combined using those
                             positions to preserve full-resolution detail.
+                            Larger copies retain more detail for alignment; smaller copies process faster.
                         </div>
 
                         <div class="scan-field">
@@ -436,10 +442,10 @@ let o_component__scan = {
             n_cnt__focus_measure: 0,
 
             // stitch config (stitch.py)
-            b_stitch__after_scan: true,
             b_live_scan: false,
             n_score__min: 0.3,
             n_dim__max: 0,
+            n_registration__max_width: 512,
             b_feather: true,
             b_matcher__loftr: false,
             // return the motors to their start position once the scan finishes
@@ -623,6 +629,7 @@ let o_component__scan = {
                     if (typeof o_config.n_overlap__pct === 'number') o_self.n_overlap__pct = o_config.n_overlap__pct;
                     if (o_config.n_score__min) o_self.n_score__min = o_config.n_score__min;
                     if (typeof o_config.n_dim__max === 'number') o_self.n_dim__max = o_config.n_dim__max;
+                    if ([1024, 512, 256, 128].includes(o_config.n_registration__max_width)) o_self.n_registration__max_width = o_config.n_registration__max_width;
                     o_self.s_mode__focus = ['fixed', 'autofocus', 'corners'].includes(o_config.s_mode__focus)
                         ? o_config.s_mode__focus : o_config.b_focus__before_tile ? 'autofocus' : 'fixed';
                     o_self.n_pct__focus_padding = Number.isFinite(o_config.n_pct__focus_padding)
@@ -630,7 +637,6 @@ let o_component__scan = {
                     if (o_config.n_step__focus) o_self.n_step__focus = o_config.n_step__focus;
                     if (o_config.n_step__focus_max) o_self.n_step__focus_max = o_config.n_step__focus_max;
                     if (typeof o_config.n_ms__focus_settle === 'number') o_self.n_ms__focus_settle = o_config.n_ms__focus_settle;
-                    if (typeof o_config.b_stitch__after_scan === 'boolean') o_self.b_stitch__after_scan = o_config.b_stitch__after_scan;
                     if (typeof o_config.b_feather === 'boolean') o_self.b_feather = o_config.b_feather;
                     if (typeof o_config.b_matcher__loftr === 'boolean') o_self.b_matcher__loftr = o_config.b_matcher__loftr;
                     if (typeof o_config.b_return__after_scan === 'boolean') o_self.b_return__after_scan = o_config.b_return__after_scan;
@@ -651,9 +657,9 @@ let o_component__scan = {
                 n_step__focus: this.n_step__focus,
                 n_step__focus_max: this.n_step__focus_max,
                 n_ms__focus_settle: this.n_ms__focus_settle,
-                b_stitch__after_scan: this.b_stitch__after_scan,
                 n_score__min: this.n_score__min,
                 n_dim__max: this.n_dim__max,
+                n_registration__max_width: this.n_registration__max_width,
                 b_feather: this.b_feather,
                 b_matcher__loftr: this.b_matcher__loftr,
                 b_return__after_scan: this.b_return__after_scan,
@@ -945,6 +951,7 @@ let o_component__scan = {
         f_stitch_options: function() {
             return {
                 n_score__min: this.n_score__min, n_dim__max: this.n_dim__max,
+                n_registration__max_width: this.n_registration__max_width,
                 s_blend: this.b_feather ? 'feather' : 'none',
                 b_matcher__loftr: this.b_matcher__loftr,
             };
@@ -1078,7 +1085,7 @@ let o_component__scan = {
                         let o_bitmap = await createImageBitmap(o_cap.o_blob);
                         try {
                             let el_small = document.createElement('canvas');
-                            el_small.width = Math.min(256, o_bitmap.width);
+                            el_small.width = Math.min(o_self.n_registration__max_width, o_bitmap.width);
                             el_small.height = Math.max(1, Math.round(o_bitmap.height * el_small.width / o_bitmap.width));
                             let o_ctx = el_small.getContext('2d');
                             o_ctx.imageSmoothingQuality = 'high';
@@ -1125,7 +1132,7 @@ let o_component__scan = {
                 try {
                     await Promise.all(pendingTiles);
                     await o_self.f_job_request('scan_finish', { s_path_folder: folder, n_tiles: count });
-                    if (o_self.b_stitch__after_scan && count >= 2) await o_self.f_stitch();
+                    if (count >= 2) await o_self.f_stitch();
                     else await o_self.f_refresh_jobs();
                 } catch (error) {
                     o_self.s_error__jobs = error.message;

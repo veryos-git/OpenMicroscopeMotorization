@@ -10,7 +10,6 @@ export async function runCornerWorkflow(vm) {
     assert(vm.n_pct__focus_padding === 10, 'Focus points must default to 10% padding');
     const delays = [];
     vm.f_delay = async ms => { delays.push(ms); };
-    vm.b_stitch__after_scan = false;
     let autofocusCalls = 0;
     vm.f_o_focus = async () => { autofocusCalls++; throw Error('Autofocus must not run in corner mode'); };
     o_state.o_motor__axis = { x: 2, y: 0, z: 1 };

@@ -49,7 +49,7 @@ for col,x in enumerate((0,160)): cv2.imwrite(sys.argv[1]+'/tile_r00_c0'+str(col)
         await request('scan_finish', { s_path_folder: folder });
         const queued = await request('stitch_run', { s_path_folder: folder, b_no_flatfield: true });
         assert.ok(['running', 'queued'].includes(queued.s_status));
-        const second = await request('scan_create_folder', { b_live_scan: true, o_option: { b_no_flatfield: true } });
+        const second = await request('scan_create_folder', { b_live_scan: true, o_option: { b_no_flatfield: true, n_registration__max_width: 128 } });
         assert.notEqual(second.s_path_folder, folder);
         let job;
         for (let i = 0; i < 100; i++) {
@@ -59,6 +59,7 @@ for col,x in enumerate((0,160)): cv2.imwrite(sys.argv[1]+'/tile_r00_c0'+str(col)
         }
         assert.equal(job.s_status, 'complete', JSON.stringify(job));
         assert.ok(job.a_s_line.some(line => line.includes('done')));
+        assert.ok(job.a_s_line.some(line => line.includes('alignment images: 340 x 240')), 'Default alignment must retain tiles smaller than 512');
         // The real Python live preview must become available before scan_finish.
         for (let col = 0; col < 2; col++) {
             const name = 'tile_r00_c0' + col + '.png';
@@ -74,6 +75,7 @@ for col,x in enumerate((0,160)): cv2.imwrite(sys.argv[1]+'/tile_r00_c0'+str(col)
         }
         assert.equal(liveJob.s_status, 'capturing');
         assert.equal(liveJob.o_live?.n_revision, 2, JSON.stringify(liveJob));
+        assert.equal(liveJob.o_option.n_registration__max_width, 128);
         const previewResponse = await fetch(origin + '/api/file?path=' + encodeURIComponent(liveJob.o_live.s_path_preview));
         assert.equal(previewResponse.status, 200);
         assert.ok((await previewResponse.arrayBuffer()).byteLength > 100);
@@ -85,6 +87,7 @@ for col,x in enumerate((0,160)): cv2.imwrite(sys.argv[1]+'/tile_r00_c0'+str(col)
             await new Promise(r => setTimeout(r, 100));
         }
         assert.equal(liveJob.s_status, 'complete', JSON.stringify(liveJob));
+        assert.ok(liveJob.a_s_line.some(line => line.includes('alignment images: 128 x 90')), 'Final alignment must retain the live scan width');
         assert.ok(liveJob.a_s_line.some(line => line.includes('reused 1/1 pairs')), JSON.stringify(liveJob));
         for (const completed of [job, liveJob]) {
             assert.equal(completed.o_result.s_path_jpeg, completed.s_path_folder + '/stitched.jpg');

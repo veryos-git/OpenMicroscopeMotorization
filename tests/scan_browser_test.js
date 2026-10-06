@@ -55,16 +55,16 @@ async function runScanBrowserTest(cornerFocus = false) {
             import {o_state} from './index.js';
             export const saved=[];
             export async function f_o_capture__frame(){ const c=document.createElement('canvas');c.width=640;c.height=480;return {o_blob:await new Promise(r=>c.toBlob(r))}; }
-            export async function f_save_image(blob,folder,name){saved.push({folder,name,positions:o_state.a_o_motor.map(m=>m.n_position)});}
+            export async function f_save_image(blob,folder,name){saved.push({folder,name,size:await blob.text(),positions:o_state.a_o_motor.map(m=>m.n_position)});}
         `);
         if (path === '/') return new Response(`<!doctype html><meta charset="utf-8"><div id="app"></div><script type="module">
             import {createApp,nextTick} from './lib/vue.esm-browser.js';
             import {o_component__scan} from './o_component__scan.js';
-            import {o_state,jobs} from './index.js';
+            import {o_state,jobs,settings} from './index.js';
             import {saved} from './o_capture.module.js';
             import {runCornerWorkflow} from './scan_corner_workflow.browser.js';
             const assert=(ok,message)=>{if(!ok)throw Error(message)};
-            HTMLCanvasElement.prototype.toBlob=function(callback){callback(new Blob(['frame']));};
+            HTMLCanvasElement.prototype.toBlob=function(callback){callback(new Blob([this.width+'x'+this.height]));};
             window.createImageBitmap=async()=>{const c=document.createElement('canvas');c.width=640;c.height=480;c.close=()=>{};return c;};
             const app=createApp(o_component__scan), vm=app.mount('#app');
             try {
@@ -74,6 +74,14 @@ async function runScanBrowserTest(cornerFocus = false) {
                 vm.n_tile_x=2;vm.n_tile_y=1;vm.f_delay=async()=>{};vm.f_move_motor_n_step=async()=>{};
                 assert(document.body.textContent.includes('Start classical scan'),'Classical button missing');
                 assert(document.body.textContent.includes('Start live scan'),'Live button missing');
+                const widthSelect=document.querySelector('#scan-registration-width');
+                assert(vm.n_registration__max_width===512 && widthSelect.value==='512','Alignment width must default to 512');
+                assert([...widthSelect.options].map(o=>o.value).join(',')==='1024,512,256,128','Alignment width choices missing');
+                for (const width of [1024,256,128,512]) {
+                    widthSelect.value=String(width);widthSelect.dispatchEvent(new Event('change',{bubbles:true}));await nextTick();
+                    assert(vm.f_stitch_options().n_registration__max_width===width,'Selected width omitted from stitch options');
+                    assert(settings.o_config__scan.n_registration__max_width===width,'Selected width not persisted');
+                }
                 assert(![...document.querySelectorAll('label.scan-toggle')].some(label=>label.textContent.includes('Flat-field')),'Obsolete flat-field checkbox remains');
                 assert(!('b_no_flatfield' in vm.f_stitch_options()),'Scan still requests an optional flat-field setting');
                 vm.f_return_to_start=async()=>{
@@ -87,6 +95,8 @@ async function runScanBrowserTest(cornerFocus = false) {
                 await vm.f_start_scan();
                 assert(vm.s_status==='complete','Capture waited on running stitch');
                 assert(jobs[0].s_status==='running','First stitch did not start');
+                assert(jobs[0].o_option.n_registration__max_width===512,'Classical stitch omitted default width');
+                assert(saved.filter(s=>s.folder.endsWith('dowscaled')).every(s=>s.size==='512x384'),'Default reduced captures must be 512 wide');
                 assert(!o_state.b_scanning,'Capture lock left enabled');
                 await nextTick();
                 [...document.querySelectorAll('button')].find(b=>b.textContent==='New Scan').click();
@@ -94,9 +104,13 @@ async function runScanBrowserTest(cornerFocus = false) {
                 assert(vm.s_status==='idle','New scan unavailable');
                 assert(document.body.textContent.includes('running'),'Job disappeared on reset');
                 o_state.n_id__slide__current=20;
+                const liveWidthSelect=document.querySelector('#scan-registration-width');
+                liveWidthSelect.value='128';liveWidthSelect.dispatchEvent(new Event('change',{bubbles:true}));await nextTick();
                 await vm.f_start_scan(true);
                 assert(jobs[1].s_status==='queued','Second stitch must queue behind first');
                 assert(jobs[1].o_live?.n_revision===2,'Live scan did not notify both saved tiles');
+                assert(jobs[1].o_option.n_registration__max_width===128,'Live scan omitted selected alignment width');
+                assert(saved.filter(s=>s.folder===jobs[1].s_path_folder+'/dowscaled').every(s=>s.size==='128x96'),'Live reduced captures must use selected width');
                 await nextTick();
                 assert(document.querySelector('img[alt="Provisional live scan mosaic"]'),'Live preview missing');
                 assert(jobs[0].n_id__slide===10 && jobs[1].n_id__slide===20,'Slide associations lost');

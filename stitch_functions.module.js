@@ -28,7 +28,7 @@ let f_b_path_exists = async function(s_path) {
 };
 
 // o_option: {
-//   s_path_folder, n_score__min, n_dim__max, s_blend,
+//   s_path_folder, n_score__min, n_dim__max, n_registration__max_width, s_blend,
 //   b_matcher__loftr, b_dry_run
 // }
 // f_on_line: called with every log line while stitch.py runs (may be omitted)
@@ -52,6 +52,8 @@ let f_o_stitch_run = async function(o_option, f_on_line) {
     }
 
     const live = o_option.b_live_preview === true;
+    const n_registration__max_width = [1024, 512, 256, 128].includes(o_option.n_registration__max_width)
+        ? o_option.n_registration__max_width : 512;
     let s_path_output = `${s_path_folder}${s_ds}${live ? 'live_preview.jpg' : 'stitched.png'}`;
     let s_path_jpeg = `${s_path_folder}${s_ds}stitched.jpg`;
     let s_path_preview = `${s_path_folder}${s_ds}stitched_preview.jpg`;
@@ -73,7 +75,7 @@ let f_o_stitch_run = async function(o_option, f_on_line) {
         '-o', s_path_output,
         '--positions', s_path_position,
         '--report', s_path_report,
-        '--registration-max-width', '256',
+        '--registration-max-width', String(n_registration__max_width),
         '--jobs', live ? '1' : '2',
     ];
     if (!live) {

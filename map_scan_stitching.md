@@ -22,14 +22,14 @@ Validation added for this mode covers single/partial grids, arrival-order change
 
 Map → Scan uses a custom Python **translation-only image stitcher** in `stitch.py`. It estimates relative tile translations by normalized cross-correlation (NCC), solves a globally consistent layout, corrects illumination/exposure, and averages overlapping image data into a mosaic.
 
-Alignment runs on images at most **256 pixels wide**. Final compositing reads the original saved images. There is no later full-resolution registration pass in this workflow, so preserving original image detail does not imply original-pixel alignment accuracy.
+Alignment runs on images at most **512 pixels wide by default**. The Scan panel offers 1024, 512, 256, and 128 pixels, remembered with the scan configuration and used for both live and final alignment. Final compositing reads the original saved images. There is no later full-resolution registration pass in this workflow, so preserving original image detail does not imply original-pixel alignment accuracy.
 
 The separate Map → Stitch and Map → AStitch tools are different workflows. `autostitch.py`, the manual stitch implementation, archived live stitching, and `stitch.py`'s incremental `add`/`watch`/`locate` modes are not called by Map → Scan.
 
 ```mermaid
 flowchart TD
     A[Map opens Scan panel] --> B[Capture named grid tiles]
-    B --> C[Original PNGs and 256-pixel-wide copies]
+    B --> C[Original PNGs and reduced copies, default 512 pixels wide]
     C --> D[scan_finish then stitch_run]
     D --> E[Persistent server job queue]
     E --> F[stitch.py batch build]
@@ -70,7 +70,7 @@ scans/scan_<timestamp>/
 
 `dowscaled` is the actual directory spelling used by the application.
 
-After movement/settling and the selected focus adjustment, `f_o_capture__frame()` captures the whole video frame with no requested crop or size reduction. The browser saves the PNG, decodes that same blob, and draws it onto a smaller canvas. Thus the registration copy and original represent the same captured frame. The smaller width is `min(256, original_width)`; height preserves aspect ratio with rounding.
+After movement/settling and the selected focus adjustment, `f_o_capture__frame()` captures the whole video frame with no requested crop or size reduction. The browser saves the PNG, decodes that same blob, and draws it onto a smaller canvas. Thus the registration copy and original represent the same captured frame. The smaller width is `min(selected_alignment_width, original_width)`; height preserves aspect ratio with rounding.
 
 The saved original can already include the application's active capture-time flat-field/dust correction, if its calibration matches the frame dimensions. This is independent of the Scan panel's Python flat-field checkbox. Both corrections can therefore be applied in one workflow.
 
@@ -104,7 +104,7 @@ venv/bin/python3 stitch.py scans/scan_<timestamp> \
   --jpeg-copy --all-color-variants --pattern '^tile_r[0-9]+_c[0-9]+.*\.(png|jpe?g|tiff?)$' \
   --positions scans/scan_<timestamp>/positions.json \
   --report scans/scan_<timestamp>/report.json \
-  --registration-max-width 256 \
+  --registration-max-width 512 \
   --jobs 2
 ```
 
@@ -112,7 +112,8 @@ It adds flags according to the selected options:
 
 | UI option | Initial default | Python behavior |
 | --- | --- | --- |
-| Stitch automatically | Enabled | Queue after capture; does not change the algorithm. |
+| Automatic stitching | Always enabled | Queue after capture when at least two tiles were captured; does not change the algorithm. |
+| Alignment image width | `512` | `--registration-max-width`; options are 1024, 512, 256, and 128. |
 | Minimum match score | `0.3` | `--min-score`; threshold for accepting NCC matches. |
 | Maximum output size | `0` | Nonzero value adds `--max-dim`; resize after full compositing. |
 | Feather blending | Enabled | Default `--blend feather`; disabled sends `--blend none`. |
@@ -151,7 +152,7 @@ If grid inference fails, ordinary Scan files fall back to all `N(N-1)/2` pairs. 
 `prepare_registration_images()` establishes a common tile size from the first original, then prepares registration images:
 
 ```text
-rw = min(original_width, 256)
+rw = min(original_width, selected_alignment_width)  # default 512
 rh = max(1, round(original_height × rw / original_width))
 sx = rw / original_width
 sy = rh / original_height

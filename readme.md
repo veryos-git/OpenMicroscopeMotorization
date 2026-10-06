@@ -442,6 +442,63 @@ links the LGPL-3.0 `ESP Async WebServer` / `Async TCP` libraries and the
 LGPL-2.1 ESP32 arduino core; the full source of this project is provided, so the
 relinking condition of those licences is met.
 
+### Focus stacking: Easy and Expert modes
+
+**Focus Stack** opens in Easy mode by default. Adjust Z with the normal focus
+controls, press **Set focus position 1 here**, adjust Z to the other end, and
+press **Set focus position 2 here**. Choose 2–200 images and press **Start**.
+Capture moves to position 1, then visits evenly spaced whole-motor-step depths
+through position 2, including both endpoints. Either direction is supported.
+The image count cannot exceed the number of distinct steps in the selected range.
+Easy mode skips autofocus, settles for 350 ms per image, aligns frames, and
+produces the full-resolution stack. Focus remains at position 2 after capture.
+
+Switch to **Expert** for step size, settle time, output size, alignment,
+autofocus, search step, and search travel. Expert mode retains the original
+step-based sweep; with autofocus enabled it centers the sweep around the found
+focus. Switching modes preserves these expert values and remembers the mode.
+
+The two marked positions are valid only for the current controller connection
+and Z motor assignment; disconnecting or changing the assignment clears them.
+Stop cancels capture without starting more motion or stacking partial frames.
+Interrupted or timed-out moves abort acquisition before another image is saved.
+
+### Exposure histogram and pixel warnings
+
+Open **Image Filter** for a live brightness and RGB histogram of the camera frame
+before display filters. It samples a preview at most 512 pixels wide, updates
+four times per second, and pauses when the panel is closed. The percentages
+show sampled pixels meeting the current dark and bright thresholds.
+
+Enable red overexposure markers, blue underexposure markers, or both; select
+zebra stripes or checkerboard. Bright pixels have at least one channel at or
+above the threshold (default 250); dark pixels have all channels at or below
+the threshold (default 5). Thresholds use the 0–255 camera pixel scale. Markers
+use the full-resolution camera texture and work with Processing off. Settings
+are saved with the image filter. Reset restores the defaults.
+
+Raw captures, scan tiles, and training images retain their camera pixels.
+Recordings using the processed-view source include the visible markers.
+
+### Automatic SAM annotations
+
+In **Training → Annotation settings**, enable **Automatically segment boxes with
+SAM**. This optional setting is remembered in the browser and starts disabled.
+Drawing, resizing, or moving a box runs box-prompted Segment Anything (SAM-B)
+on a raw camera snapshot and displays the selected pixels in the label color.
+Removed boxes and results from previous regions or datasets are ignored.
+
+SAM shares the optional AI environment installed with `deno task install-yolo`.
+Its first inference downloads `weights/sam/sam_b.pt` (about 358 MiB). The server
+reuses the loaded model, uses CUDA when available, and releases it after five
+minutes idle. CPU inference can take several seconds per frame.
+
+Capture segments each focus plane's actual saved image, including its crop.
+Lossless binary PNG masks and normalized contour outlines are retained in each
+box's `o_segmentation` metadata and included in dataset exports. YOLO detection
+labels still use bounding boxes. A SAM capture failure reports an error instead
+of saving that plane with missing masks; already saved planes remain available.
+
 ### Actions and input bindings
 
 The compact toolbar keeps capture, scan, focus, zoom, mouse movement, Stop,

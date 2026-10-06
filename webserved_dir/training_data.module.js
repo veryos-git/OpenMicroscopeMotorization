@@ -46,6 +46,23 @@ let f_validate_sample = function (o_sample) {
             o_box.n_x < 0 || o_box.n_y < 0 || o_box.n_scl_x <= 0 || o_box.n_scl_y <= 0 ||
             o_box.n_x + o_box.n_scl_x > 1.00000001 || o_box.n_y + o_box.n_scl_y > 1.00000001
         ) throw new Error('Invalid bounding box');
+        if (o_box.o_segmentation) {
+            let o_mask = o_box.o_segmentation;
+            if (o_mask.s_model !== 'sam_b' || o_mask.n_scl_x !== o_sample.n_scl_x ||
+                o_mask.n_scl_y !== o_sample.n_scl_y || typeof o_mask.s_mask_png !== 'string' ||
+                o_mask.s_mask_png.length > 50 * 1024 * 1024 ||
+                !Array.isArray(o_mask.a_a_n_polygon) || o_mask.a_a_n_polygon.length > 10000 ||
+                o_mask.a_a_n_polygon.some(a => !Array.isArray(a) || a.length < 3 || a.length > 200000 ||
+                    a.some(p => !Array.isArray(p) || p.length !== 2 || p.some(n => !Number.isFinite(n) || n < 0 || n > 1)))) {
+                throw new Error('Invalid SAM segmentation');
+            }
+            let a_n_mask;
+            try { a_n_mask = Uint8Array.from(atob(o_mask.s_mask_png), s => s.charCodeAt(0)); }
+            catch { throw new Error('Invalid SAM mask PNG'); }
+            if (a_n_mask.length < 24 || ![137,80,78,71,13,10,26,10].every((n,i) => a_n_mask[i] === n)) throw new Error('Invalid SAM mask PNG');
+            let o_header = new DataView(a_n_mask.buffer);
+            if (o_header.getUint32(16) !== o_sample.n_scl_x || o_header.getUint32(20) !== o_sample.n_scl_y) throw new Error('SAM mask dimensions do not match image');
+        }
     }
 };
 let f_s_yolo = function (a_o_box, a_s_label) {

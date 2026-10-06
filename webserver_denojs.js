@@ -1,5 +1,6 @@
 import { f_o_scan_jobs } from './scan_jobs.module.js';
 import { f_o_yolo_response } from './yolo_functions.module.js';
+import { f_o_sam_response } from './sam_functions.module.js';
 import { f_o_training_response } from './training_data_functions.module.js';
 
 import {
@@ -792,6 +793,7 @@ let f_handler = async function(o_request, o_conninfo) {
 
     let o_url = new URL(o_request.url);
     let s_path = o_url.pathname;
+    if (s_path === '/api/training/sam/infer') return await f_o_sam_response(o_request);
     if (s_path.startsWith('/api/training/yolo/')) return await f_o_yolo_response(o_request);
     if (s_path.startsWith('/api/training/')) return await f_o_training_response(o_request);
 
