@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import { f_n_rpm__manual } from '../webserved_dir/manual_speed.module.js';
+import { o_component__icon } from '../webserved_dir/o_component__icon.js';
 
 async function component(name, bindings) {
+    bindings = { o_component__icon, ...bindings };
     const source = (await Deno.readTextFile(new URL('../webserved_dir/o_component__' + name + '.js', import.meta.url)))
         .replace(/^import\s*\{[\s\S]*?\}\s*from\s*['"][^'"]+['"];?/gm, '')
         .replace(/export \{[^}]+\};?/, '');
@@ -84,18 +87,26 @@ Deno.test('coarse focus probe aborts absent or noisy response and restores compe
         assert.equal(state.o_focus__probe.s_status, 'no_response');
         assert.equal(state.o_focus__probe.n_motor, 1);
         assert.equal(saved[0][0], 'o_focus__probe');
-        assert.deepEqual(commands, [['backlash', 1, 0], ['move', 100], ['move', -100], ['backlash', 1, 37]]);
-        assert.match(ctx.s_status, /No focus response/);
+        assert.deepEqual(commands, [['backlash', 1, 0], ['move', 500], ['move', -500], ['backlash', 1, 37]]);
+        assert.match(ctx.s_status, /No focus response after 500 steps/);
         assert.equal(ctx.b_running, false); assert.equal(state.b_scanning, false);
     }
 });
 
 Deno.test('responsive focus continues into backlash calibration and can recover a failed probe', async () => {
-    const { ctx, state, commands } = await focusFixture([...Array(5).fill(100), ...Array(5).fill(120)]);
-    state.o_focus__probe = { n_motor: 1, s_status: 'no_response' };
-    await ctx.f_run({ b_quick: true });
-    assert.equal(state.o_focus__probe.s_status, 'responsive');
-    assert.deepEqual(commands.filter(c => c[0] === 'round'), [['round'], ['round']]);
+    for (const b_quick of [true, false]) {
+        const { ctx, state, commands } = await focusFixture([]);
+        let position = 0, frame = 0;
+        ctx.f_move = async steps => { position += steps; commands.push(['move', steps]); };
+        // Simulate a drive whose first 100 steps do not visibly change focus.
+        ctx.f_o_frame = () => ({ n_score: position > 100 ? 120 : 100, n_time: ++frame });
+        state.o_focus__probe = { n_motor: 1, s_status: 'no_response' };
+        await ctx.f_run({ b_quick });
+        assert.equal(state.o_focus__probe.s_status, 'responsive');
+        assert.deepEqual(commands.filter(c => c[0] === 'move'), [['move', 500], ['move', -500]]);
+        assert.equal(position, 0, 'return the commanded probe displacement before measuring backlash');
+        assert.equal(commands.filter(c => c[0] === 'round').length, b_quick ? 2 : 4);
+    }
 });
 
 Deno.test('cancelled or failed focus probes do not classify hardware', async () => {
@@ -134,3 +145,68 @@ Deno.test('unresponsive focus blocks shared automatic Z routing while calibratio
     state.o_focus__probe.s_status = 'responsive'; assert.equal(resolve('z'), 1);
     state.o_motor__axis.z = null; assert.equal(resolve('z', true), null);
 });
+
+for(const s_input of ['keyboard', 'mouse', 'gamepad']) {
+    Deno.test('manual focus sends ESP32 start and stop after a failed probe via ' + s_input, async () => {
+        const { ctx, state } = await focusFixture(Array(10).fill(100));
+        await ctx.f_run({ b_quick: true });
+        assert.equal(state.o_focus__probe.s_status, 'no_response');
+        const o_probe = structuredClone(state.o_focus__probe);
+        Object.assign(state, {
+            n_rpm__focus_jog: 0.5, o_key_held: {},
+            o_mapping__q: { s_dir: 'cw' }, o_mapping__e: { s_dir: 'ccw' },
+            o_mapping__mouse_right: { s_dir: 'cw' },
+            n_index__gamepad: -1, b_enabled__gamepad: true,
+        });
+        // Use the production resolver and command helpers through a fake socket;
+        // a resolver stub would hide the calibration lockout this test covers.
+        const s_source = await Deno.readTextFile(new URL('../webserved_dir/index.js', import.meta.url));
+        const a_s_function = ['f_n_motor__axis', 'f_send_esp', 'f_send_esp_run_continuous', 'f_send_esp_stop'];
+        const a_s_message = [];
+        const o_command = new Function('o_state', 'o_ws__esp', 'WebSocket',
+            a_s_function.map(s_name => s_source.match(new RegExp('let ' + s_name + ' = [\\s\\S]*?\\n};'))[0]).join('\n')
+            + '\nreturn { ' + a_s_function.join(', ') + ' };'
+        )(state, { readyState: 1, send: s_message => a_s_message.push(JSON.parse(s_message)) }, { OPEN: 1 });
+        const o_pad = { index: 0, id: 'test', connected: true, axes: [0, 0, 0, 0], buttons: [] };
+        const o_component = await component('jog', {
+            o_state: state, f_n_rpm__manual, ...o_command,
+            navigator: { getGamepads: () => [o_pad] },
+            document: { hidden: false, hasFocus: () => true },
+        });
+        const o_jog = Object.assign(o_component.data(), o_component.methods, {
+            b_driving__mouse: false, b_driving__mouse_z: false, s_dir__mouse_z: 'cw',
+        });
+        const f_input = b_start => {
+            if(s_input === 'keyboard') {
+                o_jog[b_start ? 'f_on_keydown' : 'f_on_keyup']({ key: 'q' });
+            } else if(s_input === 'mouse') {
+                o_jog.b_driving__mouse_z = b_start;
+                o_jog.n_y_nor__mouse = -1;
+                o_jog.f_tick_mouse_jog();
+            } else {
+                o_pad.axes[1] = 0;
+                o_jog.f_poll_gamepad();
+                if(b_start) {
+                    o_pad.axes[1] = -1;
+                    o_jog.f_poll_gamepad();
+                }
+            }
+        };
+        state.b_scanning = true;
+        f_input(true);
+        f_input(false);
+        assert.deepEqual(a_s_message, [], 'manual inputs still wait for calibration to finish');
+        state.b_scanning = false;
+        f_input(true);
+        assert.deepEqual(a_s_message, [{ motor: 1, command: 'runContinuous', n_rpm: 0.5, direction: 'cw' }]);
+        f_input(false);
+        assert.deepEqual(a_s_message.at(-1), { motor: 1, command: 'stop' });
+        assert.deepEqual(state.o_focus__probe, o_probe, 'manual motion must preserve the probe result');
+        assert.equal(o_command.f_n_motor__axis('z'), null, 'automatic focus still requires a responsive probe');
+        a_s_message.length = 0;
+        state.o_motor__axis.z = null;
+        f_input(true);
+        f_input(false);
+        assert.deepEqual(a_s_message, [], 'an unassigned Z axis must not send commands');
+    });
+}

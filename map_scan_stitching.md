@@ -2,6 +2,49 @@
 
 Reverse-engineered from repository revision `649180e`, inspected on 2026-09-28. This document describes the current code, including observed implementation quirks. It covers the Scan panel's batch mosaicing pipeline; motor control and autofocus are included only where they affect its image inputs.
 
+## Free outline scan (2026-09-30)
+
+The Scan panel's **Free outline** area mode records ordered XYZ boundary points.
+It accepts simple concave polygons, rejects crossing/overlapping edges and
+duplicate XY points, and closes the last edge automatically. Both X/Y axes need
+steps-per-pixel calibration; Z must be available for the manually sampled focus.
+The operator supplies points and overlap instead of tile counts.
+
+`webserved_dir/free_scan.module.js` triangulates the polygon and interpolates Z
+linearly inside each triangle. Border tile centers outside the polygon use the
+nearest boundary edge's interpolated Z, without unbounded extrapolation. Tile
+spacing is the camera footprint times one minus overlap, rounded down to motor
+steps. Every lattice cell intersecting the polygon is captured, preserving thin
+edges that a center-only inclusion test would miss. Camera footprints are larger
+than these cells, so captures include a small border outside the outline.
+
+Rows run in alternating directions, omitting unselected cells. Capture moves to
+absolute XY targets and then interpolated Z, settles, and saves the original and
+reduced frame. A scan may start from any stage position, including when the first
+selected cell is not at the grid origin. Existing return-to-start, Stop, queue,
+live preview and color-variant exports also apply. Plan changes during capture
+stop movement; new slides, axis changes and disconnects clear the sampled points.
+
+`scan_plan.json` stores the outline, triangulation, ordered XYZ tile targets,
+logical row/column indices, camera dimensions, calibration, overlap, motor-axis
+assignments, slide ID and timestamp. Points are not restored as active stage
+coordinates on reload. The queue persists the free-scan flag and preserves it
+when re-stitching, independent of the currently selected UI mode.
+
+Free builds pass `--scan-grid` to preserve sparse row/column indices, even without
+live caching. Only adjacent occupied grid cells are registered. A final build
+with disconnected groups fails instead of exporting arbitrary overlapping
+groups. The convex-hull gap warning is skipped because concave cutouts are
+intentional. Uncaptured output regions remain black; exports are rectangular
+images, not polygon-masked cutouts. A single captured tile remains available as
+an original image; stitching requires at least two saved tiles.
+
+Geometry and browser tests cover concave coverage, narrow diagonal regions,
+focus interpolation, axis mapping, shifted first tiles, live/classical capture,
+stopping and invalidation. Synthetic image tests and an isolated server test
+verify sparse registration, metadata and all output variants. Physical stage
+accuracy and real-slide alignment still depend on the microscope calibration.
+
 ## Live scan addition (2026-09-28)
 
 The Scan panel now offers **Start classical scan** (the original workflow described below) and **Start live scan**. The latter saves the same original and reduced tiles, then asynchronously sends `scan_tile_ready` after both uploads finish. These notifications never wait for Python processing before capture continues. At capture completion, outstanding notifications are acknowledged before `scan_finish`.

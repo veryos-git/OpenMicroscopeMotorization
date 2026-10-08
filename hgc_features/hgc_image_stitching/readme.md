@@ -90,6 +90,11 @@ possible solution:
 - the focus corner points have a certain padding from the actual corner points so that the operator still sees the subject
 - after navigating to a corner end point the operator can still navigate freely and find the closest field of view where the subject can be seen then the operator can set the desired focus point 
 
+# free scan mode 
+the current scan modes are a bit complicted because the user has to guess numbers such as x and y tiles. the subject on the slide could be a complex shape and the area that need to be covered could be a concave polygon. 
+therefore the 'free scan mode' allows the user to go to a point, add a focus, go to the next point add the focus. and so on. 
+finally the path that has to be traveled to get images to be able to create a stitch is calculated. 
+
 ## possible workflow
 - operator sets size / tiles x and y 
 - operator can go to corners and set the desired focus. 

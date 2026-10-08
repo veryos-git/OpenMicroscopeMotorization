@@ -12,6 +12,9 @@ import { f_n_score } from './focus_metric.module.js';
 
 let N_RPM__PROBE = 6.0;
 let N_MS__MOVE_TIMEOUT = 30000;
+// A 100-step move can be lost in drive slack or produce too little focus change.
+// This coarse response check is separate from the fine backlash probe steps.
+const N_STEP__FOCUS_RESPONSE = 500;
 // the profiles are built from a frame downscaled to this width
 let N_SCL_X__MEASURE = 400;
 // correlation search radius in profile pixels
@@ -36,7 +39,7 @@ let o_component__backlash = {
             <p class="setup-hint" v-else-if="!o_state.b_streaming__webcam">Start a camera to calibrate.</p>
             <p class="setup-hint" v-else-if="o_config.s_signal === 'sharpness'">Focus calibration: start clearly off focus, on one side of the sharpness peak.</p>
             <p class="setup-hint" v-else>Use a textured sample and manual exposure.</p>
-            <p class="focusstack-error" v-if="o_state.o_focus__probe?.n_motor === f_n_motor() && o_state.o_focus__probe.s_status === 'no_response'" role="alert">No focus response detected. The motor may be absent, disconnected or slipping. Automatic focus is unavailable. Check the drive and use a textured, slightly defocused sample, then Calibrate again.</p>
+            <p class="focusstack-error" v-if="o_state.o_focus__probe?.n_motor === f_n_motor() && o_state.o_focus__probe.s_status === 'no_response'" role="alert">No sharpness change detected. The motor may be disconnected or slipping, or the sample may not show enough detail. Automatic focus is unavailable; manual focus controls remain available. Check the drive and use manual focus to slightly defocus a textured sample, then Calibrate again.</p>
             <p class="backlash-applied" v-if="s_note__applied">{{ s_note__applied }}</p>
             <details class="hardware-calibration-advanced">
                 <summary>Advanced calibration settings &amp; results</summary>
@@ -424,9 +427,9 @@ let o_component__backlash = {
             return a_score;
         },
         f_probe_focus: async function(o_config) {
-            this.s_status = 'checking focus response — 100 coarse steps';
+            this.s_status = 'checking focus response — ' + N_STEP__FOCUS_RESPONSE + ' coarse steps';
             let a_before = await this.f_a_focus_scores(o_config);
-            await this.f_move(100);
+            await this.f_move(N_STEP__FOCUS_RESPONSE);
             if(this.b_stop_requested) return false;
             let a_after = await this.f_a_focus_scores(o_config);
             let f_mean = a => a.reduce((sum, n) => sum + n, 0) / a.length;
@@ -435,14 +438,14 @@ let o_component__backlash = {
             n_noise = Math.max(n_noise, Math.max(...a_after) - Math.min(...a_after));
             let b_response = Math.abs(n_after - n_before) > Math.max(1e-6, Math.abs(n_before) * 0.05, n_noise * 3);
             // Return the commanded displacement before the normal backlash sequence.
-            await this.f_move(-100);
+            await this.f_move(-N_STEP__FOCUS_RESPONSE);
             if(this.b_stop_requested) return false;
             o_state.o_focus__probe = {
                 n_motor: this.f_n_motor(), s_status: b_response ? 'responsive' : 'no_response',
                 n_ts_ms: Date.now(), n_score__before: n_before, n_score__after: n_after,
             };
             f_save_setting__debounced('o_focus__probe', o_state.o_focus__probe);
-            if(!b_response) this.s_status = 'No focus response after 100 steps — check the motor and sample, then retry';
+            if(!b_response) this.s_status = 'No focus response after ' + N_STEP__FOCUS_RESPONSE + ' steps — check the motor and sample, then retry';
             return b_response;
         },
 

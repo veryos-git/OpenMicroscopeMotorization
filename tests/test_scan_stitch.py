@@ -21,6 +21,38 @@ class ScanStitchTest(unittest.TestCase):
                 self.assertEqual(cv2.imread(paths[0]).shape[:2], (height, width))
                 self.assertEqual(scales, (width / 1101, height / 777))
 
+    def test_free_scan_sparse_grid_preserves_concave_layout(self):
+        rng = np.random.default_rng(41)
+        scene = cv2.GaussianBlur(rng.integers(0, 256, (560, 560, 3), dtype=np.uint8), (0, 0), 2)
+        cells = [(0, 0), (0, 1), (0, 2), (1, 0), (2, 0)]
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            for row, col in cells:
+                cv2.imwrite(str(root / f'tile_r{row:02}_c{col:02}.png'), scene[row*160:row*160+240, col*160:col*160+240])
+            args = [folder, '--scan-grid', '--pattern', r'^tile_r\d+_c\d+\.png$',
+                    '--registration-max-width', '256', '--jobs', '1', '--no-subpixel',
+                    '--all-color-variants', '--jpeg-copy', '-o', str(root / 'stitched.png'),
+                    '--positions', str(root / 'positions.json'), '--report', str(root / 'report.json')]
+            self.assertEqual(stitch.main(args), 0)
+            positions = json.loads((root / 'positions.json').read_text())['tiles']
+            self.assertEqual([(t['row'], t['col']) for t in positions], cells)
+            for tile in positions:
+                self.assertAlmostEqual(tile['x'], tile['col'] * 160, delta=3)
+                self.assertAlmostEqual(tile['y'], tile['row'] * 160, delta=3)
+            output = cv2.imread(str(root / 'stitched_original_colors.png'))
+            self.assertAlmostEqual(output.shape[0], 560, delta=4)
+            self.assertAlmostEqual(output.shape[1], 560, delta=4)
+            self.assertTrue(np.all(output[450:500, 450:500] == 0), 'outside-outline space should remain empty')
+            self.assertEqual(len(json.loads((root / 'report.json').read_text())), 4)
+            for stem in ['stitched', 'stitched_original_colors', 'stitched_flatfield', 'stitched_exposure']:
+                self.assertEqual(cv2.imread(str(root / (stem + '.png'))).shape, output.shape)
+                self.assertEqual(cv2.imread(str(root / (stem + '.jpg'))).shape, output.shape)
+
+            # A missing connecting tile must not produce arbitrarily overlaid groups.
+            (root / 'tile_r01_c00.png').unlink()
+            with self.assertRaisesRegex(SystemExit, 'disconnected groups'):
+                stitch.main(args)
+
     def test_all_color_variants_match_individual_correction_runs(self):
         rng = np.random.default_rng(73)
         texture = cv2.GaussianBlur(rng.integers(0, 80, (240, 500), dtype=np.uint8), (0, 0), 2)

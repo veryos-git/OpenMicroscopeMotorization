@@ -1,6 +1,23 @@
 import assert from 'node:assert/strict';
 import { f_o_scan_jobs } from '../scan_jobs.module.js';
 const deferred = () => { let resolve; const promise = new Promise(r => resolve = r); return { promise, resolve }; };
+Deno.test('free scan geometry survives queue restart and changed restitch options', async () => {
+    const root = await Deno.makeTempDir();
+    try {
+        const queue = f_o_scan_jobs({ s_root: root, f_run: async () => ({ b_success: true }) });
+        await queue.f_init();
+        const folder = await tiles(root, 'free');
+        await queue.f_create(folder, 12, { b_free_scan: true });
+        await queue.f_finish(folder);
+        const calls = [];
+        const restored = f_o_scan_jobs({ s_root: root, f_run: async options => { calls.push(options); return { b_success: true }; } });
+        await restored.f_init();
+        await restored.f_enqueue({ s_path_folder: folder, b_free_scan: false });
+        await restored.f_idle();
+        assert.equal(calls[0].b_free_scan, true);
+        assert.equal(restored.f_list()[0].n_id__slide, 12);
+    } finally { await Deno.remove(root, { recursive: true }); }
+});
 Deno.test('live scan acknowledges tiles during processing, coalesces updates and waits before finalization', async () => {
     const root = await Deno.makeTempDir();
     const started = deferred(), release = deferred();

@@ -1149,6 +1149,16 @@ input[type="range"]::-moz-range-thumb {
 
 /* ─── Scan panel ─── */
 .panel-scan { top: var(--topbar-h); left: 16px; width: 340px; max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto; }
+.scan-free-preview { display: block; width: 100%; margin: 10px 0; border: 1px solid var(--border); background: #0a0a0c; }
+.scan-free-outline { fill: #00d4aa18; stroke: var(--accent-1); stroke-width: 1.5; }
+.scan-free-tile { fill: #5b8def0a; stroke: #5b8def55; stroke-width: 0.5; }
+.scan-free-route { fill: none; stroke: var(--accent-2); stroke-width: 1; }
+.scan-free-preview circle { fill: var(--accent-1); }
+.scan-free-preview text { fill: var(--text); font-size: 10px; }
+.scan-free-points { max-height: 240px; overflow: auto; margin: 8px 0; }
+.scan-free .scan-field-row { flex-wrap: wrap; gap: 6px; }
+.scan-free .btn-small { margin: 0; }
+.scan-grid .scan-grid-cell.skipped { visibility: hidden; }
 
 .scan-section { margin-bottom: 16px; }
 .scan-config { border: 0; padding: 0; margin: 0; min-width: 0; }

@@ -170,7 +170,8 @@ export function f_o_scan_jobs({ s_root, f_run, f_complete = async () => {} }) {
         if (['queued', 'running'].includes(job.s_status)) return f_copy(job);
         if (job.s_status === 'capturing') throw Error('Finish capture before stitching');
         if (job.n_tiles < 2) throw Error('At least two saved tiles are needed');
-        o_option = { ...job.o_option, ...o_option, b_live_scan: job.o_option.b_live_scan === true };
+        o_option = { ...job.o_option, ...o_option, b_live_scan: job.o_option.b_live_scan === true,
+            b_free_scan: job.o_option.b_free_scan === true };
         const previous = f_copy(job);
         Object.assign(job, { s_status: 'queued', n_queued: Date.now(), n_finished: null,
             s_error: '', a_s_line: [], o_result: null, o_option: f_copy(o_option) });

@@ -86,6 +86,27 @@ least-squares pass and blends the mosaic into `stitched.png` (plus
 `stitched_preview.jpg` for large mosaics, `positions.json` and `report.json`).
 its progress is streamed into the scan panel while it runs.
 
+For an irregular sample, choose **Scan area → Free outline**. Move around the
+boundary in order, focus manually, and press **Add focused point** at each bend
+(at least three points). Concave outlines are supported; the final edge closes
+automatically. The preview shows the outline and capture path. Tile count and
+spacing are calculated from the camera size, calibrated X/Y steps per pixel,
+and overlap (30% by default).
+
+If Start is disabled, the reason appears beside the buttons. Use **Open Setup
+for X/Y calibration** when image spacing is missing, then calibrate the motors
+assigned to X and Y. The saved focus points remain available during calibration.
+Older versions could lose calibration values when saving several settings at
+once; if this happened, calibrate X/Y again after updating.
+
+Start either a classical or live scan. Z is interpolated from the saved focus
+points without autofocus. **Focused points** lets you revisit a point and update
+its focus. The mode requires an assigned, available Z motor and calibrated X/Y
+axes. New Scan, a different slide, axis reassignment, disconnect, or reload clears
+the points. Each captured free scan retains a `scan_plan.json` with the outline,
+XYZ targets, camera dimensions, overlap and calibration. Original tiles and all
+stitched PNG/JPEG color variants remain available through the scan jobs list.
+
 ## manual movement speeds (WF-004 / WF-005)
 
 The toolbar always shows separate **XY** and **Z focus** RPM controls, with a
@@ -179,6 +200,13 @@ position. **these live in `stepper_websocket.ino`, so they need a re-flash**
 for the focus motor pick the sharpness signal instead of image shift, and park the
 stage clearly off focus — there sharpness still changes monotonically with the
 movement, which image shift never does for a z axis.
+
+Normal and quick focus calibration first check for a sharpness response using
+500 motor steps, then command 500 steps back before measuring backlash. This
+larger movement helps detect a working focus drive when 100 steps produce too
+little visible change. The return is a commanded displacement; mechanical play
+can prevent an exact physical return. Retry Calibrate to replace a saved
+“no response” result with a new measurement.
 
 ## auto focus
 the `Focus` panel searches the sharpest position of the focus motor. it scores

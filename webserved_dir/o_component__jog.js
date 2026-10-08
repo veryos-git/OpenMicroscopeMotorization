@@ -182,7 +182,8 @@ let o_component__jog = {
         },
         f_get_mapping: function(s_key) {
             let o_map = o_state['o_mapping__' + s_key];
-            let n_motor = f_n_motor__axis({ a: 'x', d: 'x', w: 'y', s: 'y', q: 'z', e: 'z' }[s_key]);
+            // Keyboard and gamepad must allow repositioning after an inconclusive focus probe.
+            let n_motor = f_n_motor__axis({ a: 'x', d: 'x', w: 'y', s: 'y', q: 'z', e: 'z' }[s_key], true);
             if(!o_map || n_motor === null) return null;
             return { motor: n_motor, direction: o_map.s_dir, rpm: f_n_rpm__manual(o_state, ['q', 'e'].includes(s_key) ? 'z' : 'xy') };
         },
@@ -448,9 +449,10 @@ let o_component__jog = {
         f_o_mapping__mouse_z: function() {
             let o_self = this;
             let o_map = o_state.o_mapping__mouse_right;
-            if(!o_map || f_n_motor__axis('z') === null) return null;
+            let n_motor = f_n_motor__axis('z', true);
+            if(!o_map || n_motor === null) return null;
             return {
-                motor: f_n_motor__axis('z'),
+                motor: n_motor,
                 direction: o_self.s_dir__mouse_z,
             };
         },

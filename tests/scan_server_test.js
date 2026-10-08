@@ -1,5 +1,6 @@
 // Full websocket/HTTP/Python integration against an isolated server and scans tree.
 import assert from 'node:assert/strict';
+import { f_o_free_scan_plan } from '../webserved_dir/free_scan.module.js';
 
 Deno.test('scan server acknowledges background jobs, accepts another scan, and exposes finished files', async () => {
     const root = await Deno.makeTempDir();
@@ -89,7 +90,31 @@ for col,x in enumerate((0,160)): cv2.imwrite(sys.argv[1]+'/tile_r00_c0'+str(col)
         assert.equal(liveJob.s_status, 'complete', JSON.stringify(liveJob));
         assert.ok(liveJob.a_s_line.some(line => line.includes('alignment images: 128 x 90')), 'Final alignment must retain the live scan width');
         assert.ok(liveJob.a_s_line.some(line => line.includes('reused 1/1 pairs')), JSON.stringify(liveJob));
-        for (const completed of [job, liveJob]) {
+        const plan = f_o_free_scan_plan([[0, 0], [320, 0], [320, 10], [10, 10], [10, 320], [0, 320]]
+            .map(([n_x, n_y]) => ({ n_x, n_y, n_z: 10 + n_x + n_y })),
+            { n_width: 240, n_height: 240, n_steps_x: 1, n_steps_y: 1, n_overlap_pct: 100 / 3 });
+        const freeScan = await request('scan_create_folder', { o_option: { b_free_scan: true }, o_scan_plan: plan });
+        assert.deepEqual(JSON.parse(await Deno.readTextFile(freeScan.s_path_folder + '/scan_plan.json')), plan);
+        const freeImages = await new Deno.Command(repo + '/venv/bin/python', { args: ['-c', `
+import cv2, numpy as np, sys
+rng=np.random.default_rng(41)
+scene=cv2.GaussianBlur(rng.integers(0,256,(560,560,3),dtype=np.uint8),(0,0),2)
+for row,col in [(0,0),(0,1),(0,2),(1,0),(2,0)]:
+    cv2.imwrite(sys.argv[1]+f'/tile_r{row:02}_c{col:02}.png',scene[row*160:row*160+240,col*160:col*160+240])
+`, freeScan.s_path_folder], stdout: 'piped', stderr: 'piped' }).output();
+        assert.equal(freeImages.code, 0);
+        await request('scan_finish', { s_path_folder: freeScan.s_path_folder });
+        await request('stitch_run', { s_path_folder: freeScan.s_path_folder, b_free_scan: false });
+        let freeJob;
+        for (let i = 0; i < 100; i++) {
+            freeJob = (await request('scan_jobs_list')).find(j => j.s_path_folder === freeScan.s_path_folder);
+            if (['complete', 'failed'].includes(freeJob.s_status)) break;
+            await new Promise(r => setTimeout(r, 100));
+        }
+        assert.equal(freeJob.s_status, 'complete', JSON.stringify(freeJob));
+        assert.equal(freeJob.o_option.b_free_scan, true, 'capture geometry must survive different restitch settings');
+        assert.ok(freeJob.a_s_line.some(line => line.includes('registering 4 pairs')), JSON.stringify(freeJob));
+        for (const completed of [job, liveJob, freeJob]) {
             assert.equal(completed.o_result.s_path_jpeg, completed.s_path_folder + '/stitched.jpg');
             const jpegResponse = await fetch(origin + '/api/file?path=' + encodeURIComponent(completed.o_result.s_path_jpeg));
             assert.equal(jpegResponse.status, 200);

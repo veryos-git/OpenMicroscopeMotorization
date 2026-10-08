@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 
-async function runScanBrowserTest(cornerFocus = false) {
+async function runScanBrowserTest(cornerFocus = false, freeScan = false) {
     const dir = await Deno.makeTempDir();
     const folderRequests = [];
     const js = text => new Response(text, { headers: { 'content-type': 'text/javascript' } });
     const server = Deno.serve({ hostname: '127.0.0.1', port: 0, onListen() {} }, async request => {
         const path = new URL(request.url).pathname;
-        if (path === '/scan_corner_workflow.browser.js') return js(await Deno.readTextFile(new URL('./scan_corner_workflow.browser.js', import.meta.url)));
+        if (['/scan_corner_workflow.browser.js', '/scan_free_workflow.browser.js'].includes(path)) return js(await Deno.readTextFile(new URL('.' + path, import.meta.url)));
         if (path === '/api/scans/open_folder') {
             folderRequests.push({ method: request.method, folder: new URL(request.url).searchParams.get('path') });
             return folderRequests.length === 1 ? new Response(null, { status: 204 })
@@ -14,7 +14,7 @@ async function runScanBrowserTest(cornerFocus = false) {
         }
         if (path === '/index.js') return js(`
             import {reactive} from './lib/vue.esm-browser.js';
-            export const o_state = reactive({ b_connected__esp:true, b_connected__server:true, b_scanning:false,
+            export const o_state = reactive({ b_connected__esp:true, b_connected__server:true, b_scanning:false, b_streaming__webcam:true,
                 n_id__slide__current: 10, o_panel_visibility:{scan:true}, a_o_setting:[], o_motor__axis:{x:0,y:1,z:2},
                 a_o_motor:[{n_position:0},{n_position:0},{n_position:0}], a_n_step__per_px:[1,1,1] });
             export const jobs = [];
@@ -32,11 +32,11 @@ async function runScanBrowserTest(cornerFocus = false) {
             export function f_send_esp_stop() {}
             export function f_send_esp_stop_all() { o_state.n_cnt__stop_all=(o_state.n_cnt__stop_all||0)+1; }
             export async function f_send_wsmsg_with_response(msg) {
-                const d = msg.v_data;
+                const d = JSON.parse(JSON.stringify(msg.v_data));
                 if (msg.s_type === 'scan_create_folder') {
                     const folder = '/scans/scan_' + jobs.length;
                     jobs.push({s_id:folder, s_name:folder, s_path_folder:folder, s_status:'capturing', n_tiles:0, a_s_line:[], n_id__slide:d.n_id__slide,
-                        o_option: d.b_live_scan ? {...d.o_option,b_live_scan:true} : {}});
+                        o_option: {...d.o_option,b_live_scan:d.b_live_scan===true}, o_scan_plan:d.o_scan_plan});
                     return {v_result:{s_path_folder:folder}};
                 }
                 if (msg.s_type === 'scan_jobs_list') return {v_result:structuredClone(jobs)};
@@ -57,18 +57,25 @@ async function runScanBrowserTest(cornerFocus = false) {
             export async function f_o_capture__frame(){ const c=document.createElement('canvas');c.width=640;c.height=480;return {o_blob:await new Promise(r=>c.toBlob(r))}; }
             export async function f_save_image(blob,folder,name){saved.push({folder,name,size:await blob.text(),positions:o_state.a_o_motor.map(m=>m.n_position)});}
         `);
-        if (path === '/') return new Response(`<!doctype html><meta charset="utf-8"><div id="app"></div><script type="module">
+        if (path === '/') return new Response(`<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/index.css"><div id="app"></div><script type="module">
             import {createApp,nextTick} from './lib/vue.esm-browser.js';
             import {o_component__scan} from './o_component__scan.js';
             import {o_state,jobs,settings} from './index.js';
             import {saved} from './o_capture.module.js';
             import {runCornerWorkflow} from './scan_corner_workflow.browser.js';
+            import {runFreeWorkflow} from './scan_free_workflow.browser.js';
             const assert=(ok,message)=>{if(!ok)throw Error(message)};
-            HTMLCanvasElement.prototype.toBlob=function(callback){callback(new Blob([this.width+'x'+this.height]));};
+            HTMLCanvasElement.prototype.toBlob=function(callback){
+                const size=this.width+'x'+this.height, blob=new Blob([size]);
+                // Keep mock reads in microtasks so virtual time cannot expire during a scan.
+                blob.text=async()=>size;callback(blob);
+            };
             window.createImageBitmap=async()=>{const c=document.createElement('canvas');c.width=640;c.height=480;c.close=()=>{};return c;};
             const app=createApp(o_component__scan), vm=app.mount('#app');
             try {
-                if (${cornerFocus}) {
+                if (${freeScan}) {
+                    await runFreeWorkflow(vm);
+                } else if (${cornerFocus}) {
                     await runCornerWorkflow(vm);
                 } else {
                 vm.n_tile_x=2;vm.n_tile_y=1;vm.f_delay=async()=>{};vm.f_move_motor_n_step=async()=>{};
@@ -161,19 +168,27 @@ async function runScanBrowserTest(cornerFocus = false) {
                 }
                 document.body.dataset.result='PASS';
             } catch(e) {document.body.dataset.result='FAIL: '+e.stack;}
-            finally {app.unmount();}
+            finally {
+                const original = document.querySelector('.panel-scan');
+                const preview = ${freeScan} ? original?.cloneNode(true) : null;
+                if (preview) preview.querySelectorAll('select').forEach((select, i) => { select.value = original.querySelectorAll('select')[i].value; });
+                app.unmount();
+                if (preview) document.body.appendChild(preview);
+            }
         </script>`, { headers: { 'content-type': 'text/html' } });
+        if (path === '/index.css') return new Response(await Deno.readTextFile(new URL('../webserved_dir/index.css', import.meta.url)), { headers: { 'content-type': 'text/css' } });
         try { return js(await Deno.readTextFile(new URL('../webserved_dir' + path, import.meta.url))); }
         catch { return new Response('', { status: 404 }); }
     });
     try {
         const result = await new Deno.Command('/usr/bin/google-chrome', { args: [
             '--headless', '--no-sandbox', '--disable-gpu', '--no-first-run', '--user-data-dir=' + dir,
+            ...(freeScan ? ['--window-size=1000,1000', '--screenshot=/tmp/omm-free-scan.png'] : []),
             '--virtual-time-budget=10000', '--dump-dom', 'http://127.0.0.1:' + server.addr.port,
         ], stdout: 'piped', stderr: 'piped' }).output();
         const html = new TextDecoder().decode(result.stdout);
         assert.ok(html.includes('data-result="PASS"'), html || new TextDecoder().decode(result.stderr));
-        assert.deepEqual(folderRequests, cornerFocus ? [] : [
+        assert.deepEqual(folderRequests, cornerFocus || freeScan ? [] : [
             { method: 'POST', folder: '/scans/scan_0' },
             { method: 'POST', folder: '/scans/scan_1' },
         ]);
@@ -182,3 +197,5 @@ async function runScanBrowserTest(cornerFocus = false) {
 
 Deno.test('scan UI captures a second slide while the first stitch runs and keeps results separate', () => runScanBrowserTest());
 Deno.test('scan UI interpolates manually focused corners and handles changes, stops and disconnection', () => runScanBrowserTest(true));
+
+Deno.test('free scan captures a concave outline with interpolated focus and supports interruption and new slides', () => runScanBrowserTest(false, true));

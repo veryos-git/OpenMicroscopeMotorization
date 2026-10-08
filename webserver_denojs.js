@@ -314,7 +314,10 @@ let f_handler = async function(o_request, o_conninfo) {
                     await Deno.mkdir(s_path_folder, { recursive: true });
                     await Deno.mkdir(s_path_folder + s_ds + 'dowscaled', { recursive: true });
                     await o_scan_jobs.f_create(s_path_folder, o_data.v_data?.n_id__slide || 0,
-                        o_data.v_data?.b_live_scan ? { ...o_data.v_data.o_option, b_live_scan: true } : {});
+                        { ...o_data.v_data?.o_option, b_live_scan: o_data.v_data?.b_live_scan === true });
+                    if (o_data.v_data?.o_option?.b_free_scan && o_data.v_data?.o_scan_plan) {
+                        await Deno.writeTextFile(s_path_folder + s_ds + 'scan_plan.json', JSON.stringify(o_data.v_data.o_scan_plan, null, 2));
+                    }
                     o_socket.send(JSON.stringify({
                         v_result: { s_path_folder: s_path_folder },
                         s_uuid: o_data.s_uuid,

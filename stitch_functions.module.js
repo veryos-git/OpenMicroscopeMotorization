@@ -79,12 +79,13 @@ let f_o_stitch_run = async function(o_option, f_on_line) {
         '--jobs', live ? '1' : '2',
     ];
     if (!live) {
-        const pattern = o_option.b_live_scan ? '^tile_r[0-9]+_c[0-9]+\\.png$' : '^tile_r[0-9]+_c[0-9]+.*\\.(png|jpe?g|tiff?)$';
+        const pattern = o_option.b_live_scan || o_option.b_free_scan ? '^tile_r[0-9]+_c[0-9]+\\.png$' : '^tile_r[0-9]+_c[0-9]+.*\\.(png|jpe?g|tiff?)$';
         a_s_arg.push('--jpeg-copy', '--all-color-variants', '--pattern', pattern);
     }
     if (o_option.b_live_scan) {
         a_s_arg.push('--scan-live-cache', `${s_path_folder}${s_ds}live_alignment.json`);
     }
+    if (o_option.b_free_scan) a_s_arg.push('--scan-grid');
     if (live) a_s_arg.push('--live-preview', '--passes', '1');
     if(o_option.n_score__min) a_s_arg.push('--min-score', String(o_option.n_score__min));
     if(o_option.n_dim__max) a_s_arg.push('--max-dim', String(o_option.n_dim__max));

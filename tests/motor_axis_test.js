@@ -1,8 +1,9 @@
 import { f_n_rpm__manual } from '../webserved_dir/manual_speed.module.js';
+import { o_component__icon } from '../webserved_dir/o_component__icon.js';
 import assert from 'node:assert/strict';
 
 async function component(name, bindings) {
-    bindings = { f_n_rpm__manual, ...bindings };
+    bindings = { f_n_rpm__manual, o_component__icon, ...bindings };
     const source = (await Deno.readTextFile(new URL('../webserved_dir/o_component__' + name + '.js', import.meta.url)))
         .replace(/^import\s*\{[\s\S]*?\}\s*from\s*['"][^'"]+['"];?/gm, '')
         .replace(/export \{[^}]+\};?/, '');
@@ -119,13 +120,21 @@ Deno.test('Z can be unassigned and reassigned without removing an XY motor', asy
     assert.deepEqual(state.o_motor__axis, { x: 2, y: 1, z: 0 });
 });
 
-Deno.test('Flat always opens its overlay without changing correction activation', async () => {
+Deno.test('Flat tool toggles its overlay without changing correction activation', async () => {
     for (const active of [true, false]) {
         const state = { o_panel_visibility: { flat: false }, o_flat_field: { s_path_flat: 'flat.png', b_active: active } };
-        const toolbar = await component('toolbar', { o_state: state, f_save_setting__debounced() {} });
-        toolbar.methods.f_open_flat();
-        toolbar.methods.f_open_flat();
+        const toolbar = await component('toolbar', { o_state: state, o_actions: {
+            f_invoke(id) {
+                assert.equal(id, 'panel.flat');
+                state.o_panel_visibility.flat = !state.o_panel_visibility.flat;
+            },
+        } });
+        const ctx = { ...toolbar.methods, f_close_tools() {} };
+        ctx.f_choose_tool('flat');
         assert.equal(state.o_panel_visibility.flat, true);
+        assert.equal(state.o_flat_field.b_active, active);
+        ctx.f_choose_tool('flat');
+        assert.equal(state.o_panel_visibility.flat, false);
         assert.equal(state.o_flat_field.b_active, active);
         const flat = await component('flat_field', { o_state: state, f_save_setting__debounced() {}, f_save_flat_field() {} });
         flat.methods.f_toggle_active.call({});

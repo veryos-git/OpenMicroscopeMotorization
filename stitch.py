@@ -2163,6 +2163,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                         "(world px, 0 = search the whole mosaic)")
 
     p.add_argument('--scan-live-cache', help='reuse first-pass scan neighbor registrations')
+    p.add_argument('--scan-grid', action='store_true', help='preserve explicit scan row/column indices, including polygon outlines and missing tiles')
     p.add_argument('--live-preview', action='store_true', help='render provisional reduced scan mosaic')
     args = p.parse_args(argv)
     if args.all_color_variants:
@@ -2191,13 +2192,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         raise SystemExit("error: need at least 2 images to stitch")
 
     grid = False
-    if args.scan_live_cache:
+    if args.scan_live_cache or args.scan_grid:
         # Explicit scan coordinates allow partial rows and missing captures.
         for t in tiles:
             m = re.fullmatch(r'tile_r(\d+)_c(\d+)\.png', t.name, re.I)
             if not m:
-                raise SystemExit('error: live scan inputs must be named grid tiles')
+                raise SystemExit('error: scan grid inputs must be named tile_r<row>_c<column>.png')
             t.row, t.col = map(int, m.groups())
+        if len({(t.row, t.col) for t in tiles}) != len(tiles):
+            raise SystemExit('error: duplicate scan row/column indices')
         grid = True
     elif not args.no_grid:
         if args.grid:
@@ -2443,6 +2446,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         n_ms__match = (time.perf_counter() - n_ms__t2) * 1000
 
     groups = components(len(tiles), used)
+    if args.scan_grid and not args.live_preview and len(groups) > 1:
+        raise SystemExit('error: free scan tiles contain disconnected groups; '
+                         'cannot place them reliably. Check missing tiles or retry with LoFTR rescue.')
     if len(groups) > 1:
         warn(f"the tiles form {len(groups)} disconnected groups "
              f"(sizes {', '.join(str(len(g)) for g in groups[:6])}"
@@ -2504,7 +2510,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     span_y = pos[:, 1].max() - pos[:, 1].min() + h
     log(f"mosaic extent: {span_x:.0f} x {span_y:.0f} px")
 
-    holes = coverage_report(tiles, pos, (h, w))
+    # A convex-hull coverage estimate would mislabel a concave outline's cutout
+    # as missed acquisition. Free scan coverage is planned against its polygon.
+    holes = 0.0 if args.scan_grid else coverage_report(tiles, pos, (h, w))
     if holes > 0.0005:
         warn(f"{holes * 100:.2f}% of the scanned area is not covered by any tile: "
              "the scan itself has gaps (stage stepped further than one tile). "

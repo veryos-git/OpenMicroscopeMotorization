@@ -576,7 +576,7 @@ let f_apply_library_current_from_db = function() {
     }
 };
 
-let n_id__save_timeout = 0;
+let o_save_timeouts = new Map();
 
 let f_save_setting = async function(s_key, v_value) {
     let s_value = typeof v_value === 'string' ? v_value : JSON.stringify(v_value);
@@ -668,8 +668,13 @@ let f_toggle_mouse_jog = function() {
 };
 
 let f_save_setting__debounced = function(s_key, v_value) {
-    clearTimeout(n_id__save_timeout);
-    n_id__save_timeout = setTimeout(function(){ f_save_setting(s_key, v_value); }, 300);
+    // Calibration saves scale, backlash and timestamps together. Debounce each
+    // setting independently so a later key cannot cancel another key's save.
+    clearTimeout(o_save_timeouts.get(s_key));
+    o_save_timeouts.set(s_key, setTimeout(function(){
+        o_save_timeouts.delete(s_key);
+        f_save_setting(s_key, v_value);
+    }, 300));
 };
 
 // persist the flat-field metadata (never the pixel buffers — those stay in the
