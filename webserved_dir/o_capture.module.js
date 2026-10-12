@@ -1,9 +1,11 @@
+import { f_o_camera_geometry, f_el_camera_frame, f_b_camera_geometry_matches } from './camera_frame.module.js';
 import { o_state } from './index.js';
 import { f_b_flat__matches, f_flat__apply } from './o_flatfield.module.js';
 
 // single capture path. every component that "takes a picture" from the live
 // webcam calls this, so the subtle capture flash always shows, and the frame
 // grabbing logic stays in one place.
+// All dimensions and optional ROIs refer to the image AFTER the hardware crop.
 
 // o_opts:
 //   n_scl_max  - cap the long side (downscale for cheap uploads), optional
@@ -22,8 +24,8 @@ let f_o_capture__frame = function(o_opts) {
             reject(new Error('no webcam stream available'));
             return;
         }
-        let n_scl_x__video = el_video.videoWidth;
-        let n_scl_y__video = el_video.videoHeight;
+        let n_scl_x__video = f_o_camera_geometry(el_video).n_scl_x;
+        let n_scl_y__video = f_o_camera_geometry(el_video).n_scl_y;
 
         // source rectangle: the whole frame, or the requested crop
         let n_px_x__src = 0;
@@ -49,7 +51,7 @@ let f_o_capture__frame = function(o_opts) {
         el_canvas.height = n_scl_y;
         let o_ctx = el_canvas.getContext('2d');
         o_ctx.drawImage(
-            el_video,
+            f_el_camera_frame(el_video),
             n_px_x__src, n_px_y__src, n_scl_x__src, n_scl_y__src,
             0, 0, n_scl_x, n_scl_y
         );
@@ -58,7 +60,7 @@ let f_o_capture__frame = function(o_opts) {
         // tile and stack frame is already corrected when it is written to disk.
         // downscaled captures (e.g. the locate frame) stay raw.
         if (o_opts.b_flat !== false && !b_roi && o_state.o_flat_field.b_active && n_scl === 1) {
-            if (f_b_flat__matches(n_scl_x, n_scl_y)) {
+            if (f_b_flat__matches(n_scl_x, n_scl_y) && f_b_camera_geometry_matches(o_state.o_flat_field.o_camera__flat, el_video)) {
                 let o_imagedata = o_ctx.getImageData(0, 0, n_scl_x, n_scl_y);
                 f_flat__apply(o_imagedata);
                 o_ctx.putImageData(o_imagedata, 0, 0);
@@ -93,7 +95,7 @@ let f_o_capture__frame = function(o_opts) {
     });
 };
 
-// grab the current webcam frame as raw RGBA pixel data at full resolution.
+// Grab uncorrected RGBA at native pixel scale, after the hardware crop.
 // used by the flat-field calibration to average several defocused frames.
 let f_o_frame__imagedata = function() {
     return new Promise(function(resolve, reject) {
@@ -102,13 +104,13 @@ let f_o_frame__imagedata = function() {
             reject(new Error('no webcam stream available'));
             return;
         }
-        let n_scl_x = el_video.videoWidth;
-        let n_scl_y = el_video.videoHeight;
+        let n_scl_x = f_o_camera_geometry(el_video).n_scl_x;
+        let n_scl_y = f_o_camera_geometry(el_video).n_scl_y;
         let el_canvas = document.createElement('canvas');
         el_canvas.width = n_scl_x;
         el_canvas.height = n_scl_y;
         let o_ctx = el_canvas.getContext('2d');
-        o_ctx.drawImage(el_video, 0, 0, n_scl_x, n_scl_y);
+        o_ctx.drawImage(f_el_camera_frame(el_video), 0, 0, n_scl_x, n_scl_y);
         resolve({
             n_scl_x: n_scl_x,
             n_scl_y: n_scl_y,

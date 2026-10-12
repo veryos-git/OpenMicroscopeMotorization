@@ -22,6 +22,10 @@ let f_o_crop_point = (o_point, o_bounds) => ({
 });
 let f_o_box_to_crop = (o_box, o_bounds) => ({
     ...o_box,
+    ...(o_box.a_o_point ? { a_o_point: o_box.a_o_point.map(o => ({ ...o,
+        n_x: Math.max(0, Math.min(1, (o.n_x - o_bounds.n_x) / o_bounds.n_scl_x)),
+        n_y: Math.max(0, Math.min(1, (o.n_y - o_bounds.n_y) / o_bounds.n_scl_y)),
+    })) } : {}),
     n_x: (o_box.n_x - o_bounds.n_x) / o_bounds.n_scl_x,
     n_y: (o_box.n_y - o_bounds.n_y) / o_bounds.n_scl_y,
     n_scl_x: o_box.n_scl_x / o_bounds.n_scl_x,
@@ -29,6 +33,10 @@ let f_o_box_to_crop = (o_box, o_bounds) => ({
 });
 let f_o_box_from_crop = (o_box, o_bounds) => ({
     ...o_box,
+    ...(o_box.a_o_point ? { a_o_point: o_box.a_o_point.map(o => ({ ...o,
+        n_x: o_bounds.n_x + o.n_x * o_bounds.n_scl_x,
+        n_y: o_bounds.n_y + o.n_y * o_bounds.n_scl_y,
+    })) } : {}),
     n_x: o_bounds.n_x + o_box.n_x * o_bounds.n_scl_x,
     n_y: o_bounds.n_y + o_box.n_y * o_bounds.n_scl_y,
     n_scl_x: o_box.n_scl_x * o_bounds.n_scl_x,

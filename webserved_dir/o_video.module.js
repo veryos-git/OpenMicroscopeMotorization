@@ -1,3 +1,4 @@
+import { f_o_camera_geometry, f_el_camera_frame, f_b_camera_crop_active } from './camera_frame.module.js';
 import { o_state } from './index.js';
 import { f_o_camera_snapshot } from './o_camera.module.js';
 import {
@@ -56,37 +57,40 @@ let f_s_mime__best = function() {
 
 // ─── source ─────────────────────────────────────────────────────────
 
-// raw: the camera stream.  processed: a canvas that mirrors what the main
-// window shows (flat-field + webgl filter), captured at a fixed frame rate.
+// Raw retains camera pixels after the hardware crop. Processed mirrors the
+// flat-field + WebGL view. Cropped/processed streams use the configured FPS.
 let f_o_source = function(s_source, n_fps) {
     let el_video = document.getElementById('webcamVideo');
     if(!el_video || !el_video.srcObject){
         throw new Error('no camera stream');
     }
-    if(s_source !== 'processed'){
+    if(s_source !== 'processed' && !f_b_camera_crop_active(el_video)){
         return { o_stream: el_video.srcObject, el_canvas: null, n_id__frame: 0 };
     }
     let el_canvas = document.createElement('canvas');
-    el_canvas.width = el_video.videoWidth || 1280;
-    el_canvas.height = el_video.videoHeight || 720;
+    el_canvas.width = f_o_camera_geometry(el_video).n_scl_x || 1280;
+    el_canvas.height = f_o_camera_geometry(el_video).n_scl_y || 720;
     let o_ctx = el_canvas.getContext('2d');
     let o_state__frame = { n_id__frame: 0, b_run: true };
     let f_draw = function() {
         if(!o_state__frame.b_run) return;
         let el_filter = document.querySelector('.filter-canvas');
-        let el_src = (el_filter && el_filter.offsetParent !== null) ? el_filter : el_video;
+        let el_src = (s_source === 'processed' && el_filter && el_filter.offsetParent !== null)
+            ? el_filter : f_el_camera_frame(el_video);
         try {
             o_ctx.drawImage(el_src, 0, 0, el_canvas.width, el_canvas.height);
         } catch (o_error) { /* a webgl canvas can refuse a copy; keep the last frame */ }
         o_state__frame.n_id__frame = requestAnimationFrame(f_draw);
     };
-    o_state__frame.n_id__frame = requestAnimationFrame(f_draw);
+    f_draw();
+    let o_stream = el_canvas.captureStream(Math.max(1, Math.round(n_fps || 30)));
     return {
-        o_stream: el_canvas.captureStream(Math.max(1, Math.round(n_fps || 30))),
+        o_stream,
         el_canvas,
         f_destroy: function(){
             o_state__frame.b_run = false;
             cancelAnimationFrame(o_state__frame.n_id__frame);
+            o_stream.getTracks().forEach(o_track => o_track.stop());
         },
     };
 };

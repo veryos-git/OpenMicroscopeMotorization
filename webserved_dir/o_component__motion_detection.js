@@ -1,3 +1,4 @@
+import { f_o_camera_geometry, f_el_camera_frame } from './camera_frame.module.js';
 import { o_state, f_save_setting, f_save_setting__debounced } from './index.js';
 import { f_o_motion_config, f_o_motion_detector, f_o_motion_view } from './motion_detection.module.js';
 
@@ -101,7 +102,7 @@ let o_component__motion_detection = {
             try {
                 let el_video = document.getElementById('webcamVideo');
                 let o_track = el_video?.srcObject?.getVideoTracks()[0];
-                if (!el_video || el_video.readyState < 2 || !el_video.videoWidth || !el_video.videoHeight ||
+                if (!el_video || el_video.readyState < 2 || !f_o_camera_geometry(el_video).n_scl_x || !f_o_camera_geometry(el_video).n_scl_y ||
                     !o_track || o_track.readyState === 'ended' || o_track.muted) {
                     this._o_detector.f_reset();
                     this.f_clear();
@@ -117,9 +118,11 @@ let o_component__motion_detection = {
                     this.s_status = 'Paused for stage movement';
                     return;
                 }
-                if (this._o_track !== o_track) {
+                let s_geometry = JSON.stringify(f_o_camera_geometry(el_video));
+                if (this._o_track !== o_track || this._s_geometry !== s_geometry) {
                     this._o_detector.f_reset();
                     this._o_track = o_track;
+                    this._s_geometry = s_geometry;
                     this._n_time = null;
                 }
                 if (this._n_time === el_video.currentTime) {
@@ -132,13 +135,13 @@ let o_component__motion_detection = {
                 }
                 this._n_time = el_video.currentTime;
                 this._n_last_frame = performance.now();
-                let n_source_x = el_video.videoWidth, n_source_y = el_video.videoHeight;
+                let n_source_x = f_o_camera_geometry(el_video).n_scl_x, n_source_y = f_o_camera_geometry(el_video).n_scl_y;
                 let n_scale = Math.min(1, 640 / Math.max(n_source_x, n_source_y));
                 let n_x = Math.max(1, Math.round(n_source_x * n_scale));
                 let n_y = Math.max(1, Math.round(n_source_y * n_scale));
                 let el = this._el_analysis;
                 if (el.width !== n_x || el.height !== n_y) { el.width = n_x; el.height = n_y; }
-                this._o_context.drawImage(el_video, 0, 0, n_x, n_y);
+                this._o_context.drawImage(f_el_camera_frame(el_video), 0, 0, n_x, n_y);
                 let a_n_rgba = this._o_context.getImageData(0, 0, n_x, n_y).data;
                 let a_n_gray = new Uint8Array(n_x * n_y);
                 for (let n = 0; n < a_n_gray.length; n++) {
@@ -154,7 +157,7 @@ let o_component__motion_detection = {
             }
         },
         f_draw: function(el_video, a_o_region) {
-            let o_view = f_o_motion_view(el_video.getBoundingClientRect(), el_video.videoWidth, el_video.videoHeight);
+            let o_view = f_o_motion_view(el_video.getBoundingClientRect(), f_o_camera_geometry(el_video).n_scl_x, f_o_camera_geometry(el_video).n_scl_y);
             let el = this.$refs.el_overlay;
             Object.assign(el.style, { left: o_view.n_x + 'px', top: o_view.n_y + 'px',
                 width: o_view.n_scl_x + 'px', height: o_view.n_scl_y + 'px' });
@@ -167,8 +170,8 @@ let o_component__motion_detection = {
             o_ctx.strokeStyle = '#00d4aa';
             o_ctx.lineWidth = 2 * n_dpr;
             for (let o of a_o_region) {
-                o_ctx.strokeRect(o.n_x / el_video.videoWidth * el.width, o.n_y / el_video.videoHeight * el.height,
-                    o.n_scl_x / el_video.videoWidth * el.width, o.n_scl_y / el_video.videoHeight * el.height);
+                o_ctx.strokeRect(o.n_x / f_o_camera_geometry(el_video).n_scl_x * el.width, o.n_y / f_o_camera_geometry(el_video).n_scl_y * el.height,
+                    o.n_scl_x / f_o_camera_geometry(el_video).n_scl_x * el.width, o.n_scl_y / f_o_camera_geometry(el_video).n_scl_y * el.height);
             }
         },
     },

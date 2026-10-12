@@ -1,3 +1,4 @@
+import { f_o_camera_geometry } from './camera_frame.module.js';
 import { f_o_box_from_crop, f_o_crop_bounds } from './training_crop.module.js';
 import { o_state } from './index.js';
 import { f_o_capture__frame } from './o_capture.module.js';
@@ -134,8 +135,7 @@ let o_component__training_yolo = {
             return JSON.stringify([
                 this.s_stage,
                 this.o_crop,
-                o_video?.videoWidth,
-                o_video?.videoHeight,
+                f_o_camera_geometry(o_video),
                 f_o_camera_track()?.getSettings().zoom,
             ]);
         },

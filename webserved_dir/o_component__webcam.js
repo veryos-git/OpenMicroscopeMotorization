@@ -1,5 +1,6 @@
 import { o_state, f_save_setting__debounced } from './index.js';
 import { f_apply_camera__saved, f_camera_stopped } from './o_camera.module.js';
+import { f_o_camera_geometry, f_el_camera_frame, f_b_camera_crop_active } from './camera_frame.module.js';
 
 let o_component__webcam = {
     name: 'component-webcam',
@@ -10,8 +11,9 @@ let o_component__webcam = {
             autoplay
             playsinline
             muted
-            :style="{ display: b_streaming ? 'block' : 'none' }"
+            :style="{ display: b_streaming ? 'block' : 'none', visibility: b_cropped ? 'hidden' : 'visible' }"
         ></video>
+        <canvas id="webcamFrame" ref="el_frame" v-show="b_streaming && b_cropped"></canvas>
         <div id="webcamPlaceholder" v-if="!b_streaming">
             <span>No camera active</span>
             <span style="font-size:0.75rem;">select a camera in the toolbar above</span>
@@ -33,6 +35,7 @@ let o_component__webcam = {
             b_streaming: false,
             o_stream: null,
             b_flash: false,
+            b_cropped: false,
             n_id__flash_timeout: 0,
             n_id__camera_apply: 0,
         };
@@ -40,6 +43,7 @@ let o_component__webcam = {
     mounted: function() {
         let o_self = this;
         o_self.f_enumerate_webcam();
+        o_self.f_draw_frame();
     },
     watch: {
         'o_state.s_id__webcam_device': function(s_id__new) {
@@ -59,6 +63,24 @@ let o_component__webcam = {
         }
     },
     methods: {
+        f_draw_frame: function() {
+            let el_video = this.$refs.el_video;
+            this.b_cropped = f_b_camera_crop_active(el_video);
+            let s_geometry = JSON.stringify([o_state.s_id__webcam_device, f_o_camera_geometry(el_video)]);
+            if (this._s_geometry && this._s_geometry !== s_geometry) {
+                if (o_state.o_zoom) Object.assign(o_state.o_zoom, { n_scl_x__roi: 0, n_scl_y__roi: 0, b_selecting: false });
+                if (o_state.o_cellpose) o_state.o_cellpose.s_path_mask = '';
+            }
+            this._s_geometry = s_geometry;
+            if (this.b_streaming && this.b_cropped && el_video.readyState >= 2) {
+                let el_frame = this.$refs.el_frame;
+                let o_geometry = f_o_camera_geometry(el_video);
+                if (el_frame.width !== o_geometry.n_scl_x) el_frame.width = o_geometry.n_scl_x;
+                if (el_frame.height !== o_geometry.n_scl_y) el_frame.height = o_geometry.n_scl_y;
+                el_frame.getContext('2d').drawImage(f_el_camera_frame(el_video), 0, 0);
+            }
+            this._n_id__frame = requestAnimationFrame(() => this.f_draw_frame());
+        },
         f_enumerate_webcam: async function() {
             let o_self = this;
             try {
@@ -117,11 +139,13 @@ let o_component__webcam = {
             }
             o_self.b_streaming = false;
             o_state.b_streaming__webcam = false;
+            if (o_self.$refs.el_video) o_self.$refs.el_video.srcObject = null;
             f_camera_stopped();
         },
     },
     beforeUnmount: function() {
         clearTimeout(this.n_id__flash_timeout);
+        cancelAnimationFrame(this._n_id__frame);
         this.f_stop_webcam();
     },
 };

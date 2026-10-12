@@ -1,4 +1,5 @@
 import { o_state, f_save_setting } from './index.js';
+import { f_o_camera_geometry_snapshot } from './camera_frame.module.js';
 
 // ─── USB (UVC) camera hardware settings ─────────────────────────────
 // Every value lives in o_state.o_camera (see index.js) so the toolbar quick
@@ -58,6 +59,7 @@ let f_read_camera = function() {
 
     o_camera.b_active = o_track.readyState !== 'ended';
     o_camera.s_label = o_track.label || 'Camera';
+    o_camera.s_device_id = o_setting.deviceId || o_state.s_id__webcam_device || '';
     o_camera.n_width = o_setting.width || 0;
     o_camera.n_height = o_setting.height || 0;
     o_camera.n_frame_rate = o_setting.frameRate || 0;
@@ -123,8 +125,7 @@ let f_camera_stopped = function() {
 let f_o_camera_snapshot = function() {
     let o_camera = o_state.o_camera;
     return {
-        n_width: o_camera.n_width,
-        n_height: o_camera.n_height,
+        ...f_o_camera_geometry_snapshot({ videoWidth: o_camera.n_width, videoHeight: o_camera.n_height }),
         n_frame_rate: o_camera.n_frame_rate,
         s_mode__exposure: o_camera.s_mode__exposure,
         n_time__exposure: o_camera.n_time__exposure,
@@ -219,7 +220,7 @@ let f_o_saved_resolution = function(s_device_id) {
 };
 
 let f_b_camera_resolution_locked = function() {
-    return !!(o_state.b_scanning || o_state.o_record?.b_running ||
+    return !!(o_state.b_scanning || o_state.b_training_busy || o_state.b_training_capture_busy || o_state.o_record?.b_running ||
         o_state.o_video?.b_recording || o_state.o_video?.b_preroll || o_state.o_video?.b_burst);
 };
 

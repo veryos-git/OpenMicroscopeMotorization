@@ -1,8 +1,10 @@
+import { o_component__hardware_crop } from './o_component__hardware_crop.js';
 import { o_state, f_save_setting__debounced } from './index.js';
 import { f_apply_camera_resolution, f_b_camera_resolution_locked, f_s_key__iso, f_read_camera, f_apply_camera_setting, f_set_camera_mode } from './o_camera.module.js';
 
 let o_component__camera_setting = {
     name: 'component-camera-setting',
+    components: { o_component__hardware_crop },
     template: `
         <div class="overlay-panel panel-camera-setting" :class="{ visible: o_state.o_panel_visibility.camera_setting }">
             <div class="panel-header">
@@ -56,10 +58,12 @@ let o_component__camera_setting = {
                             {{ o_cam.o_requested_format.n_frame_rate ?? 'unchanged' }} fps
                             ({{ o_cam.o_requested_format.b_maximum ? 'preferred size' : 'exact size' }}).</p>
                         <p>Ranges and example sizes do not guarantee valid resolution/FPS combinations. Test a request to see the active result above.</p>
-                        <p>The preview adapts to the window; captures retain the active camera resolution. Monitor size uses physical screen pixels as a preference.</p>
+                        <p>The preview adapts to the window; captures use the hardware crop below at native pixel resolution. Monitor size uses physical screen pixels as a preference.</p>
                         <p v-if="b_resolution_locked">Stop scanning or recording to change resolution.</p>
                         <p v-if="o_cam.s_error__resolution" role="alert">{{ o_cam.s_error__resolution }}</p>
                     </div>
+
+                    <o_component__hardware_crop />
 
                     <p>Hardware controls reported by the camera/driver. Unavailable controls are not emulated.</p>
                     <p v-if="o_cam.s_error__setting" role="alert">{{ o_cam.s_error__setting }}</p>

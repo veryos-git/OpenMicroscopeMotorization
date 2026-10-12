@@ -1,5 +1,6 @@
+import { f_o_camera_geometry, f_el_camera_frame, f_b_camera_geometry_matches } from './camera_frame.module.js';
 import { o_state, f_save_setting__debounced } from './index.js';
-import { f_b_flat__loaded, f_o_flat } from './o_flatfield.module.js';
+import { f_b_flat__loaded, f_b_flat__matches, f_o_flat } from './o_flatfield.module.js';
 import { f_o_exposure_limits, f_o_exposure_histogram } from './exposure.module.js';
 
 // ─── Shader source ──────────────────────────────────────────────────
@@ -428,14 +429,14 @@ let o_component__filter = {
             if (n_now - (this._n_ts_histogram || 0) < 250) return;
             this._n_ts_histogram = n_now;
             let video = this.f_el_video();
-            if (!video?.videoWidth || video.readyState < 2) { this.o_histogram = null; return; }
+            if (!f_o_camera_geometry(video).n_scl_x || video.readyState < 2) { this.o_histogram = null; return; }
             this._el_histogram ||= document.createElement('canvas');
             let canvas = this._el_histogram;
-            canvas.width = Math.min(512, video.videoWidth);
-            canvas.height = Math.max(1, Math.round(video.videoHeight * canvas.width / video.videoWidth));
+            canvas.width = Math.min(512, f_o_camera_geometry(video).n_scl_x);
+            canvas.height = Math.max(1, Math.round(f_o_camera_geometry(video).n_scl_y * canvas.width / f_o_camera_geometry(video).n_scl_x));
             let ctx = canvas.getContext('2d', { willReadFrequently: true });
             ctx.imageSmoothingEnabled = false;
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            ctx.drawImage(f_el_camera_frame(video), 0, 0, canvas.width, canvas.height);
             this.o_histogram = f_o_exposure_histogram(ctx.getImageData(0, 0, canvas.width, canvas.height).data, o_state.o_filter);
         },
 
@@ -553,23 +554,23 @@ let o_component__filter = {
             let el_video = o_self.f_el_video();
             let el_canvas = o_self.$refs.el_canvas;
             if(!el_video || !el_canvas) return;
-            if(!el_video.videoWidth || !el_video.videoHeight) return;
+            if(!f_o_camera_geometry(el_video).n_scl_x || !f_o_camera_geometry(el_video).n_scl_y) return;
             // HAVE_CURRENT_DATA, otherwise there is no frame to upload yet
             if(el_video.readyState < 2) return;
             if(!o_self.f_b_init_gl()) return;
 
             let o_gl = o_self._o_gl;
 
-            if(el_canvas.width !== el_video.videoWidth || el_canvas.height !== el_video.videoHeight){
-                el_canvas.width = el_video.videoWidth;
-                el_canvas.height = el_video.videoHeight;
-                o_self.n_scl_x__frame = el_video.videoWidth;
-                o_self.n_scl_y__frame = el_video.videoHeight;
+            if(el_canvas.width !== f_o_camera_geometry(el_video).n_scl_x || el_canvas.height !== f_o_camera_geometry(el_video).n_scl_y){
+                el_canvas.width = f_o_camera_geometry(el_video).n_scl_x;
+                el_canvas.height = f_o_camera_geometry(el_video).n_scl_y;
+                o_self.n_scl_x__frame = f_o_camera_geometry(el_video).n_scl_x;
+                o_self.n_scl_y__frame = f_o_camera_geometry(el_video).n_scl_y;
                 o_gl.viewport(0, 0, el_canvas.width, el_canvas.height);
             }
 
             o_gl.bindTexture(o_gl.TEXTURE_2D, o_self._o_texture);
-            o_gl.texImage2D(o_gl.TEXTURE_2D, 0, o_gl.RGB, o_gl.RGB, o_gl.UNSIGNED_BYTE, el_video);
+            o_gl.texImage2D(o_gl.TEXTURE_2D, 0, o_gl.RGB, o_gl.RGB, o_gl.UNSIGNED_BYTE, f_el_camera_frame(el_video));
 
             let o_filter = o_state.o_filter;
             // Exposure warnings work independently of display processing.
@@ -599,7 +600,9 @@ let o_component__filter = {
             o_gl.uniform1i(o_uniform.u_colormap, f_n_colormap(o_filter.s_colormap));
 
             // flat-field correction (reuses a second texture unit)
-            let b_flat__enabled = !!(o_state.o_flat_field.b_active && f_b_flat__loaded());
+            let b_flat__enabled = !!(o_state.o_flat_field.b_active && f_b_flat__loaded() &&
+                f_b_flat__matches(el_canvas.width, el_canvas.height) &&
+                f_b_camera_geometry_matches(o_state.o_flat_field.o_camera__flat, el_video));
             o_gl.uniform1f(o_uniform.u_flat_enabled, b_flat__enabled ? 1 : 0);
             if(b_flat__enabled){
                 let o_flat = f_o_flat();

@@ -1,3 +1,4 @@
+import { f_o_camera_geometry, f_el_camera_frame } from './camera_frame.module.js';
 // measuring focus on the live image, and a search that is quick enough to run
 // before every tile of a scan
 //
@@ -17,17 +18,17 @@ import { f_n_score } from './focus_metric.module.js';
 // sharpness of the current video frame, measured on the center of the image
 // o_option: { n_scl_x__measure, n_pct__roi, s_metric }
 let f_n_score__video = function(el_video, o_option, o_cache) {
-    if(!el_video || !el_video.videoWidth || el_video.readyState < 2) return 0;
+    if(!el_video || !f_o_camera_geometry(el_video).n_scl_x || el_video.readyState < 2) return 0;
 
     let o_state__cache = o_cache || {};
     if(!o_state__cache.el_canvas) o_state__cache.el_canvas = document.createElement('canvas');
     let el_canvas = o_state__cache.el_canvas;
 
     let n_nor__roi = Math.max(0.1, Math.min(1, (o_option.n_pct__roi || 60) / 100));
-    let n_scl_x__src = el_video.videoWidth * n_nor__roi;
-    let n_scl_y__src = el_video.videoHeight * n_nor__roi;
-    let n_px_x__src = (el_video.videoWidth - n_scl_x__src) / 2;
-    let n_px_y__src = (el_video.videoHeight - n_scl_y__src) / 2;
+    let n_scl_x__src = f_o_camera_geometry(el_video).n_scl_x * n_nor__roi;
+    let n_scl_y__src = f_o_camera_geometry(el_video).n_scl_y * n_nor__roi;
+    let n_px_x__src = (f_o_camera_geometry(el_video).n_scl_x - n_scl_x__src) / 2;
+    let n_px_y__src = (f_o_camera_geometry(el_video).n_scl_y - n_scl_y__src) / 2;
 
     let n_scl_x = Math.min(o_option.n_scl_x__measure || 480, Math.round(n_scl_x__src));
     let n_scl_y = Math.max(3, Math.round(n_scl_x * (n_scl_y__src / n_scl_x__src)));
@@ -37,7 +38,7 @@ let f_n_score__video = function(el_video, o_option, o_cache) {
     }
     let o_ctx = el_canvas.getContext('2d', { willReadFrequently: true });
     o_ctx.drawImage(
-        el_video,
+        f_el_camera_frame(el_video),
         n_px_x__src, n_px_y__src, n_scl_x__src, n_scl_y__src,
         0, 0, n_scl_x, n_scl_y
     );

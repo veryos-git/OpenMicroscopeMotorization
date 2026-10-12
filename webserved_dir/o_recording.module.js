@@ -1,3 +1,4 @@
+import { f_o_camera_geometry, f_el_camera_frame } from './camera_frame.module.js';
 import {
     o_state,
     f_send_esp_move_step,
@@ -152,8 +153,8 @@ let f_o_recording_preflight = async function(o_config) {
         n_scl_y = o_state.o_zoom.n_scl_y__roi;
     } else {
         let el_video = document.getElementById('webcamVideo');
-        n_scl_x = el_video ? el_video.videoWidth : 0;
-        n_scl_y = el_video ? el_video.videoHeight : 0;
+        n_scl_x = el_video ? f_o_camera_geometry(el_video).n_scl_x : 0;
+        n_scl_y = el_video ? f_o_camera_geometry(el_video).n_scl_y : 0;
     }
     let n_sz__est = f_n_sz__estimate(o_config, n_scl_x, n_scl_y);
     let o_disk = null;
@@ -192,7 +193,7 @@ let f_o_frame__signature = function() {
         el_canvas.height = N_PX__SIGNATURE;
     }
     let o_ctx = el_canvas.getContext('2d', { willReadFrequently: true });
-    o_ctx.drawImage(el_video, 0, 0, N_PX__SIGNATURE, N_PX__SIGNATURE);
+    o_ctx.drawImage(f_el_camera_frame(el_video), 0, 0, N_PX__SIGNATURE, N_PX__SIGNATURE);
     let a_n_byte = o_ctx.getImageData(0, 0, N_PX__SIGNATURE, N_PX__SIGNATURE).data;
     let n_sum = 0;
     let a_s_part = [];

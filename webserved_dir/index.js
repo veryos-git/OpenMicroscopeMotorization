@@ -1,3 +1,4 @@
+import { f_set_camera_crop_provider, f_s_camera_crop_key } from './camera_frame.module.js';
 import { f_o_motion_config } from './motion_detection.module.js';
 import { o_component__motion_detection } from './o_component__motion_detection.js';
 import { f_o_manual_speed } from './manual_speed.module.js';
@@ -133,6 +134,9 @@ let o_state = reactive({
     // mouse jog (on by default, motors only run while the left button is held)
     b_enabled__mouse_jog: true,
 
+    // Pixel rectangles keyed by USB device and native capture resolution.
+    o_hardware_crop: {},
+
     // image filter (webgl processing of the webcam image)
     o_filter: f_o_filter__default(),
 
@@ -243,6 +247,7 @@ let o_state = reactive({
     a_o_map__scanned: [],
 
     b_training_busy: false,
+    b_training_capture_busy: false,
 
     // UI
     o_motion_detection: f_o_motion_config(),
@@ -334,6 +339,10 @@ let o_state = reactive({
     b_detected__esp_usb: false,
     s_port__esp_usb: '',
 });
+
+f_set_camera_crop_provider((n_scl_x, n_scl_y) => o_state.o_hardware_crop?.[
+    f_s_camera_crop_key(o_state.s_id__webcam_device || o_state.o_camera?.s_device_id, n_scl_x, n_scl_y)
+]);
 
 // ─── App server WebSocket (template pattern) ────────────────────────
 
@@ -518,6 +527,8 @@ let f_apply_setting_from_db = function(){
     }
     // the component caps this to whatever the current window can show
     o_state.o_zoom.n_scl_x__mag = Math.min(Math.max(Number(o_state.o_zoom.n_scl_x__mag) || 380, 140), 8000);
+
+    o_state.o_hardware_crop = f_get_json('o_hardware_crop', {}) || {};
 
     // keep unknown/missing filter keys on their defaults
     Object.assign(o_state.o_filter, f_get_json('o_filter', {}));

@@ -1,3 +1,4 @@
+import { f_o_camera_geometry, f_el_camera_frame } from './camera_frame.module.js';
 import { f_action } from './o_actions.js';
 import { o_state, f_save_setting__debounced } from './index.js';
 
@@ -241,12 +242,12 @@ let o_component__zoom = {
         // and letterboxed — every screen<->camera mapping has to go through it.
         f_o_box__video: function() {
             let el_video = document.getElementById('webcamVideo');
-            if(!el_video || !el_video.videoWidth || !el_video.videoHeight) return null;
+            if(!el_video || !f_o_camera_geometry(el_video).n_scl_x || !f_o_camera_geometry(el_video).n_scl_y) return null;
             let o_rect = el_video.getBoundingClientRect();
             let n_scl_x__win = o_rect.width;
             let n_scl_y__win = o_rect.height;
-            let n_scl_x__video = el_video.videoWidth;
-            let n_scl_y__video = el_video.videoHeight;
+            let n_scl_x__video = f_o_camera_geometry(el_video).n_scl_x;
+            let n_scl_y__video = f_o_camera_geometry(el_video).n_scl_y;
             let n_scl = Math.min(n_scl_x__win / n_scl_x__video, n_scl_y__win / n_scl_y__video);
             return {
                 n_x: o_rect.left + (n_scl_x__win - n_scl_x__video * n_scl) / 2,
@@ -775,7 +776,7 @@ let o_component__zoom = {
             o_ctx.imageSmoothingEnabled = o_state.o_zoom.s_resample !== 'pixelated';
             o_ctx.clearRect(0, 0, n_scl_x__out, n_scl_y__out);
             o_ctx.drawImage(
-                el_video,
+                f_el_camera_frame(el_video),
                 n_x, n_y, n_scl_x__roi, n_scl_y__roi,
                 0, 0, n_scl_x__out, n_scl_y__out
             );

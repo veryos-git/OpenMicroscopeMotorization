@@ -1,3 +1,4 @@
+import { f_o_camera_geometry, f_el_camera_frame } from './camera_frame.module.js';
 import {
     o_state,
     f_n_motor__axis,
@@ -316,7 +317,7 @@ let o_component__backlash = {
             if(o_self.o_config.s_signal === 'sharpness' || !a_n_per_px.length) return;
             let n_mean = a_n_per_px.reduce(function(n_sum, n){ return n_sum + n; }, 0) / a_n_per_px.length;
             let el_video = document.getElementById('webcamVideo');
-            let n_scl_x__video = el_video ? el_video.videoWidth : 0;
+            let n_scl_x__video = el_video ? f_o_camera_geometry(el_video).n_scl_x : 0;
             if(!n_scl_x__video) return;
             let n_step__per_px__full = n_mean * (Math.min(N_SCL_X__MEASURE, n_scl_x__video) / n_scl_x__video);
             let n_motor = o_self.f_n_motor();
@@ -350,18 +351,18 @@ let o_component__backlash = {
         f_o_frame: function() {
             let o_self = this;
             let el_video = document.getElementById('webcamVideo');
-            if(!el_video || !el_video.videoWidth || el_video.readyState < 2) return null;
+            if(!el_video || !f_o_camera_geometry(el_video).n_scl_x || el_video.readyState < 2) return null;
 
             if(!o_self._el_canvas) o_self._el_canvas = document.createElement('canvas');
             let el_canvas = o_self._el_canvas;
-            let n_scl_x = Math.min(N_SCL_X__MEASURE, el_video.videoWidth);
-            let n_scl_y = Math.max(3, Math.round(n_scl_x * el_video.videoHeight / el_video.videoWidth));
+            let n_scl_x = Math.min(N_SCL_X__MEASURE, f_o_camera_geometry(el_video).n_scl_x);
+            let n_scl_y = Math.max(3, Math.round(n_scl_x * f_o_camera_geometry(el_video).n_scl_y / f_o_camera_geometry(el_video).n_scl_x));
             if(el_canvas.width !== n_scl_x || el_canvas.height !== n_scl_y){
                 el_canvas.width = n_scl_x;
                 el_canvas.height = n_scl_y;
             }
             let o_ctx = el_canvas.getContext('2d', { willReadFrequently: true });
-            o_ctx.drawImage(el_video, 0, 0, n_scl_x, n_scl_y);
+            o_ctx.drawImage(f_el_camera_frame(el_video), 0, 0, n_scl_x, n_scl_y);
 
             let a_n_byte = o_ctx.getImageData(0, 0, n_scl_x, n_scl_y).data;
             let a_n_luma = new Float64Array(n_scl_x * n_scl_y);

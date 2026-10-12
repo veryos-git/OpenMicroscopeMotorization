@@ -2,6 +2,7 @@ import { f_n_motor__axis, o_state, f_send_esp_move_step, f_send_esp_stop, f_send
 import { f_o_wsmsg } from './constructors.module.js';
 import { f_save_image, f_o_frame__imagedata } from './o_capture.module.js';
 import { f_o_camera_snapshot } from './o_camera.module.js';
+import { f_b_camera_geometry_matches } from './camera_frame.module.js';
 import {
     f_o_flat__average,
     f_flat__set,
@@ -194,9 +195,13 @@ let o_component__flat_field = {
         },
         s_warning__camera: function() {
             let o_flat = o_state.o_flat_field;
-            if(!o_flat.o_camera__flat || !o_state.o_camera.b_active) return '';
+            if(!o_flat.s_path_flat || !o_state.o_camera.b_active) return '';
             let o_now = o_state.o_camera;
             let a_s_diff = [];
+            if (!f_b_camera_geometry_matches(o_flat.o_camera__flat, { videoWidth: o_now.n_width, videoHeight: o_now.n_height })) {
+                return 'Hardware crop or camera resolution changed. Correction is bypassed until you recalibrate or restore the original crop.';
+            }
+            if (!o_flat.o_camera__flat) return '';
             if(o_now.s_mode__exposure !== o_flat.o_camera__flat.s_mode__exposure) a_s_diff.push('exposure mode');
             if(o_now.n_time__exposure !== o_flat.o_camera__flat.n_time__exposure) a_s_diff.push('exposure time');
             if(o_now.n_iso !== o_flat.o_camera__flat.n_iso) a_s_diff.push('gain/iso');

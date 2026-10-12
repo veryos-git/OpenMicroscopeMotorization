@@ -73,7 +73,8 @@ Deno.test('training UI: live annotation, focus sweep, grid, review, cancellation
             const width = header.getUint32(16), height = header.getUint32(20);
             const boxes = JSON.parse(form.get('boxes'));
             return Response.json({ n_scl_x: width, n_scl_y: height, a_o_box: boxes.map(b => ({
-                s_id: b.s_id, o_segmentation: { s_model: 'sam_b', n_scl_x: width, n_scl_y: height,
+                s_id: b.s_id, o_bounds: { n_x: b.n_x, n_y: b.n_y, n_scl_x: b.n_scl_x, n_scl_y: b.n_scl_y },
+                o_segmentation: { s_model: 'sam_b', n_scl_x: width, n_scl_y: height,
                     s_mask_png: btoa(String.fromCharCode(...image)),
                     a_a_n_polygon: [[[b.n_x,b.n_y],[b.n_x+b.n_scl_x,b.n_y],[b.n_x+b.n_scl_x,b.n_y+b.n_scl_y]]],
                 },
@@ -335,9 +336,83 @@ Deno.test('training UI: live annotation, focus sweep, grid, review, cancellation
                 f_assert(o_vm.a_o_sample.length===3,'saved data survives remount');
                 f_assert(o_vm.a_o_label.length===2,'label palette persists');
                 await o_vm.f_delete(o_vm.a_o_sample[0]);f_assert(o_vm.a_o_sample.length===2,'delete capture');
+                // SAM point mode uses one snapshot in both views and preserves signed prompts.
+                while(!o_vm.o_live) await f_pause();
+                o_vm.f_set_crop({n_x:64,n_y:40,n_scl_x:192,n_scl_y:120});
+                o_state.o_panel_visibility.zoom=true;
+                Object.assign(o_state.o_zoom,{n_x__roi:64,n_y__roi:40,n_scl_x__roi:160,n_scl_y__roi:100});
+                while(!o_vm.o_zoom_view) await f_pause();
+                await o_vm.f_sam_start();await nextTick();
+                f_assert(o_vm.b_sam_point && document.querySelectorAll('.training-sam-image').length===2,'frozen SAM frame appears in live and zoom views');
+                let a_o_prompt=[], f_infer=o_vm.f_sam_infer;
+                o_vm.f_sam_infer=async(c,b)=>{a_o_prompt.push({capture:c,box:b[0]});return f_infer(c,b);};
+                let f_sam_pointer=(s_view,s_type,x,y,button=0)=>{
+                    let el=document.querySelector('.training-live-overlay[data-view="'+s_view+'"]');
+                    let view=o_vm.a_o_view.find(v=>v.s_id===s_view),r=el.getBoundingClientRect();
+                    let e=new PointerEvent(s_type,{bubbles:true,cancelable:true,pointerId:4,button,
+                        clientX:r.left+(x*320-view.n_x)/view.n_width*r.width,
+                        clientY:r.top+(y*200-view.n_y)/view.n_height*r.height});
+                    el.dispatchEvent(e);return e;
+                };
+                f_sam_pointer('live','pointermove',.3,.4);
+                await new Promise(r=>setTimeout(r,220));while(o_vm.b_sam_point_busy) await f_pause();await nextTick();
+                f_assert(o_vm.o_sam_result?.b_preview && o_vm.a_o_sam_point.length===0,'hover previews without committing a point');
+                f_assert(document.querySelector('.training-sam-help')?.textContent.includes('Middle click: reset points'),'cursor help describes buttons');
+                f_sam_pointer('live','pointerleave',.3,.4);await nextTick();
+                f_assert(!o_vm.o_sam_result && !document.querySelector('.training-sam-help'),'leaving clears hover preview and help');
+                f_sam_pointer('live','pointerdown',.3,.4,2);
+                f_assert(o_vm.a_o_sam_point.length===0,'negative first click requests a positive point');
+                f_sam_pointer('live','pointerdown',.1,.1);
+                f_assert(o_vm.a_o_sam_point.length===0,'SAM ignores clicks outside training crop');
+                f_sam_pointer('live','pointerdown',.3,.4);
+                while(o_vm.b_sam_point_busy) await f_pause();
+                let e_negative=f_sam_pointer('zoom','pointerdown',.5,.6,2);
+                while(o_vm.b_sam_point_busy) await f_pause();await nextTick();
+                f_assert(e_negative.defaultPrevented,'SAM right click consumes the pointer action');
+                f_assert(o_vm.a_o_sam_point.length===2 && o_vm.a_o_sam_point[1].n_label===0,'right click adds negative point');
+                f_assert(Math.abs(o_vm.a_o_sam_point[1].n_x-.5)<.0001 && Math.abs(o_vm.a_o_sam_point[1].n_y-.6)<.0001,'zoom prompt maps to full camera coordinates');
+                f_assert(document.querySelectorAll('.training-sam-point[data-label="0"]').length===2,'negative marker appears in both views');
+                f_assert(a_o_prompt.every(p=>p.capture.o_blob===a_o_prompt[0].capture.o_blob),'hover and click reuse identical snapshot');
+                let s_image=o_vm.s_sam_image;
+                o_vm.f_sam_keep();await nextTick();
+                f_assert(o_vm.a_o_box.length===1 && o_vm.a_o_box[0].a_o_point.length===2,'Add selection creates labeled annotation with signed prompts');
+                f_assert(!o_vm.a_o_sam_point.length && o_vm.s_sam_image===s_image,'next object reuses the snapshot');
+                f_sam_pointer('live','pointerdown',.4,.4);
+                let e_reset=f_sam_pointer('live','pointerdown',.4,.4,1);
+                while(o_vm.b_sam_point_busy) await f_pause();
+                f_assert(e_reset.defaultPrevented && !o_vm.a_o_sam_point.length && !o_vm.o_sam_result,'middle reset rejects a pending result');
+                f_assert(o_vm.a_o_box.length===1,'reset keeps accepted annotations');
+                o_vm.b_sam=false;o_vm.f_sam_setting();
+                o_vm.n_focus_start=12;o_vm.n_focus_end=12;o_vm.n_plane=1;
+                await o_vm.f_capture();await nextTick();
+                let o_point_sample=o_vm.a_o_sample[0];
+                f_assert(!o_vm.s_sam_image && !o_vm.b_sam_point,'capture resumes live view');
+                f_assert(o_point_sample.n_scl_x===192 && o_point_sample.a_o_box[0].o_segmentation.n_scl_x===192,'point selection is segmented on captured crop even with automatic box SAM off');
+                f_assert(Math.abs(o_point_sample.a_o_box[0].a_o_point[0].n_x-1/6)<.001,'saved point coordinates are crop relative');
+                await o_vm.f_sam_start();
+                let s_previous_image=o_vm.s_sam_image;
+                await o_vm.f_sam_start();
+                f_assert(o_vm.s_sam_image!==s_previous_image,'New image refreshes the snapshot');
+                o_state.a_o_motor[2].b_running=true;await nextTick();
+                f_assert(!o_vm.b_sam_point && !o_vm.s_sam_image,'focus motion discards frozen preview');
+                o_state.a_o_motor[2].b_running=false;
+                await o_vm.f_sam_start();
+                o_state.o_panel_visibility.training=false;await nextTick();
+                f_assert(!o_vm.b_sam_point && !o_vm.s_sam_image,'closing panel releases the snapshot');
+                o_state.o_panel_visibility.training=true;await nextTick();
+                while(o_vm.b_busy) await f_pause();
+                if (${!!Deno.env.get('TRAINING_SAM_PREVIEW')}) {
+                    await o_vm.f_sam_start();await nextTick();
+                    f_assert(o_vm.b_sam_point && o_vm.s_sam_image,'SAM preview active for screenshot');
+                    document.querySelector('.training-sam-control').scrollIntoView({block:'center'});
+                    f_sam_pointer('live','pointerdown',.4,.4);
+                    f_sam_pointer('live','pointerdown',.6,.6,2);
+                    while(o_vm.b_sam_point_busy) await f_pause();await nextTick();
+                }
                 if (${!Deno.env.get(
                     'TRAINING_SCREENSHOT',
-                )}) {o_app.unmount();clearInterval(n_timer);o_video.srcObject.getTracks().forEach(o=>o.stop());} else {o_vm.n_focus_start=10;o_vm.n_focus_end=14;o_vm.n_plane=3;o_vm.a_o_box=o_vm.a_o_sample[0].a_o_box;}
+                )}) {o_app.unmount();clearInterval(n_timer);o_video.srcObject.getTracks().forEach(o=>o.stop());}
+                else if (${!Deno.env.get('TRAINING_SAM_PREVIEW')}) {o_vm.n_focus_start=10;o_vm.n_focus_end=14;o_vm.n_plane=3;o_vm.a_o_box=o_vm.a_o_sample[0].a_o_box;}
                 document.body.dataset.result='passed';
             } catch(o_error) {document.body.dataset.result='failed';document.body.dataset.error=o_error.stack;}
             </script>`;

@@ -1,3 +1,5 @@
+import { f_validate_sam_point } from './sam_prompt.module.js';
+
 // Geometry is normalized to the unprocessed, full camera frame.
 let f_o_box = function (o_start, o_end, o_label) {
     let f_n_clamp = (n) => Math.max(0, Math.min(1, n));
@@ -37,6 +39,7 @@ let f_validate_sample = function (o_sample) {
         throw new Error('Add at least one bounding box (maximum 1000)');
     }
     for (let o_box of o_sample.a_o_box) {
+        if (o_box.a_o_point !== undefined) f_validate_sam_point(o_box.a_o_point);
         if (
             typeof o_box.s_label !== 'string' || !o_box.s_label.trim() || o_box.s_label.length > 100 ||
             /[\r\n]/.test(o_box.s_label)

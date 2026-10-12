@@ -1,5 +1,6 @@
 import { o_state, f_save_calibration, f_save_setting__debounced } from './index.js';
 import { f_o_camera_snapshot } from './o_camera.module.js';
+import { f_b_camera_geometry_matches } from './camera_frame.module.js';
 
 // calibration hub: an ordered checklist of everything that has to be
 // calibrated for this rig. each step shows a status (ready / stale / partial /
@@ -185,8 +186,10 @@ let o_component__calibration = {
             f_save_calibration();
         },
         f_b_camera__matches: function(o_snapshot) {
-            if(!o_snapshot || !o_state.o_camera.b_active) return true;
+            if(!o_state.o_camera.b_active) return true;
             let o_now = o_state.o_camera;
+            if (!f_b_camera_geometry_matches(o_snapshot, { videoWidth: o_now.n_width, videoHeight: o_now.n_height })) return false;
+            if (!o_snapshot) return true;
             return o_now.s_mode__exposure === o_snapshot.s_mode__exposure
                 && o_now.n_time__exposure === o_snapshot.n_time__exposure
                 && o_now.n_iso === o_snapshot.n_iso

@@ -74,8 +74,11 @@ let f_o_sam_response = async (o_request, f_worker = f_infer) => {
         if (o_result.n_scl_x !== n_scl_x || o_result.n_scl_y !== n_scl_y) throw new Error('SAM image geometry changed');
         if (!Array.isArray(o_result.a_o_box) || o_result.a_o_box.length !== a_o_box.length) throw new Error('SAM did not return one mask per box');
         f_validate_sample({ n_scl_x, n_scl_y, a_o_box: a_o_box.map(o => {
-            let o_mask = o_result.a_o_box.find(m => m.s_id === o.s_id)?.o_segmentation;
+            let o_output = o_result.a_o_box.find(m => m.s_id === o.s_id);
+            let o_mask = o_output?.o_segmentation;
             if (!o_mask) throw new Error('SAM mask is missing');
+            if (o_output.o_bounds) f_validate_sample({ n_scl_x, n_scl_y,
+                a_o_box: [{ ...o, ...o_output.o_bounds }] });
             return { ...o, o_segmentation: o_mask };
         }) });
         return Response.json(o_result);

@@ -491,6 +491,25 @@ and Z motor assignment; disconnecting or changing the assignment clears them.
 Stop cancels capture without starting more motion or stacking partial frames.
 Interrupted or timed-out moves abort acquisition before another image is saved.
 
+### Hardware crop for the optical image
+
+Open **Camera Settings → Hardware crop**. Draw a rectangle inside the visible
+tube edges on the full sensor preview, or enter Left, Top, Width and Height in
+pixels, then press **Apply hardware crop**. **Reset to full sensor** removes it.
+The setting is remembered separately for each camera and capture resolution.
+
+This rectangle becomes the camera image for the live view, captures, stitching,
+map matching, training, autofocus, calibration and recordings, including raw
+video. Pixels are not resized. Digital zoom and training crops use coordinates
+inside this image. Camera exposure, resolution and other USB controls still
+operate on the original camera track.
+
+Choose the hardware crop before calibrating or collecting images. Changing it
+clears live selections and bypasses flat-field correction until its calibration
+matches the new crop, including its position. Recalculate a manual scan grid
+after changing the crop; free-scan coverage updates automatically. Crop changes
+are locked during capture, scanning, calibration and recording.
+
 ### Exposure histogram and pixel warnings
 
 Open **Image Filter** for a live brightness and RGB histogram of the camera frame

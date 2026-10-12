@@ -1,3 +1,4 @@
+import { f_o_camera_geometry } from './camera_frame.module.js';
 import { f_o_free_scan_plan } from './free_scan.module.js';
 import { f_n_motor__axis, o_state, f_send_esp_move_step, f_send_esp_stop, f_send_esp_stop_all, f_send_wsmsg_with_response, f_save_setting__debounced } from './index.js';
 import { f_o_wsmsg } from './constructors.module.js';
@@ -623,8 +624,10 @@ let o_component__scan = {
         },
         o_free_plan_result() {
             // Read reactive camera dimensions so a format change recalculates coverage.
-            const width = o_state.o_camera?.n_width || document.getElementById('webcamVideo')?.videoWidth;
-            const height = o_state.o_camera?.n_height || document.getElementById('webcamVideo')?.videoHeight;
+            const { n_scl_x: width, n_scl_y: height } = f_o_camera_geometry({
+                videoWidth: o_state.o_camera?.n_width || document.getElementById('webcamVideo')?.videoWidth,
+                videoHeight: o_state.o_camera?.n_height || document.getElementById('webcamVideo')?.videoHeight,
+            });
             try {
                 return { o_plan: f_o_free_scan_plan(this.a_o_point__free, {
                     n_width: width, n_height: height, n_steps_x: this.n_step__per_px__x,
@@ -1057,11 +1060,11 @@ let o_component__scan = {
             let o_box = o_self.o_box__grid;
             if(!o_box) return;
             let el_video = document.getElementById('webcamVideo');
-            if(!el_video || !el_video.videoWidth) return;
+            if(!el_video || !f_o_camera_geometry(el_video).n_scl_x) return;
 
             let n_overlap = Math.max(0, Math.min(0.9, (o_self.n_overlap__pct || 0) / 100));
-            let n_fov_steps_x = el_video.videoWidth * n_per_px_x;
-            let n_fov_steps_y = el_video.videoHeight * n_per_px_y;
+            let n_fov_steps_x = f_o_camera_geometry(el_video).n_scl_x * n_per_px_x;
+            let n_fov_steps_y = f_o_camera_geometry(el_video).n_scl_y * n_per_px_y;
             let n_step_x = n_fov_steps_x * (1 - n_overlap);
             let n_step_y = n_fov_steps_y * (1 - n_overlap);
             let n_extent_x = o_box.n_extent_x;

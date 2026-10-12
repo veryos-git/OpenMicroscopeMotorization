@@ -1,3 +1,4 @@
+import { f_o_camera_geometry_snapshot } from '../webserved_dir/camera_frame.module.js';
 import assert from 'node:assert/strict';
 
 // Isolate the camera controller from index.js, which boots the full application.
@@ -28,9 +29,9 @@ function fixture() {
         state.a_o_setting = state.a_o_setting.filter(o => o.s_key !== key);
         state.a_o_setting.push({ s_key: key, s_value: JSON.stringify(value) });
     };
-    const api = new Function('o_state', 'f_save_setting', 'document', 'setTimeout', 'clearTimeout',
-        s_source.replace(/^import .*;\n/, '').replace('export {', 'return {'))(
-        state, save, { getElementById: () => video }, () => 0, () => {});
+    const api = new Function('o_state', 'f_save_setting', 'document', 'setTimeout', 'clearTimeout', 'f_o_camera_geometry_snapshot',
+        s_source.replace(/^import .*;\n/gm, '').replace('export {', 'return {'))(
+        state, save, { getElementById: () => video }, () => 0, () => {}, f_o_camera_geometry_snapshot);
     api.f_read_camera();
     return { state, track, saves, api, switchTrack: t => { current = t; } };
 }

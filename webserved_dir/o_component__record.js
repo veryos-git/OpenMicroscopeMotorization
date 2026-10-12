@@ -1,3 +1,4 @@
+import { f_o_camera_geometry } from './camera_frame.module.js';
 import { o_state, f_save_setting__debounced, f_send_esp_move_step, f_n_motor__axis } from './index.js';
 import {
     f_recording_start,
@@ -275,8 +276,8 @@ let o_component__record = {
             let n_scl_y = this.o_state.o_zoom.n_scl_y__roi;
             if(!(this.o_config.b_roi && n_scl_x > 0)){
                 let el_video = document.getElementById('webcamVideo');
-                n_scl_x = el_video ? el_video.videoWidth : 1920;
-                n_scl_y = el_video ? el_video.videoHeight : 1080;
+                n_scl_x = el_video ? f_o_camera_geometry(el_video).n_scl_x : 1920;
+                n_scl_y = el_video ? f_o_camera_geometry(el_video).n_scl_y : 1080;
             }
             return f_n_sz__estimate(this.o_config, n_scl_x, n_scl_y);
         },
