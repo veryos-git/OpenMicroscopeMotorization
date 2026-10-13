@@ -1,11 +1,14 @@
+# Open Microscope Motorization
 
-# HGC 
-hgc stands for Human Generated Content. this content has only to be written and edited by humans and not by any machine system.
+**See more. Explore further. Bring your microscope to your screen.**
 
-hgc stands for Human Generated Content. this content has only to be written and edited by humans and not by any machine system.
+View your microscope's live camera image directly in your browser. Start with
+live viewing alone, or connect optional motor-control hardware to explore your
+sample in **X and Y** and adjust focus along **Z**—all from the same application.
 
-hgc stands for Human Generated Content. this content has only to be written and edited by humans and not by any machine system.
+[Get started →](#installation)
 
+![Open Microscope Motorization showing a live microscope image with X/Y movement and Z focus controls](./cover.png)
 
 # installation 
 
