@@ -18,6 +18,7 @@ for (const width of [1440, 800, 360]) Deno.test(`compact toolbar actions and lay
                 o_motor__axis: { x: 0, y: 1, z: 2 }, a_o_motor: [{b_running: false}],
                 n_rpm__jog: 5, n_rpm__focus_jog: 0.5, o_key_held: {},
                 o_record: { b_running: false, n_its__frame__done: 4 }, o_video: { b_recording: false },
+                o_filter: { n_brightness: 0, n_contrast: 1, n_gamma: 1, n_saturation: 1 },
                 o_motion_detection: { b_enabled: false }, o_flat_field: { b_active: false },
                 o_camera: { b_active: true, s_mode__exposure: 'manual', n_time__exposure: 10,
                     o_capability: { exposureMode: ['manual', 'continuous'], exposureTime: {min: 1, max: 100, step: 1} } },
@@ -50,6 +51,9 @@ for (const width of [1440, 800, 360]) Deno.test(`compact toolbar actions and lay
             import {f_install_overlay_windows} from './overlay_windows.module.js';
             import {o_state, calls} from './index.js';
             import {o_action_ui} from './o_actions.js';
+            import {f_install_control_catalog} from './control_catalog.module.js';
+            import {f_a_control_effects} from './control_effects.module.js';
+            import {f_save_setting__debounced} from './index.js';
             const check = (ok, message) => { if (!ok) throw Error(message); };
             const errors = [];
             const tick = async () => { await nextTick(); await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); await new Promise(resolve => setTimeout(resolve, 20)); check(!errors.length, errors.join('\\n')); };
@@ -60,6 +64,9 @@ for (const width of [1440, 800, 360]) Deno.test(`compact toolbar actions and lay
             const makeApp = (withActions = true) => {
                 const app = createApp({components: {bar: o_component__toolbar, actions: o_component__actions}, template: '<bar ref="bar"/>' + (withActions ? '<actions/>' : '')});
                 app.component('o_component__manual_speed', o_component__manual_speed);
+                f_install_control_catalog(app, {components:{o_component__toolbar, o_component__manual_speed},
+                    openPanel(panel) { if(panel) o_state.o_panel_visibility[panel] = true; },
+                    effects:f_a_control_effects(o_state, {n_brightness:0, n_contrast:1, n_gamma:1, n_saturation:1}, f_save_setting__debounced, () => {})});
                 app.config.warnHandler = message => errors.push(message);
                 app.config.errorHandler = error => errors.push(error.stack);
                 return {app, root: app.mount('#app')};
@@ -141,6 +148,11 @@ for (const width of [1440, 800, 360]) Deno.test(`compact toolbar actions and lay
                 o_state.o_video.b_recording = false; o_state.o_motion_detection.b_enabled = false; o_state.o_flat_field.b_active = false;
                 await tick();
                 check(!o_action_ui.error, 'Action error: ' + o_action_ui.error);
+                Object.assign(o_state.o_filter, {n_brightness:0.2, n_contrast:1.4, n_gamma:1.3, n_saturation:0.6}); await tick();
+                check(document.querySelectorAll('.toolbar-setting-reset').length === 4, 'Changed setting icons visible');
+                check(document.querySelector('.toolbar').scrollWidth <= innerWidth, 'Active icons do not overflow toolbar');
+                check(parseInt(getComputedStyle(document.documentElement).getPropertyValue('--topbar-h')) === document.querySelector('.toolbar').offsetHeight, 'Active settings update panel offset');
+                await click('Reset Brightness'); check(o_state.o_filter.n_brightness === 0 && o_state.o_filter.n_contrast === 1.4, 'Toolbar reset is independent');
                 document.body.setAttribute('data-result', 'PASS');
             } catch(error) { document.body.setAttribute('data-result', 'FAIL: ' + error.stack); }
         `);

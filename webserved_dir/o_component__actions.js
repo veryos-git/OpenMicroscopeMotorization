@@ -2,16 +2,23 @@ import { o_state, f_save_setting__debounced, f_send_esp_stop_all, f_toggle_mouse
 import { o_actions, o_action_ui, f_action } from './o_actions.js';
 import { f_s_binding, f_s_key, f_o_keymap__migrated } from './actions.module.js';
 import { f_o_capture__frame } from './o_capture.module.js';
+import { f_a_control_results, f_reveal_control } from './control_catalog.module.js';
 let o_component__actions = {
-    data() { return { o_action_ui, s_query: '', n_selected: 0, b_edit: false, s_id: '', o_edit: null, s_source: 'keyboard', s_chord: '', n_index: 0, n_direction: 0, s_profile: 'default', n_revision: 0 }; },
+    data() { return { o_action_ui, a_controls: [], s_query: '', n_selected: 0, b_edit: false, s_id: '', o_edit: null, s_source: 'keyboard', s_chord: '', n_index: 0, n_direction: 0, s_profile: 'default', n_revision: 0 }; },
     computed: {
-        a_result() { this.n_revision; let s = this.s_query.toLowerCase(); return o_actions.a_o_action.filter(o => [o.name, o.description, o.category, ...o.keywords].join(' ').toLowerCase().includes(s)).sort((a, b) => (b.id === 'image.capture') - (a.id === 'image.capture') || a.name.localeCompare(b.name)); },
+        a_result() {
+            this.n_revision;
+            const words = this.s_query.toLowerCase().trim().split(/\s+/);
+            const items = this.b_edit ? o_actions.a_o_action : [...o_actions.a_o_action, ...this.a_controls];
+            return items.filter(o => words.every(word => [o.name, o.description, o.category, ...(Array.isArray(o.keywords) ? o.keywords : [o.keywords])].join(' ').toLowerCase().includes(word)))
+                .sort((a, b) => (b.id === 'image.capture') - (a.id === 'image.capture') || a.name.localeCompare(b.name));
+        },
     },
     methods: {
-        f_label(o) { this.n_revision; return o_actions.f_config(o.id).bindings.map(f_s_binding).join(' / ') || 'Unbound'; },
+        f_label(o) { this.n_revision; return o.kind ? (o.kind === 'setting' ? 'Setting' : 'Control') : o_actions.f_config(o.id).bindings.map(f_s_binding).join(' / ') || 'Unbound'; },
         f_close() { o_state.b_input_suspended = false; this.o_action_ui.open = false; this.o_edit = null; o_actions.f_release(); this.o_key.clear(); this.el_previous?.focus(); },
-        f_open() { o_state.b_input_suspended = true; o_state.b_armed__gamepad = false; this.el_previous = document.activeElement; this.o_action_ui.open = true; this.b_edit = false; this.o_edit = null; this.s_query = ''; this.n_selected = 0; o_actions.f_release(); this.o_key.clear(); this.$nextTick(() => this.$refs.search?.focus()); },
-        f_run(o) { if(!o) return; this.f_close(); o_actions.f_invoke(o.id); if(o.type === 'analog' || o.repeat === 'none') setTimeout(() => o_actions.f_invoke(o.id, 0, 'release'), 150); },
+        f_open() { o_state.b_input_suspended = true; o_state.b_armed__gamepad = false; this.el_previous = document.activeElement; this.a_controls = f_a_control_results(); this.o_action_ui.open = true; this.b_edit = false; this.o_edit = null; this.s_query = ''; this.n_selected = 0; o_actions.f_release(); this.o_key.clear(); this.$nextTick(() => this.$refs.search?.focus()); },
+        f_run(o) { if(!o) return; this.f_close(); if(o.kind) { f_reveal_control(o); return; } o_actions.f_invoke(o.id); if(o.type === 'analog' || o.repeat === 'none') setTimeout(() => o_actions.f_invoke(o.id, 0, 'release'), 150); },
         f_select(o) { this.s_id = o.id; this.o_edit = o_actions.f_config(o.id); },
         f_add() {
             try {
@@ -50,7 +57,7 @@ let o_component__actions = {
     },
     mounted() {
         this.o_key = new Set(); this.o_key_record = new Set();
-        f_action({ id: 'actions.search', name: 'Search Actions', description: 'Find and invoke an application action', category: 'Application', bindings: [{ source: 'keyboard', keys: ['Ctrl', 'F'] }, { source: 'keyboard', keys: ['F3'] }] }, () => this.f_open());
+        f_action({ id: 'actions.search', name: 'Search settings and actions', description: 'Find any input, control or application action', category: 'Application', bindings: [{ source: 'keyboard', keys: ['Ctrl', 'Shift', 'P'] }, { source: 'keyboard', keys: ['Ctrl', 'F'] }, { source: 'keyboard', keys: ['F3'] }] }, () => this.f_open());
         f_action({ id: 'image.capture', name: 'Capture Image', description: 'Download the current camera image', category: 'Image', keywords: ['photo', 'snapshot'], bindings: [{ source: 'keyboard', keys: ['Ctrl', 'Shift', 'I'] }, { source: 'button', index: 0 }] }, async () => {
             let o = await f_o_capture__frame(); let s = URL.createObjectURL(o.o_blob); let a = document.createElement('a'); a.href = s; a.download = 'capture-' + Date.now() + '.png'; a.click(); setTimeout(() => URL.revokeObjectURL(s), 1000);
         });
@@ -71,7 +78,7 @@ let o_component__actions = {
                     let b_search = o_actions.f_config('actions.search').bindings.some(b => b.source === 'keyboard' && b.keys.every(s => this.o_key.has(s)) && ['Ctrl', 'Alt', 'Shift', 'Meta'].every(s => !this.o_key.has(s) || b.keys.includes(s)));
                     if(b_search) { e.preventDefault(); this.$refs.search?.focus(); }
                     if(e.key === 'Escape') { e.preventDefault(); this.f_close(); }
-                    if(!this.b_edit && ['ArrowDown', 'ArrowUp', 'Enter'].includes(e.key)) {
+                    if(!this.b_edit && e.target === this.$refs.search && ['ArrowDown', 'ArrowUp', 'Enter'].includes(e.key)) {
                         e.preventDefault();
                         if(e.key === 'Enter') this.f_run(this.a_result[this.n_selected]);
                         else { this.n_selected = Math.max(0, Math.min(this.a_result.length - 1, this.n_selected + (e.key === 'ArrowDown' ? 1 : -1))); this.$nextTick(() => document.querySelector('.action-results .selected')?.scrollIntoView({ block: 'nearest' })); }
@@ -99,10 +106,11 @@ let o_component__actions = {
     beforeUnmount() { clearInterval(this.n_timer); this.f_blur(); window.removeEventListener('keydown', this.f_key, true); window.removeEventListener('keyup', this.f_key, true); window.removeEventListener('blur', this.f_blur); document.removeEventListener('visibilitychange', this.f_visibility); },
     template: `<teleport to="body"><div v-if="o_action_ui.error" class="action-error" role="alert">{{ o_action_ui.error }} <button @click="o_action_ui.error = ''">Dismiss</button></div>
     <div v-if="o_action_ui.open" class="action-backdrop" @click.self="f_close"><section class="action-dialog" role="dialog" aria-modal="true" aria-label="Actions and keybindings" @keydown.tab="if (!$event.shiftKey && $event.target === $refs.last) { $event.preventDefault(); $refs.search.focus(); } else if ($event.shiftKey && $event.target === $refs.search) { $event.preventDefault(); $refs.last.focus(); }">
-    <input ref="search" v-model="s_query" @input="n_selected = 0" placeholder="Search actions…" aria-label="Search actions">
+    <input ref="search" v-model="s_query" @input="n_selected = 0" placeholder="Search settings, controls and actions…" aria-label="Search actions">
+    <p class="action-search-hint">Ctrl+Shift+P · ↑ ↓ to choose · Enter to open · Esc to close</p>
     <label><input type="checkbox" v-model="b_edit"> Edit bindings</label><button @click="f_close">Close</button>
     <div v-if="b_edit"><label>Profile <input v-model.lazy="s_profile" @change="f_profile"></label><button @click="f_reset(true)">Reset all</button><button @click="f_export">Export JSON</button><label>Import JSON <input type="file" accept=".json,application/json" @change="f_import"></label></div>
-    <div class="action-results"><button v-for="(o, i) in a_result" :key="o.id" :class="{ selected: i === n_selected }" @click="b_edit ? f_select(o) : f_run(o)"><strong>{{ o.name }}</strong><small>{{ o.category }} · {{ o.description }}</small><kbd>{{ f_label(o) }}</kbd></button><p v-if="!a_result.length">No matching actions.</p></div>
+    <div class="action-results"><button v-for="(o, i) in a_result" :key="o.id" :class="{ selected: i === n_selected }" @click="b_edit ? f_select(o) : f_run(o)"><strong>{{ o.name }}</strong><small>{{ o.category }} · {{ o.description }}</small><kbd>{{ f_label(o) }}</kbd></button><p v-if="!a_result.length">No matching settings or actions.</p></div>
     <form v-if="b_edit && o_edit" @submit.prevent="f_save"><h3>{{ s_id }}</h3><div v-for="(b, i) in o_edit.bindings">{{ b.source === 'keyboard' ? b.keys.join('+') : b.source + ' ' + b.index + ' / direction ' + b.direction }} <button type="button" @click="o_edit.bindings.splice(i, 1)">Remove</button></div>
     <select v-model="s_source" aria-label="Input source"><option>keyboard</option><option>button</option><option>axis</option></select><input v-if="s_source === 'keyboard'" ref="chord" :value="s_chord" @keydown="f_record" placeholder="Press keys together" aria-label="Record shortcut"><template v-else><label>Index <input type="number" min="0" max="255" v-model.number="n_index"></label><select v-model.number="n_direction" aria-label="Direction"><option :value="0">Both directions</option><option :value="1">Positive</option><option :value="-1">Negative</option></select></template><button type="button" @click="f_add">Add binding</button>
     <label>Repeat <select v-model="o_edit.repeat"><option>none</option><option>single-shot</option><option>auto-repeat</option></select></label><label v-for="s in ['delay', 'interval', 'threshold', 'deadzone', 'sensitivity', 'curve']">{{ s }}{{ ['delay', 'interval'].includes(s) ? ' (ms)' : '' }} <input type="number" step="any" v-model.number="o_edit[s]"></label>

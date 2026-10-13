@@ -228,7 +228,7 @@ let o_component__filter = {
                     <button
                         class="toolbar-toggle"
                         :class="{ active: o_filter.b_enabled }"
-                        @click="f_toggle"
+                        aria-label="Image processing" :aria-pressed="o_filter.b_enabled" @click="f_toggle"
                     >{{ o_filter.b_enabled ? 'on' : 'off' }}</button>
                 </div>
                 <div class="filter-note" v-if="s_error">{{ s_error }}</div>
@@ -276,8 +276,8 @@ let o_component__filter = {
 
                 <div class="filter-group">
                     <div class="filter-row">
-                        <span class="filter-label">Kernel</span>
-                        <select v-model="o_filter.s_kernel" @change="f_on_change">
+                        <label class="filter-label" for="filter-kernel">Kernel</label>
+                        <select id="filter-kernel" aria-label="Kernel" v-model="o_filter.s_kernel" @change="f_on_change">
                             <option v-for="o_kernel in a_o_kernel" :value="o_kernel.s_value">
                                 {{ o_kernel.s_label }}
                             </option>
@@ -285,9 +285,9 @@ let o_component__filter = {
                     </div>
                     <div v-if="o_filter.s_kernel === 'edge'">
                         <div class="filter-slider">
-                            <label>Edge gain <span class="filter-value">{{ o_filter.n_edge_gain.toFixed(1) }}</span></label>
+                            <label for="filter-n_edge_gain">Edge gain <input id="filter-n_edge_gain" data-control-effect="filter.n_edge_gain" class="filter-exact-value" type="number" min="0.5" max="12" step="0.1" aria-label="Edge gain" :value="o_filter.n_edge_gain" @change="f_set_number('n_edge_gain', $event, 0.5, 12)"></label>
                             <input
-                                type="range" min="0.5" max="12" step="0.1"
+                                type="range" min="0.5" max="12" step="0.1" aria-label="Edge gain slider"
                                 v-model.number="o_filter.n_edge_gain"
                                 @input="f_on_change"
                             >
@@ -301,33 +301,33 @@ let o_component__filter = {
 
                 <div class="filter-group">
                     <div class="filter-slider">
-                        <label>Brightness <span class="filter-value">{{ o_filter.n_brightness.toFixed(2) }}</span></label>
+                        <label for="filter-n_brightness">Brightness <input id="filter-n_brightness" data-control-effect="filter.n_brightness" class="filter-exact-value" type="number" min="-0.5" max="0.5" step="0.01" aria-label="Brightness" :value="o_filter.n_brightness" @change="f_set_number('n_brightness', $event, -0.5, 0.5)"></label>
                         <input
-                            type="range" min="-0.5" max="0.5" step="0.01"
+                            type="range" min="-0.5" max="0.5" step="0.01" aria-label="Brightness slider"
                             v-model.number="o_filter.n_brightness"
                             @input="f_on_change"
                         >
                     </div>
                     <div class="filter-slider">
-                        <label>Contrast <span class="filter-value">{{ o_filter.n_contrast.toFixed(2) }}</span></label>
+                        <label for="filter-n_contrast">Contrast <input id="filter-n_contrast" data-control-effect="filter.n_contrast" class="filter-exact-value" type="number" min="0" max="3" step="0.01" aria-label="Contrast" :value="o_filter.n_contrast" @change="f_set_number('n_contrast', $event, 0, 3)"></label>
                         <input
-                            type="range" min="0" max="3" step="0.01"
+                            type="range" min="0" max="3" step="0.01" aria-label="Contrast slider"
                             v-model.number="o_filter.n_contrast"
                             @input="f_on_change"
                         >
                     </div>
                     <div class="filter-slider">
-                        <label>Gamma <span class="filter-value">{{ o_filter.n_gamma.toFixed(2) }}</span></label>
+                        <label for="filter-n_gamma">Gamma <input id="filter-n_gamma" data-control-effect="filter.n_gamma" class="filter-exact-value" type="number" min="0.2" max="3" step="0.01" aria-label="Gamma" :value="o_filter.n_gamma" @change="f_set_number('n_gamma', $event, 0.2, 3)"></label>
                         <input
-                            type="range" min="0.2" max="3" step="0.01"
+                            type="range" min="0.2" max="3" step="0.01" aria-label="Gamma slider"
                             v-model.number="o_filter.n_gamma"
                             @input="f_on_change"
                         >
                     </div>
                     <div class="filter-slider">
-                        <label>Saturation <span class="filter-value">{{ o_filter.n_saturation.toFixed(2) }}</span></label>
+                        <label for="filter-n_saturation">Saturation <input id="filter-n_saturation" data-control-effect="filter.n_saturation" class="filter-exact-value" type="number" min="0" max="3" step="0.01" aria-label="Saturation" :value="o_filter.n_saturation" @change="f_set_number('n_saturation', $event, 0, 3)"></label>
                         <input
-                            type="range" min="0" max="3" step="0.01"
+                            type="range" min="0" max="3" step="0.01" aria-label="Saturation slider"
                             v-model.number="o_filter.n_saturation"
                             @input="f_on_change"
                         >
@@ -344,8 +344,8 @@ let o_component__filter = {
                         <span>invert</span>
                     </label>
                     <div class="filter-row" style="margin-top: 8px;">
-                        <span class="filter-label">False color</span>
-                        <select v-model="o_filter.s_colormap" @change="f_on_change">
+                        <label class="filter-label" for="filter-colormap">False color</label>
+                        <select id="filter-colormap" aria-label="False color" v-model="o_filter.s_colormap" @change="f_on_change">
                             <option v-for="o_colormap in a_o_colormap" :value="o_colormap.s_value">
                                 {{ o_colormap.s_label }}
                             </option>
@@ -405,6 +405,14 @@ let o_component__filter = {
         f_close: function() {
             o_state.o_panel_visibility.filter = false;
             f_save_setting__debounced('o_panel_visibility', o_state.o_panel_visibility);
+        },
+        f_set_number(key, event, min, max) {
+            const value = Number(event.target.value);
+            if (event.target.value.trim() && Number.isFinite(value)) {
+                o_state.o_filter[key] = Math.min(max, Math.max(min, value));
+                this.f_on_change();
+            }
+            event.target.value = o_state.o_filter[key];
         },
         f_on_change: function() {
             let { n_low, n_high } = f_o_exposure_limits(o_state.o_filter);

@@ -114,16 +114,21 @@ let f_o_action_system = function(f_error = console.error) {
         f_context: a => { f_release(); o_context = new Set(['global', ...a]); },
     };
 };
-// Upgrade untouched search defaults without taking a customized Ctrl+F binding.
+// Add the palette shortcut only to untouched defaults. Keep custom profiles and
+// existing ownership of either shortcut intact.
 let f_o_keymap__migrated = o_keymap => {
     let o = structuredClone(o_keymap);
     if(o?.version === 1 && o.actions) { delete o.actions['panel.backlash']; delete o.actions['panel.calibration']; }
     let a_binding = o?.actions?.['actions.search']?.bindings;
     if(o?.version !== 1 || !Array.isArray(a_binding) || a_binding.length !== 2) return o;
     let f_b_key = (b, a_key) => b.source === 'keyboard' && JSON.stringify(f_o_binding(b).keys) === JSON.stringify(a_key);
-    if(!a_binding.some(b => f_b_key(b, ['Ctrl', 'P', 'Shift'])) || !a_binding.some(b => f_b_key(b, ['F3']))) return o;
-    if(Object.entries(o.actions).some(([s_id, c]) => s_id !== 'actions.search' && c.bindings?.some(b => f_b_key(b, ['Ctrl', 'F'])))) return o;
-    o.actions['actions.search'].bindings = [{ source: 'keyboard', keys: ['Ctrl', 'F'] }, { source: 'keyboard', keys: ['F3'] }];
+    if(!a_binding.some(b => f_b_key(b, ['F3']))) return o;
+    const oldSearch = a_binding.some(b => f_b_key(b, ['Ctrl', 'F']));
+    const paletteSearch = a_binding.some(b => f_b_key(b, ['Ctrl', 'P', 'Shift']));
+    if (!oldSearch && !paletteSearch) return o;
+    const missing = oldSearch ? ['Ctrl', 'P', 'Shift'] : ['Ctrl', 'F'];
+    if(Object.entries(o.actions).some(([s_id, c]) => s_id !== 'actions.search' && c.bindings?.some(b => f_b_key(b, missing)))) return o;
+    o.actions['actions.search'].bindings = [{ source: 'keyboard', keys: ['Ctrl', 'Shift', 'P'] }, { source: 'keyboard', keys: ['Ctrl', 'F'] }, { source: 'keyboard', keys: ['F3'] }];
     return o;
 };
 export { f_o_action_system, f_o_binding, f_s_binding, f_s_key, f_o_keymap__migrated };

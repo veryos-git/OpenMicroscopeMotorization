@@ -18,13 +18,13 @@ let o_component__auto_move = {
                         class="mode-btn"
                         :class="{ active: s_mode === 'rectangle' }"
                         :disabled="b_running"
-                        @click="s_mode = 'rectangle'"
+                        data-control-model="s_mode" data-control-reset="s_mode = value" @click="s_mode = 'rectangle'"
                     >Rectangle</button>
                     <button
                         class="mode-btn"
                         :class="{ active: s_mode === 'circle' }"
                         :disabled="b_running"
-                        @click="s_mode = 'circle'"
+                        data-control-model="s_mode" data-control-reset="s_mode = value" @click="s_mode = 'circle'"
                     >Circle</button>
                 </div>
 

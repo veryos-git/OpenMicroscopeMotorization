@@ -36,12 +36,14 @@ let o_component__cellpose = {
                             <button
                                 class="mode-btn"
                                 :class="{ active: s_mode === 'single' }"
+                                data-control-model="s_mode" data-control-reset="f_set_mode(value)"
                                 @click="f_set_mode('single')"
                                 title="segment one captured frame"
                             >Single image</button>
                             <button
                                 class="mode-btn"
                                 :class="{ active: s_mode === 'loop' }"
+                                data-control-model="s_mode" data-control-reset="f_set_mode(value)"
                                 @click="f_set_mode('loop')"
                                 title="segment the camera feed over and over"
                             >Loop</button>

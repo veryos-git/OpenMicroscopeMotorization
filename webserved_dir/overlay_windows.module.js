@@ -30,12 +30,18 @@ export function f_install_overlay_windows(o_document = document) {
         if (el_header.hasPointerCapture(n_id)) el_header.releasePointerCapture(n_id);
     }
 
-    function f_down(o_evt) {
+    function f_focus(o_evt) {
         const el_panel = o_evt.target.closest?.('.overlay-panel');
-        if (!el_panel || o_evt.button !== 0 || o_evt.isPrimary === false || o_drag) return;
+        if (!el_panel) return;
         if (el_active) delete el_active.dataset.panelActive;
         el_active = el_panel;
         el_panel.dataset.panelActive = '';
+    }
+
+    function f_down(o_evt) {
+        const el_panel = o_evt.target.closest?.('.overlay-panel');
+        if (!el_panel || o_evt.button !== 0 || o_evt.isPrimary === false || o_drag) return;
+        f_focus(o_evt);
         const el_header = o_evt.target.closest('.panel-header');
         if (!el_header || el_header.closest('.overlay-panel') !== el_panel
             || el_panel.classList.contains('panel-zoom') || o_evt.target.closest(s_control)) return;
@@ -78,6 +84,7 @@ export function f_install_overlay_windows(o_document = document) {
     });
     o_observer.observe(o_document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
     o_document.addEventListener('pointerdown', f_down, true);
+    o_document.addEventListener('focusin', f_focus);
     o_document.addEventListener('pointermove', f_move, true);
     o_document.addEventListener('pointerup', f_stop, true);
     o_document.addEventListener('pointercancel', f_stop, true);
@@ -90,6 +97,7 @@ export function f_install_overlay_windows(o_document = document) {
         o_observer.disconnect();
         if (el_active) delete el_active.dataset.panelActive;
         o_document.removeEventListener('pointerdown', f_down, true);
+        o_document.removeEventListener('focusin', f_focus);
         o_document.removeEventListener('pointermove', f_move, true);
         o_document.removeEventListener('pointerup', f_stop, true);
         o_document.removeEventListener('pointercancel', f_stop, true);

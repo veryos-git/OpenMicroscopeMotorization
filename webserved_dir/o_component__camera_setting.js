@@ -5,6 +5,13 @@ import { f_apply_camera_resolution, f_b_camera_resolution_locked, f_s_key__iso, 
 let o_component__camera_setting = {
     name: 'component-camera-setting',
     components: { o_component__hardware_crop },
+    controlSearch() {
+        return this.a_o_control.map(control => ({
+            id: 'camera-setting-' + control.s_api, name: control.s_label,
+            panel: 'camera_setting', keywords: ['camera', control.s_api],
+            selector: '[data-camera-control="' + control.s_api + '"]',
+        }));
+    },
     template: `
         <div class="overlay-panel panel-camera-setting" :class="{ visible: o_state.o_panel_visibility.camera_setting }">
             <div class="panel-header">
@@ -72,7 +79,7 @@ let o_component__camera_setting = {
                         <template v-if="o_cap[o_control.s_api]">
                             <p>Active: {{ o_cam.o_setting?.[o_control.s_api] ?? 'Unreported' }}
                                 · Requested: {{ o_cam.o_requested?.[o_control.s_api] ?? '—' }}</p>
-                            <select v-if="o_control.b_mode" :value="o_cam.o_setting?.[o_control.s_api]"
+                            <select v-if="o_control.b_mode" :data-camera-control="o_control.s_api" :data-control-scope="o_state.s_id__webcam_device" :aria-label="o_control.s_label" :value="o_cam.o_setting?.[o_control.s_api]"
                                 @change="f_set_mode(o_control.s_api, $event.target.value)">
                                 <option v-for="s_mode in o_cap[o_control.s_api]" :value="s_mode">{{ s_mode }}</option>
                             </select>
@@ -80,7 +87,15 @@ let o_component__camera_setting = {
                                 <p>Range: {{ o_cap[o_control.s_api].min }}–{{ o_cap[o_control.s_api].max }}
                                     · Step: {{ o_cap[o_control.s_api].step ?? 'Unreported' }}</p>
                                 <label>Request
+                                    <input v-if="Number.isFinite(o_cap[o_control.s_api].min) && Number.isFinite(o_cap[o_control.s_api].max)"
+                                        type="range" :data-control-scope="o_state.s_id__webcam_device" :aria-label="o_control.s_label + ' slider'"
+                                        :min="o_cap[o_control.s_api].min" :max="o_cap[o_control.s_api].max" :step="o_cap[o_control.s_api].step ?? 'any'"
+                                        :value="o_cam.o_requested?.[o_control.s_api] ?? o_cam.o_setting?.[o_control.s_api]"
+                                        :disabled="o_control.s_mode && o_cap[o_control.s_mode] && o_cam.o_setting?.[o_control.s_mode] !== 'manual'"
+                                        @change="f_apply_setting(o_control.s_api, Number($event.target.value))" />
                                     <input type="number" :min="o_cap[o_control.s_api].min" :max="o_cap[o_control.s_api].max"
+                                        :data-camera-control="o_control.s_api" :data-control-scope="o_state.s_id__webcam_device"
+                                        :aria-label="o_control.s_label"
                                         :step="o_cap[o_control.s_api].step ?? 'any'"
                                         :value="o_cam.o_requested?.[o_control.s_api] ?? o_cam.o_setting?.[o_control.s_api]"
                                         :disabled="o_control.s_mode && o_cap[o_control.s_mode] && o_cam.o_setting?.[o_control.s_mode] !== 'manual'"
@@ -161,10 +176,10 @@ let o_component__camera_setting = {
                 this.n_frame_rate === '' ? null : this.n_frame_rate);
         },
         f_set_mode: function(s_api_name, s_value) {
-            f_set_camera_mode(s_api_name, s_value);
+            return f_set_camera_mode(s_api_name, s_value);
         },
         f_apply_setting: function(s_api_name, v_value) {
-            f_apply_camera_setting(s_api_name, v_value);
+            return f_apply_camera_setting(s_api_name, v_value);
         },
         f_close: function() {
             o_state.o_panel_visibility.camera_setting = false;

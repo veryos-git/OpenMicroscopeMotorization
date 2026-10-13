@@ -92,7 +92,7 @@ Deno.test('zero-delay auto-repeat waits an interval after its initial invocation
 Deno.test('search default migration preserves customized and conflicting shortcuts', () => {
     const old = { version: 1, actions: { 'actions.search': { bindings: [{ source: 'keyboard', keys: ['Ctrl', 'Shift', 'P'] }, { source: 'keyboard', keys: ['F3'] }] } } };
     const migrated = f_o_keymap__migrated(old);
-    assert.deepEqual(migrated.actions['actions.search'].bindings[0].keys, ['Ctrl', 'F']);
+    assert.deepEqual(migrated.actions['actions.search'].bindings.map(b => b.keys), [['Ctrl', 'Shift', 'P'], ['Ctrl', 'F'], ['F3']]);
     assert.deepEqual(old.actions['actions.search'].bindings[0].keys, ['Ctrl', 'Shift', 'P']);
     assert.deepEqual(f_o_keymap__migrated(migrated), migrated);
     old.actions.custom = { bindings: [{ source: 'keyboard', keys: ['Ctrl', 'F'] }] };
@@ -100,4 +100,11 @@ Deno.test('search default migration preserves customized and conflicting shortcu
     delete old.actions.custom;
     old.actions['actions.search'].bindings = [];
     assert.deepEqual(f_o_keymap__migrated(old), old);
+});
+
+Deno.test('Ctrl+F profiles gain Ctrl+Shift+P unless another action owns it', () => {
+    const profile = { version: 1, actions: { 'actions.search': { bindings: [{ source: 'keyboard', keys: ['Ctrl', 'F'] }, { source: 'keyboard', keys: ['F3'] }] } } };
+    assert.equal(f_o_keymap__migrated(profile).actions['actions.search'].bindings.length, 3);
+    profile.actions.custom = { bindings: [{ source: 'keyboard', keys: ['Ctrl', 'Shift', 'P'] }] };
+    assert.deepEqual(f_o_keymap__migrated(profile), profile);
 });

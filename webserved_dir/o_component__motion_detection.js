@@ -13,7 +13,7 @@ let o_component__motion_detection = {
             </div>
             <div class="panel-body">
                 <label class="motion-detection-switch">
-                    <input type="checkbox" v-model="o_config.b_enabled" @change="f_change" />
+                    <input type="checkbox" aria-label="Motion detection enabled" data-control-effect="motion.enabled" v-model="o_config.b_enabled" @change="f_change" />
                     {{ o_config.b_enabled ? 'On' : 'Off' }}
                 </label>
                 <form @submit.prevent="f_change" class="motion-detection-config">

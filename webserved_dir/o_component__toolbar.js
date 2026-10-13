@@ -3,6 +3,7 @@ import { o_actions } from './o_actions.js';
 import { o_state, f_save_setting__debounced, f_save_library_current, f_refresh_maps } from './index.js';
 import { f_s_key__iso, f_apply_camera_setting, f_set_camera_mode, f_apply_camera__saved } from './o_camera.module.js';
 import { f_recording_stop } from './o_recording.module.js';
+import { f_a_changed_controls, f_reset_control, f_reset_title, o_control_ui } from './control_catalog.module.js';
 
 let o_component__toolbar = {
     name: 'component-toolbar',
@@ -20,7 +21,7 @@ let o_component__toolbar = {
                     <button class="toolbar-toggle toolbar-icon toolbar-mouse-jog" :class="{ active: o_state.b_enabled__mouse_jog }"
                         :aria-pressed="!!o_state.b_enabled__mouse_jog" aria-label="Mouse movement"
                         :title="'Mouse movement ' + (o_state.b_enabled__mouse_jog ? 'on' : 'off') + ' — hold left on the image for XY; right for focus'"
-                        @click="f_mouse_jog"><ui_icon s_name="move" /></button>
+                        data-control-model="o_state.b_enabled__mouse_jog" data-control-reset="f_mouse_jog()" @click="f_mouse_jog"><ui_icon s_name="move" /></button>
                     <button class="toolbar-toggle toolbar-stop" :class="{ active: b_any_motor_running }"
                         @click="f_stop_all" aria-label="Stop all motors" title="Stop all motors immediately">
                         <ui_icon s_name="stop" /><span>Stop</span>
@@ -36,7 +37,7 @@ let o_component__toolbar = {
                 </div>
                 <div class="toolbar-group toolbar-group--utilities">
                     <button class="toolbar-toggle toolbar-icon" @click="f_action_search" aria-label="Search actions"
-                        title="Search all actions and shortcuts — Ctrl+F / F3"><ui_icon s_name="search" /></button>
+                        title="Search settings, controls and actions — Ctrl+Shift+P / Ctrl+F / F3"><ui_icon s_name="search" /></button>
                     <button class="toolbar-toggle toolbar-icon" :class="{ active: b_details }" @click="f_toggle_details"
                         aria-label="Quick settings" :aria-expanded="b_details" aria-controls="toolbar-details"
                         title="Quick settings — camera tuning, movement speeds, project and slide"><ui_icon s_name="settings" /></button>
@@ -52,6 +53,15 @@ let o_component__toolbar = {
                         :aria-label="b_fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'" :title="b_fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'">
                         <ui_icon :s_name="b_fullscreen ? 'restore' : 'fullscreen'" /></button>
                 </div>
+            </div>
+            <div v-if="a_o_changed.length" class="toolbar-row toolbar-row--changes" aria-label="Changed settings">
+                <span class="toolbar-changes-label">Reset</span>
+                <button v-for="item in a_o_changed" :key="item.id" class="toolbar-toggle toolbar-icon toolbar-setting-reset"
+                    data-control-skip :aria-label="'Reset ' + item.name" :title="f_reset_title(item)"
+                    @click="f_reset_control(item)"><ui_icon :s_name="item.icon" /><span class="setting-reset-mark" aria-hidden="true">×</span></button>
+            </div>
+            <div v-if="o_control_ui.notice" class="toolbar-control-notice" role="status">{{ o_control_ui.notice }}
+                <button data-control-skip @click="o_control_ui.notice = ''" aria-label="Dismiss setting notice">×</button>
             </div>
             <div v-if="a_o_activity.length || o_state.o_record.b_running" class="toolbar-row toolbar-row--activity" aria-label="Active processes">
                 <button v-if="o_state.o_record.b_running" class="toolbar-toggle toolbar-record-stop" @click="f_stop_recording"
@@ -76,6 +86,7 @@ let o_component__toolbar = {
                                 <button
                                     class="mode-btn"
                                     :class="{ active: o_cam[o_control.s_local] === o_control.s_a_value[0] }"
+                                    data-control-model="o_cam[o_control.s_local]" :data-control-scope="o_state.s_id__webcam_device" data-control-reset="f_cam_mode(o_control.s_api, value)"
                                     @click="f_cam_mode(o_control.s_api, o_control.s_a_value[0])"
                                     :disabled="!o_cam.o_capability[o_control.s_api]?.includes(o_control.s_a_value[0])"
                                     :title="o_control.s_a_title[0]" :aria-label="o_control.s_label + ': ' + o_control.s_a_title[0]" :aria-pressed="o_cam[o_control.s_local] === o_control.s_a_value[0]"
@@ -83,6 +94,7 @@ let o_component__toolbar = {
                                 <button
                                     class="mode-btn"
                                     :class="{ active: o_cam[o_control.s_local] === o_control.s_a_value[1] }"
+                                    data-control-model="o_cam[o_control.s_local]" :data-control-scope="o_state.s_id__webcam_device" data-control-reset="f_cam_mode(o_control.s_api, value)"
                                     @click="f_cam_mode(o_control.s_api, o_control.s_a_value[1])"
                                     :disabled="!o_cam.o_capability[o_control.s_api]?.includes(o_control.s_a_value[1])"
                                     :title="o_control.s_a_title[1]" :aria-label="o_control.s_label + ': ' + o_control.s_a_title[1]" :aria-pressed="o_cam[o_control.s_local] === o_control.s_a_value[1]"
@@ -97,7 +109,7 @@ let o_component__toolbar = {
                                 :min="o_control.o_range.min"
                                 :max="o_control.o_range.max"
                                 :step="o_control.o_range.step ?? 'any'"
-                                v-model.number="o_cam[o_control.s_local]"
+                                v-model.number="o_cam[o_control.s_local]" :data-control-scope="o_state.s_id__webcam_device"
                                 @input="f_cam_set(o_control.s_api, o_cam[o_control.s_local])"
                             >
                             <input
@@ -106,7 +118,7 @@ let o_component__toolbar = {
                                 :min="o_control.o_range.min"
                                 :max="o_control.o_range.max"
                                 :step="o_control.o_range.step ?? 'any'"
-                                v-model.number="o_cam[o_control.s_local]"
+                                v-model.number="o_cam[o_control.s_local]" :data-control-scope="o_state.s_id__webcam_device"
                                 @change="f_cam_set(o_control.s_api, o_cam[o_control.s_local])"
                             >
                             <span class="toolbar-cam-unit" v-if="o_control.s_unit">{{ o_control.s_unit }}</span>
@@ -178,6 +190,7 @@ let o_component__toolbar = {
     data: function() {
         return {
             o_state: o_state,
+            o_control_ui,
             b_details: false,
             b_tools: false,
             b_fullscreen: false,
@@ -225,6 +238,7 @@ let o_component__toolbar = {
         };
     },
     computed: {
+        a_o_changed: f_a_changed_controls,
         s_hardware_summary() {
             return this.a_o_hardware.map(item => item.s_label + ': ' + item.s_value).join('; ');
         },
@@ -376,6 +390,9 @@ let o_component__toolbar = {
         },
     },
     methods: {
+        f_reset_control,
+        f_reset_title,
+        f_show_quick_settings() { this.b_details = true; },
         f_action_search() { this.f_close_tools(); o_actions.f_invoke('actions.search'); },
         f_capture_image() { o_actions.f_invoke('image.capture'); },
         f_mouse_jog() { o_actions.f_invoke('motion.mouse'); },
@@ -410,10 +427,10 @@ let o_component__toolbar = {
             });
             let n_value = parseFloat(v_value);
             if (!isFinite(n_value)) return;
-            f_apply_camera_setting(s_api, n_value);
+            return f_apply_camera_setting(s_api, n_value);
         },
         f_cam_mode: function(s_api, s_value) {
-            f_set_camera_mode(s_api, s_value);
+            return f_set_camera_mode(s_api, s_value);
         },
         f_update_topbar_height: function() {
             let el_toolbar = this.$refs.el_toolbar;
@@ -495,6 +512,7 @@ let o_component__toolbar = {
         },
     },
     mounted: function() {
+        window.addEventListener('control-show-quick-settings', this.f_show_quick_settings);
         if(o_state.b_connected__server) f_refresh_maps();
         let o_self = this;
         try { this.b_details = localStorage.getItem('omm.toolbar.details') === 'true'; } catch (_) {}
@@ -520,6 +538,7 @@ let o_component__toolbar = {
         if (o_state.b_streaming__webcam) f_apply_camera__saved();
     },
     beforeUnmount: function() {
+        window.removeEventListener('control-show-quick-settings', this.f_show_quick_settings);
         if (this.o_observer_resize) this.o_observer_resize.disconnect();
         document.removeEventListener('pointerdown', this.f_on_outside);
         document.removeEventListener('keydown', this.f_on_escape);

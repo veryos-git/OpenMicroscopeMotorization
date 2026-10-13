@@ -4,6 +4,8 @@ import { o_component__motion_detection } from './o_component__motion_detection.j
 import { f_o_manual_speed } from './manual_speed.module.js';
 import { o_component__manual_speed } from './o_component__manual_speed.js';
 import { o_component__actions } from './o_component__actions.js';
+import { f_install_control_catalog } from './control_catalog.module.js';
+import { f_a_control_effects } from './control_effects.module.js';
 import { f_wait_for_esp_status } from './serial_handshake.module.js';
 import { createApp, reactive, watch, markRaw } from 'vue';
 import { createRouter, createWebHistory } from 'vue-router';
@@ -1233,6 +1235,16 @@ o_app.component('o_component__motion_detection', o_component__motion_detection);
 o_app.component('o_component__stats', o_component__stats);
 
 o_app.component('o_component__manual_speed', o_component__manual_speed);
+f_install_control_catalog(o_app, {
+    components: o_app._context.components,
+    openPanel(panel) {
+        if (panel && panel in o_state.o_panel_visibility) {
+            o_state.o_panel_visibility[panel] = true;
+            f_save_setting__debounced('o_panel_visibility', o_state.o_panel_visibility);
+        }
+    },
+    effects: f_a_control_effects(o_state, f_o_filter__default(), f_save_setting__debounced, f_save_flat_field),
+});
 o_app.use(o_router);
 
 globalThis.o_app = o_app;
