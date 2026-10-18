@@ -7,6 +7,7 @@ import { o_component__actions } from './o_component__actions.js';
 import { f_install_control_catalog } from './control_catalog.module.js';
 import { f_a_control_effects } from './control_effects.module.js';
 import { f_wait_for_esp_status } from './serial_handshake.module.js';
+import { f_o_hardware_led_config } from './hardware_led.module.js';
 import { createApp, reactive, watch, markRaw } from 'vue';
 import { createRouter, createWebHistory } from 'vue-router';
 import {
@@ -49,6 +50,7 @@ import { f_o_video_config__default } from './o_video.module.js';
 import { o_component__backlash } from './o_component__backlash.js';
 import { o_component__slide_library } from './o_component__slide_library.js';
 import { o_component__setup } from './o_component__setup.js';
+import { o_component__hardware_led } from './o_component__hardware_led.js';
 import { o_component__page_control } from './o_component__page_control.js';
 import { o_component__stats } from './o_component__stats.js';
 
@@ -328,6 +330,9 @@ let o_state = reactive({
     n_ts_ms__macro_last: 0,
 
     // Setup overlay state
+    o_config__hardware_led: f_o_hardware_led_config(),
+    o_hardware_led: null,
+    s_error__hardware_led: '',
     s_wifi_ssid: '',
     s_wifi_password: '',
     a_o_pin_config: [
@@ -561,6 +566,7 @@ let f_apply_setting_from_db = function(){
     o_state.a_n_step__per_px = f_get_json('a_n_step__per_px', o_state.a_n_step__per_px);
 
     // Setup overlay settings
+    o_state.o_config__hardware_led = f_o_hardware_led_config(f_get_json('o_config__hardware_led', {}));
     o_state.s_wifi_ssid = f_get('s_wifi_ssid', o_state.s_wifi_ssid);
     o_state.s_wifi_password = f_get('s_wifi_password', o_state.s_wifi_password);
     o_state.a_o_pin_config = f_get_json('a_o_pin_config', o_state.a_o_pin_config)
@@ -753,6 +759,8 @@ let f_register_esp_disconnect = function(f_handler) {
 };
 
 let f_notify_esp_disconnect = function() {
+    o_state.o_hardware_led = null;
+    o_state.s_error__hardware_led = '';
     let a_f = a_f_on_disconnect__esp;
     a_f_on_disconnect__esp = [];
     for (let f_handler of a_f) f_handler();
@@ -833,6 +841,8 @@ let f_update_stat__motor = function() {
 };
 
 let f_handle_esp_message = function(o_data) {
+    if (o_data.type === 'status') o_state.o_hardware_led = o_data.o_hardware_led || null;
+    if (o_data.type === 'hardwareLedError') o_state.s_error__hardware_led = o_data.error;
     if (o_data.type === 'status' && o_data.a_o_motor) {
         o_state.b_axis_assignment__circle = o_data.b_axis_assignment__circle === true;
         for (let n_idx = 0; n_idx < o_data.a_o_motor.length && n_idx < o_state.a_o_motor.length; n_idx++) {
@@ -1202,6 +1212,7 @@ let o_app = createApp({
 });
 
 o_app.component('o_component__setup', o_component__setup);
+o_app.component('o_component__hardware_led', o_component__hardware_led);
 o_app.component('o_component__actions', o_component__actions);
 o_app.component('o_component__toolbar', o_component__toolbar);
 o_app.component('o_component__webcam', o_component__webcam);

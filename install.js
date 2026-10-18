@@ -14,6 +14,7 @@ import {
     s_root_dir,
     s_ds,
 } from "./runtimedata.module.js";
+import { f_generate_ino } from './flash_functions.module.js';
 
 // ─── Paths ──────────────────────────────────────────────────────────
 
@@ -33,15 +34,12 @@ let s_url__torch_cpu = 'https://download.pytorch.org/whl/cpu';
 // an older driver needs the matching cu* index (see the pytorch install page).
 let s_url__torch_cuda = 'https://download.pytorch.org/whl/cu130';
 
-let s_path__ino = `${s_root_dir}${s_ds}stepper_websocket.ino`;
 // cellpose lives in its own venv so its pins cannot break the stitcher stack
 let s_path__venv__cellpose = `${s_root_dir}${s_ds}venv_cellpose`;
 let s_path__python__cellpose = `${s_path__venv__cellpose}${s_ds}bin${s_ds}python3`;
 let s_path__worker__cellpose = `${s_root_dir}${s_ds}cellpose_worker.py`;
 // arduino-cli requires the sketch file to be named exactly like its directory
-let s_name__sketch__verify = 'stepper_websocket__verify';
-let s_dir__verify = `/tmp/${s_name__sketch__verify}`;
-let s_path__ino__verify = `${s_dir__verify}/${s_name__sketch__verify}.ino`;
+let s_dir__verify = '/tmp/microscope-verify/stepper_websocket';
 let s_fqbn = 'esp32:esp32:esp32s3';
 
 // ─── CLI args ───────────────────────────────────────────────────────
@@ -610,22 +608,13 @@ let f_setup_arduino = async function() {
 let f_b_verify_compile = async function(s_bin) {
     f_log_step('verifying the firmware compiles');
 
-    let s_ino;
     try {
-        s_ino = await Deno.readTextFile(s_path__ino);
-    } catch {
-        f_log_error(`could not read ${s_path__ino}`);
-        a_s_problem.push('firmware template missing');
+        await f_generate_ino('verify', 'verify', undefined, s_dir__verify);
+    } catch (o_error) {
+        f_log_error(`could not generate verification firmware: ${o_error.message}`);
+        a_s_problem.push('firmware generation failed');
         return false;
     }
-
-    // pin placeholders are bare numbers in an int array, the rest are string literals
-    let s_ino__verify = s_ino
-        .replace(/\{\{n_pin[^}]*\}\}/g, '1')
-        .replace(/\{\{[^}]*\}\}/g, 'verify');
-
-    await Deno.mkdir(s_dir__verify, { recursive: true });
-    await Deno.writeTextFile(s_path__ino__verify, s_ino__verify);
 
     f_log('compiling (first run takes a few minutes)...');
     let o_compile = await f_o_run(s_bin, ['compile', '--fqbn', s_fqbn, s_dir__verify]);

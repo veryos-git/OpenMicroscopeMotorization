@@ -1,10 +1,12 @@
 import { f_v_crud__indb } from "./database_functions.module.js";
+import { f_o_hardware_led_config } from './webserved_dir/hardware_led.module.js';
 import {
     a_o_model,
     f_s_name_table__from_o_model,
 } from "./webserved_dir/constructors.module.js";
 
 let a_o_data_default = [
+    { o_setting: { s_key: 'o_config__hardware_led', s_value: JSON.stringify(f_o_hardware_led_config()) } },
     { o_setting: { s_key: 's_ip__esp', s_value: '' } },
     { o_setting: { s_key: 'n_speed__jog', s_value: '50' } },
     { o_setting: { s_key: 's_id__webcam_device', s_value: '' } },

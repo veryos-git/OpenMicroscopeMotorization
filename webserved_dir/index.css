@@ -2206,6 +2206,14 @@ input[type="range"]::-moz-range-thumb {
 .hardware-wiring summary, .hardware-inputs summary, .hardware-controller summary { cursor: pointer; color: var(--dim); padding: 8px 0; }
 .hardware-pin-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; margin: 8px 0; }
 .hardware-pin-grid input { width: 100%; }
+.hardware-led fieldset { border: 0; padding: 0; margin: 10px 0; min-width: 0; }
+.hardware-led fieldset:disabled { opacity: 0.6; }
+.hardware-led legend { font-weight: 600; margin-bottom: 8px; }
+.hardware-led-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 12px 0; }
+.hardware-led-grid label { display: flex; flex-direction: column; gap: 5px; font-size: 0.8rem; }
+.hardware-led-grid input, .hardware-led-grid select { width: 100%; min-width: 0; box-sizing: border-box; }
+.hardware-led-grid input[type="color"] { height: 32px; padding: 2px; }
+.hardware-led details summary { cursor: pointer; padding: 8px 0; }
 .hardware-backlash { display: flex; gap: 10px; align-items: center; }
 .hardware-backlash input { width: 90px; }
 .hardware-pin-grid label, .hardware-backlash { font-size: 0.75rem; color: var(--dim); }

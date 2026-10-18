@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { s_root_dir, s_ds } from "./runtimedata.module.js";
+import { f_o_hardware_led_config, f_s_hardware_led_config_error } from './webserved_dir/hardware_led.module.js';
 
 let s_path__ino_template = `${s_root_dir}${s_ds}stepper_websocket.ino`;
 let s_path__tmp_dir = '/tmp/stepper_websocket';
@@ -125,7 +126,14 @@ let f_o_check_arduino_cli = async function() {
 
 // ─── Generate .ino firmware from template ───────────────────────────
 
-let f_generate_ino = async function(s_wifi_ssid, s_wifi_password, a_o_pin_config, s_dir = s_path__tmp_dir) {
+let f_generate_ino = async function(s_wifi_ssid, s_wifi_password, a_o_pin_config = [
+    { n_pin1: 4, n_pin2: 5, n_pin3: 6, n_pin4: 7 },
+    { n_pin1: 15, n_pin2: 16, n_pin3: 17, n_pin4: 18 },
+    { n_pin1: 8, n_pin2: 3, n_pin3: 46, n_pin4: 9 },
+], s_dir = s_path__tmp_dir, o_config__hardware_led = {}) {
+    let o_led = f_o_hardware_led_config(o_config__hardware_led);
+    let s_error = f_s_hardware_led_config_error(o_led, a_o_pin_config);
+    if (s_error) throw new Error(s_error);
     let s_ino = await Deno.readTextFile(s_path__ino_template);
 
     // replace WiFi placeholders
@@ -139,6 +147,17 @@ let f_generate_ino = async function(s_wifi_ssid, s_wifi_password, a_o_pin_config
         s_ino = s_ino.replace(`{{n_pin2__motor_${n_idx}}}`, String(o_pin.n_pin2));
         s_ino = s_ino.replace(`{{n_pin3__motor_${n_idx}}}`, String(o_pin.n_pin3));
         s_ino = s_ino.replace(`{{n_pin4__motor_${n_idx}}}`, String(o_pin.n_pin4));
+    }
+
+    let o_led_placeholder = {
+        b_enabled: o_led.b_enabled,
+        n_pin: Number.isInteger(o_led.n_pin) && o_led.n_pin >= 0 && o_led.n_pin <= 48 ? o_led.n_pin : 21,
+        n_count: o_led.n_count, b_rgbw: o_led.s_protocol === 'rgbw',
+        b_green_first: o_led.s_order === 'grb',
+    };
+    for (let s_key of ['b_on', 'n_red', 'n_green', 'n_blue', 'n_white', 'n_brightness']) o_led_placeholder[s_key] = o_led.o_startup[s_key];
+    for (let [s_key, v_value] of Object.entries(o_led_placeholder)) {
+        s_ino = s_ino.replaceAll(`{{${s_key}__led}}`, String(v_value));
     }
 
     await Deno.mkdir(s_dir, { recursive: true });
@@ -244,11 +263,13 @@ let f_install_esp32_deps = async function(f_on_line) {
 
 // Only compilation runs on the server; the browser owns the USB device.
 let b_building = false;
-let f_compile_esp = async function(s_wifi_ssid, s_wifi_password, a_o_pin_config, f_on_line) {
+let f_compile_esp = async function(s_wifi_ssid, s_wifi_password, a_o_pin_config, f_on_line, o_config__hardware_led = {}) {
     if (b_building) return { b_success: false, s_error: 'Another firmware build is running. Try again when it finishes.' };
     b_building = true;
     let s_dir;
     try {
+        let s_error = f_s_hardware_led_config_error(f_o_hardware_led_config(o_config__hardware_led), a_o_pin_config);
+        if (s_error) throw new Error(s_error);
         let s_bin = await f_s_arduino_cli_bin();
         if (!s_bin) {
             if (!await f_install_arduino_cli(f_on_line)) throw new Error('Failed to install arduino-cli');
@@ -257,7 +278,7 @@ let f_compile_esp = async function(s_wifi_ssid, s_wifi_password, a_o_pin_config,
         if (!await f_install_esp32_deps(f_on_line)) throw new Error('Failed to install ESP32 dependencies');
         s_dir = await Deno.makeTempDir({ prefix: 'microscope-firmware-' });
         let s_sketch = `${s_dir}/stepper_websocket`;
-        await f_generate_ino(s_wifi_ssid, s_wifi_password, a_o_pin_config, s_sketch);
+        await f_generate_ino(s_wifi_ssid, s_wifi_password, a_o_pin_config, s_sketch, o_config__hardware_led);
         let s_output = `${s_dir}/output`;
         f_on_line('--- Compiling ESP32-S3 firmware ---', 'stdout');
         if (!await f_run_and_stream(s_bin, [

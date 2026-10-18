@@ -80,6 +80,21 @@ The browser flasher is bundled locally in `webserved_dir/vendor`; it does not
 need a CDN. `deno task flash` remains the separate command-line wizard and
 uses a USB device attached to the machine running that command.
 
+## optional hardware LED
+
+In **Setup → Optional hardware LED**, enable a single addressable RGBWW/RGBCW
+LED (RGB plus one warm or cool white channel), choose its free GPIO and protocol,
+then use **Generate Firmware & Flash ESP32**. The option is disabled by default.
+GPIO 21, one LED, GRBW and a low white startup brightness of 8/255 are suggested.
+The default motor wiring already uses GPIO 18 from the reference LED sketch.
+
+After flashing, **Live light** provides RGB colour, a separate white channel,
+brightness and off/on controls over USB or WiFi. Click **Apply light** to send
+the chosen output. Live changes last until the controller restarts; hardware
+and startup changes require another flash. Up to 16 chained LEDs can share the
+same output. See the [LED setup and protocol notes](hgc_features/hgc_hardware_led/readme.md)
+for wiring, supported formats and verification.
+
 ## tile scan -> mosaic
 the scan panel drives the stage over a grid, saves every tile as
 `tile_r<row>_c<col>.png` into `scans/scan_<date>_<time>/` and then hands the whole

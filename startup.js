@@ -1,12 +1,11 @@
 #!/usr/bin/env -S deno run -A
 // run: deno run -A startup.js
+import { f_generate_ino } from './flash_functions.module.js';
 
 const SCRIPT_DIR = new URL(".", import.meta.url).pathname;
-const INO_FILE = `${SCRIPT_DIR}stepper_websocket.ino`;
 const ENV_FILE = `${SCRIPT_DIR}.env`;
 const SERVER_FILE = `${SCRIPT_DIR}webserver_denojs.js`;
 const TMP_DIR = "/tmp/stepper_websocket";
-const TMP_INO = `${TMP_DIR}/stepper_websocket.ino`;
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -219,14 +218,8 @@ if (shouldFlash) {
 
   logStep("Preparing firmware...");
 
-  const inoSource = await Deno.readTextFile(INO_FILE);
-  const inoPatched = inoSource
-    .replace("{{wifi_ssid}}", wifiSsid)
-    .replace("{{wifi_password}}", wifiPassword);
-
-  await Deno.mkdir(TMP_DIR, { recursive: true });
-  await Deno.writeTextFile(TMP_INO, inoPatched);
-  logOk("Firmware prepared with WiFi credentials.");
+  await f_generate_ino(wifiSsid, wifiPassword, undefined, TMP_DIR);
+  logOk("Firmware prepared with default motor pins and LED disabled. Configure the optional LED in Hardware Setup.");
 
   // ─── Step 6: Detect ESP32 board ────────────────────────────────────
 

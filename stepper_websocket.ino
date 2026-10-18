@@ -25,6 +25,8 @@
  *   → { "motor": 0, "command": "setBacklash", "n_step__backlash": 25 }
  *   → { "command": "stopAll" }
  *   → { "command": "status" }
+ *   → { "command": "setLed", "b_on": true, "n_red": 0, "n_green": 0, "n_blue": 0, "n_white": 255, "n_brightness": 8 }
+ *     LED fields are optional; omitted fields retain their current value.
  *   → { "command": "circleStart", "n_step__radius": 100, "n_rpm": 8.0, "b_loop": false }
  *   → { "command": "circleStop" }
  *   ← { "type":"status", "a_o_motor":[ {n_rpm,s_direction,b_running,n_position,s_mode,n_step__remaining,n_step__backlash,b_compensating}, ... ] }
@@ -38,6 +40,7 @@
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
 #include <HWCDC.h>
+#include <esp32-hal-rmt.h>
 
 // Serve both the USB-to-UART bridge and the native ESP32-S3 USB port.
 // The default Arduino board profile maps Serial to UART0 only.
@@ -60,6 +63,122 @@ static const uint8_t MOTOR_PINS[NUM_MOTORS][4] = {
     { {{n_pin1__motor_1}}, {{n_pin2__motor_1}}, {{n_pin3__motor_1}}, {{n_pin4__motor_1}} },
     { {{n_pin1__motor_2}}, {{n_pin2__motor_2}}, {{n_pin3__motor_2}}, {{n_pin4__motor_2}} },
 };
+
+// Optional addressable LED chain. All LEDs share the same colour/brightness.
+// Timing and byte order follow hgc_features/hgc_hardware_led/led_test_mgc.ino.
+static const bool B_ENABLED__LED = {{b_enabled__led}};
+static const int N_PIN__LED = {{n_pin__led}};
+static const int N_COUNT__LED = {{n_count__led}};
+static const bool B_RGBW__LED = {{b_rgbw__led}};
+static const bool B_GREEN_FIRST__LED = {{b_green_first__led}};
+static_assert(N_COUNT__LED >= 1 && N_COUNT__LED <= 16, "LED count must be 1-16");
+
+struct LedOutput {
+    bool b_on;
+    uint8_t n_red, n_green, n_blue, n_white, n_brightness;
+};
+const LedOutput O_STARTUP__LED = {
+    {{b_on__led}}, {{n_red__led}}, {{n_green__led}}, {{n_blue__led}}, {{n_white__led}}, {{n_brightness__led}}
+};
+LedOutput o_output__led = O_STARTUP__LED;
+portMUX_TYPE o_mux__led = portMUX_INITIALIZER_UNLOCKED;
+bool b_ready__led = false;
+bool b_dirty__led = false;
+bool b_transmitting__led = false;
+const char* s_error__led = "";
+rmt_data_t a_frame__led[N_COUNT__LED * (B_RGBW__LED ? 32 : 24) + 1];
+
+void ledInit() {
+    if (!B_ENABLED__LED) return; // No GPIO or RMT resources used when disabled.
+    bool b_pin_valid = N_PIN__LED == 1 || N_PIN__LED == 2 || N_PIN__LED == 21 ||
+        N_PIN__LED == 47 || N_PIN__LED == 48 ||
+        (N_PIN__LED >= 4 && N_PIN__LED <= 18) || (N_PIN__LED >= 38 && N_PIN__LED <= 42);
+    for (int n_motor = 0; n_motor < NUM_MOTORS; ++n_motor) {
+        for (int n_pin = 0; n_pin < 4; ++n_pin) {
+            if (MOTOR_PINS[n_motor][n_pin] == N_PIN__LED) b_pin_valid = false;
+        }
+    }
+    if (!b_pin_valid) { s_error__led = "LED GPIO is reserved or assigned to a motor"; return; }
+    pinMode(N_PIN__LED, OUTPUT);
+    digitalWrite(N_PIN__LED, LOW);
+    b_ready__led = rmtInit(N_PIN__LED, RMT_TX_MODE, RMT_MEM_NUM_BLOCKS_1, 10000000);
+    if (b_ready__led) b_ready__led = rmtSetEOT(N_PIN__LED, LOW);
+    if (!b_ready__led) { s_error__led = "LED RMT initialization failed"; return; }
+    b_dirty__led = true;
+}
+
+// Only loop() touches RMT or its frame buffer. WebSocket callbacks only queue
+// output under the lock. Keep the buffer intact until transmission completes.
+void ledUpdate() {
+    portENTER_CRITICAL(&o_mux__led);
+    bool b_ready = b_ready__led;
+    bool b_transmitting = b_transmitting__led;
+    portEXIT_CRITICAL(&o_mux__led);
+    if (!b_ready) return;
+    if (b_transmitting && !rmtTransmitCompleted(N_PIN__LED)) return;
+    portENTER_CRITICAL(&o_mux__led);
+    b_transmitting__led = false;
+    bool b_dirty = b_dirty__led;
+    LedOutput o_output = o_output__led;
+    b_dirty__led = false;
+    portEXIT_CRITICAL(&o_mux__led);
+    if (!b_dirty) return;
+
+    uint8_t a_channel[] = {o_output.n_red, o_output.n_green, o_output.n_blue, o_output.n_white};
+    uint8_t a_order[] = {uint8_t(B_GREEN_FIRST__LED ? 1 : 0), uint8_t(B_GREEN_FIRST__LED ? 0 : 1), 2, 3};
+    size_t n_symbol = 0;
+    for (int n_led = 0; n_led < N_COUNT__LED; ++n_led) {
+        for (int n_channel = 0; n_channel < (B_RGBW__LED ? 4 : 3); ++n_channel) {
+            uint8_t n_value = o_output.b_on ? (uint16_t(a_channel[a_order[n_channel]]) * o_output.n_brightness + 127) / 255 : 0;
+            for (int n_bit = 7; n_bit >= 0; --n_bit) {
+                bool b_one = (n_value & (1U << n_bit)) != 0;
+                a_frame__led[n_symbol].level0 = 1;
+                a_frame__led[n_symbol].duration0 = B_RGBW__LED ? (b_one ? 6 : 3) : (b_one ? 8 : 4);
+                a_frame__led[n_symbol].level1 = 0;
+                a_frame__led[n_symbol].duration1 = B_RGBW__LED ? (b_one ? 6 : 9) : (b_one ? 4 : 8);
+                ++n_symbol;
+            }
+        }
+    }
+    // Include the 350 us LOW latch in the asynchronous frame, so neither the
+    // data nor the reset interval blocks motor stepping or serial processing.
+    a_frame__led[n_symbol].level0 = a_frame__led[n_symbol].level1 = 0;
+    a_frame__led[n_symbol].duration0 = a_frame__led[n_symbol].duration1 = 1750;
+    bool b_sent = rmtWriteAsync(N_PIN__LED, a_frame__led, n_symbol + 1);
+    portENTER_CRITICAL(&o_mux__led);
+    b_transmitting__led = b_sent;
+    if (!b_sent) { b_ready__led = false; s_error__led = "LED RMT transmission failed"; }
+    portEXIT_CRITICAL(&o_mux__led);
+}
+
+void ledWriteOutput(JsonObject o_json, const LedOutput &o_output) {
+    o_json["b_on"] = o_output.b_on;
+    o_json["n_red"] = o_output.n_red;
+    o_json["n_green"] = o_output.n_green;
+    o_json["n_blue"] = o_output.n_blue;
+    o_json["n_white"] = o_output.n_white;
+    o_json["n_brightness"] = o_output.n_brightness;
+}
+
+void ledWriteStatus(JsonObject o_json) {
+    portENTER_CRITICAL(&o_mux__led);
+    LedOutput o_output = o_output__led;
+    bool b_ready = b_ready__led;
+    bool b_pending = b_dirty__led || b_transmitting__led;
+    const char* s_error = s_error__led;
+    portEXIT_CRITICAL(&o_mux__led);
+    o_json["b_ready"] = b_ready;
+    o_json["b_pending"] = b_pending;
+    o_json["s_error"] = s_error;
+    JsonObject o_config = o_json["o_config"].to<JsonObject>();
+    o_config["b_enabled"] = B_ENABLED__LED;
+    o_config["n_pin"] = N_PIN__LED;
+    o_config["n_count"] = N_COUNT__LED;
+    o_config["s_protocol"] = B_RGBW__LED ? "rgbw" : "rgb";
+    o_config["s_order"] = B_GREEN_FIRST__LED ? "grb" : "rgb";
+    ledWriteOutput(o_config["o_startup"].to<JsonObject>(), O_STARTUP__LED);
+    ledWriteOutput(o_json["o_output"].to<JsonObject>(), o_output);
+}
 
 static const uint8_t HALF_STEP_SEQ[8][4] = {
     {1,0,0,0}, {1,1,0,0}, {0,1,0,0}, {0,1,1,0},
@@ -184,6 +303,42 @@ void sendJsonError(const char* s_error) {
     JsonDocument doc;
     doc["error"] = s_error;
     sendJson(doc);
+}
+
+void ledSendError(const char* s_error) {
+    JsonDocument doc;
+    doc["type"] = "hardwareLedError";
+    doc["error"] = s_error;
+    sendJson(doc);
+}
+
+bool ledSetOutput(JsonDocument &doc) {
+    portENTER_CRITICAL(&o_mux__led);
+    bool b_ready = b_ready__led;
+    portEXIT_CRITICAL(&o_mux__led);
+    if (!B_ENABLED__LED || !b_ready) { ledSendError("LED is disabled or unavailable; check Hardware Setup"); return false; }
+    // Validate the whole patch before changing any channel. Floats, strings and
+    // out-of-range values must not wrap when converted to an 8-bit channel.
+    if (!doc["b_on"].isUnbound() && !doc["b_on"].is<bool>()) { ledSendError("LED b_on must be boolean"); return false; }
+    const char* a_key[] = {"n_red", "n_green", "n_blue", "n_white", "n_brightness"};
+    for (const char* s_key : a_key) {
+        if (doc[s_key].isUnbound()) continue;
+        if (!doc[s_key].is<int>() || doc[s_key].as<int>() < 0 || doc[s_key].as<int>() > 255) {
+            ledSendError("LED channel values and brightness must be integers from 0 to 255"); return false;
+        }
+    }
+    if (!B_RGBW__LED && !doc["n_white"].isUnbound() && doc["n_white"].as<int>() != 0) {
+        ledSendError("RGB firmware has no separate white channel"); return false;
+    }
+    portENTER_CRITICAL(&o_mux__led);
+    if (!doc["b_on"].isUnbound()) o_output__led.b_on = doc["b_on"].as<bool>();
+    uint8_t* a_channel[] = {&o_output__led.n_red, &o_output__led.n_green, &o_output__led.n_blue, &o_output__led.n_white, &o_output__led.n_brightness};
+    for (int n_channel = 0; n_channel < 5; ++n_channel) {
+        if (!doc[a_key[n_channel]].isUnbound()) *a_channel[n_channel] = doc[a_key[n_channel]].as<int>();
+    }
+    b_dirty__led = true;
+    portEXIT_CRITICAL(&o_mux__led);
+    return true;
 }
 
 // Read complete newline-terminated JSON commands from USB Serial and dispatch
@@ -573,6 +728,7 @@ void sendStatus(AsyncWebSocketClient *client = nullptr) {
     JsonDocument doc;
     doc["type"] = "status";
     doc["b_axis_assignment__circle"] = true;
+    ledWriteStatus(doc["o_hardware_led"].to<JsonObject>());
     JsonArray arr = doc["a_o_motor"].to<JsonArray>();
     for (int i = 0; i < NUM_MOTORS; i++) {
         JsonObject mo = arr.add<JsonObject>();
@@ -637,6 +793,7 @@ void handleCommand(const uint8_t *data, size_t len) {
             sendStatus(); return;
         }
         if (cmd == "status") { sendStatus(); return; }
+        if (cmd == "setLed") { if (ledSetOutput(doc)) sendStatus(); return; }
 
         if (cmd == "circleStart") {
             long  n_radius = doc["n_step__radius"] | 100L;
@@ -749,6 +906,8 @@ void setup() {
 
     motorInit();
     circleInit();
+    ledInit();
+    ledUpdate();
     Serial.println("Motors initialised.");
 
     // WiFi is best-effort and non-blocking: the USB Serial API must stay
@@ -777,6 +936,7 @@ void loop() {
     handleSerial();
     motorsUpdate();
     circleUpdate();
+    ledUpdate();
 
     // send queued move events (suppress during circle mode — internal moves)
     for (int i = 0; i < n_cnt__move_event; i++) {

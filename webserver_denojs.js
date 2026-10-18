@@ -774,7 +774,7 @@ let f_handler = async function(o_request, o_conninfo) {
                 };
 
                 let o_result = await f_compile_esp(
-                    v.s_wifi_ssid, v.s_wifi_password, v.a_o_pin_config, f_on_line,
+                    v.s_wifi_ssid, v.s_wifi_password, v.a_o_pin_config, f_on_line, v.o_config__hardware_led,
                 );
 
                 o_socket.send(JSON.stringify({

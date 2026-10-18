@@ -2,6 +2,7 @@ import { f_n_rpm__manual } from './manual_speed.module.js';
 import { o_state, f_send_esp, f_send_esp_move_step, f_send_esp_stop, f_send_esp_stop_all, f_send_esp_set_backlash, f_save_setting__debounced, f_send_wsmsg_with_response, f_register_handler, f_save_setting, f_connect_esp, f_connect_esp_serial, f_disconnect_esp } from './index.js';
 import { f_flash_browser } from './flash_browser.module.js';
 import { f_o_wsmsg } from './constructors.module.js';
+import { f_s_hardware_led_config_error } from './hardware_led.module.js';
 
 let o_component__setup = {
     name: 'component-setup',
@@ -80,6 +81,7 @@ let o_component__setup = {
                     <p v-if="s_error__motor" class="focusstack-error">{{ s_error__motor }}</p>
                 </section>
                 <details class="hardware-calibration-checklist"><summary>Calibration checklist &amp; optical settings</summary><o_component__calibration /></details>
+                <o_component__hardware_led :b_busy="b_hardware_busy" />
                 <o_component__jog />
                 <details class="hardware-controller">
                     <summary>Controller connection &amp; firmware</summary>
@@ -230,9 +232,12 @@ let o_component__setup = {
             return this.b_connected__serial || this.b_disconnecting__usb;
         },
         b_enabled__flash: function() {
+            if (f_s_hardware_led_config_error(o_state.o_config__hardware_led, o_state.a_o_pin_config)) return false;
             return !this.b_hardware_busy && !this.b_disconnecting__usb && !o_state.b_connecting__esp_serial && o_state.b_available__serial;
         },
         s_hint__flash: function() {
+            let s_error = f_s_hardware_led_config_error(o_state.o_config__hardware_led, o_state.a_o_pin_config);
+            if (s_error) return s_error;
             if (!o_state.b_available__serial) return 'USB flashing requires Chrome or Edge over HTTPS or localhost.';
             return 'Firmware is compiled on the server and flashed over USB from this browser. WiFi is optional for USB control.';
         },
@@ -400,6 +405,7 @@ let o_component__setup = {
                     s_wifi_ssid: o_state.s_wifi_ssid,
                     s_wifi_password: o_state.s_wifi_password,
                     a_o_pin_config: o_state.a_o_pin_config,
+                    o_config__hardware_led: o_state.o_config__hardware_led,
                 }), 15 * 60 * 1000);
                 if (!o_resp.v_data.b_success) throw new Error(o_resp.v_data.s_error);
                 f_log('--- Flashing over browser USB. Keep the device connected. ---');
