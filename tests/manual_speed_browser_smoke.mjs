@@ -10,8 +10,11 @@ try {
     page.on('pageerror', e => errors.push(e.message));
     await page.goto(process.env.BASE_URL || 'http://127.0.0.1:18895');
     await page.waitForFunction(() => window.o_state?.b_connected__server);
-    const quickSettings = page.getByRole('button', { name: 'Quick settings', exact: true });
-    if (await quickSettings.getAttribute('aria-expanded') !== 'true') await quickSettings.click();
+    const openSettings = async () => {
+        await page.getByRole('button', { name: 'All tools', exact: true }).click();
+        await page.locator('#toolbar-tools').getByRole('button', { name: 'Quick settings', exact: true }).click();
+    };
+    await openSettings();
     const bar = page.locator('.toolbar-row--speed');
     await bar.locator('#toolbar-speed-z').waitFor();
     await page.evaluate(() => { o_state.o_panel_visibility.setup = false; o_state.o_panel_visibility.gamepad = false; });
@@ -24,12 +27,14 @@ try {
     await bar.locator('.manual-speeds').evaluate(el => el.__vueParentComponent.proxy.f_save());
     await page.reload();
     await page.waitForFunction(() => window.o_state?.n_rpm__focus_jog === 0.25);
+    await openSettings();
     assert.equal(await bar.locator('#toolbar-speed-xy').inputValue(), '10');
     await bar.getByRole('slider', { name: 'XY speed slider', exact: true }).fill('7.5');
     await page.waitForFunction(() => JSON.parse(o_state.a_o_setting.find(s => s.s_key === 'o_rpm__manual')?.s_value || '{}').xy === 7.5);
     assert.equal(await bar.locator('#toolbar-speed-z').inputValue(), '0.25');
     await page.evaluate(() => { o_state.o_panel_visibility.setup = false; o_state.o_panel_visibility.gamepad = false; });
     await page.getByRole('button', { name: 'Setup', exact: true }).click();
+    await page.locator('.micro-diagnostics > summary').click();
     assert.equal(await page.locator('#setup-speed-z').inputValue(), '0.25');
     assert.equal(await page.locator('#setup-speed-xy').inputValue(), '7.5');
     await page.getByRole('button', { name: 'Close Setup', exact: true }).click();

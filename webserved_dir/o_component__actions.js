@@ -105,16 +105,18 @@ let o_component__actions = {
     },
     beforeUnmount() { clearInterval(this.n_timer); this.f_blur(); window.removeEventListener('keydown', this.f_key, true); window.removeEventListener('keyup', this.f_key, true); window.removeEventListener('blur', this.f_blur); document.removeEventListener('visibilitychange', this.f_visibility); },
     template: `<teleport to="body"><div v-if="o_action_ui.error" class="action-error" role="alert">{{ o_action_ui.error }} <button @click="o_action_ui.error = ''">Dismiss</button></div>
-    <div v-if="o_action_ui.open" class="action-backdrop" @click.self="f_close"><section class="action-dialog" role="dialog" aria-modal="true" aria-label="Actions and keybindings" @keydown.tab="if (!$event.shiftKey && $event.target === $refs.last) { $event.preventDefault(); $refs.search.focus(); } else if ($event.shiftKey && $event.target === $refs.search) { $event.preventDefault(); $refs.last.focus(); }">
+    <div v-if="o_action_ui.open" class="action-backdrop" @click.self="f_close"><section class="action-dialog overlay-panel visible" role="dialog" aria-modal="true" aria-label="Actions and keybindings" @keydown.tab="if (!$event.shiftKey && $event.target === $refs.last) { $event.preventDefault(); $refs.search.focus(); } else if ($event.shiftKey && $event.target === $refs.search) { $event.preventDefault(); $refs.last.focus(); }">
+    <div class="panel-header"><h2>Search</h2><button class="panel-close" @click="f_close" aria-label="Close">×</button></div>
+    <div class="panel-body">
     <input ref="search" v-model="s_query" @input="n_selected = 0" placeholder="Search settings, controls and actions…" aria-label="Search actions">
     <p class="action-search-hint">Ctrl+Shift+P · ↑ ↓ to choose · Enter to open · Esc to close</p>
-    <label><input type="checkbox" v-model="b_edit"> Edit bindings</label><button @click="f_close">Close</button>
+    <label><input type="checkbox" v-model="b_edit"> Edit bindings</label>
     <div v-if="b_edit"><label>Profile <input v-model.lazy="s_profile" @change="f_profile"></label><button @click="f_reset(true)">Reset all</button><button @click="f_export">Export JSON</button><label>Import JSON <input type="file" accept=".json,application/json" @change="f_import"></label></div>
     <div class="action-results"><button v-for="(o, i) in a_result" :key="o.id" :class="{ selected: i === n_selected }" @click="b_edit ? f_select(o) : f_run(o)"><strong>{{ o.name }}</strong><small>{{ o.category }} · {{ o.description }}</small><kbd>{{ f_label(o) }}</kbd></button><p v-if="!a_result.length">No matching settings or actions.</p></div>
     <form v-if="b_edit && o_edit" @submit.prevent="f_save"><h3>{{ s_id }}</h3><div v-for="(b, i) in o_edit.bindings">{{ b.source === 'keyboard' ? b.keys.join('+') : b.source + ' ' + b.index + ' / direction ' + b.direction }} <button type="button" @click="o_edit.bindings.splice(i, 1)">Remove</button></div>
     <select v-model="s_source" aria-label="Input source"><option>keyboard</option><option>button</option><option>axis</option></select><input v-if="s_source === 'keyboard'" ref="chord" :value="s_chord" @keydown="f_record" placeholder="Press keys together" aria-label="Record shortcut"><template v-else><label>Index <input type="number" min="0" max="255" v-model.number="n_index"></label><select v-model.number="n_direction" aria-label="Direction"><option :value="0">Both directions</option><option :value="1">Positive</option><option :value="-1">Negative</option></select></template><button type="button" @click="f_add">Add binding</button>
     <label>Repeat <select v-model="o_edit.repeat"><option>none</option><option>single-shot</option><option>auto-repeat</option></select></label><label v-for="s in ['delay', 'interval', 'threshold', 'deadzone', 'sensitivity', 'curve']">{{ s }}{{ ['delay', 'interval'].includes(s) ? ' (ms)' : '' }} <input type="number" step="any" v-model.number="o_edit[s]"></label>
     <button type="button" @click="o_edit.bindings = []">Clear bindings</button><button type="button" @click="f_reset(false)">Defaults</button><button type="submit">Save</button></form><button ref="last" @click="f_close">Done</button>
-    </section></div></teleport>`,
+    </div></section></div></teleport>`,
 };
 export { o_component__actions };

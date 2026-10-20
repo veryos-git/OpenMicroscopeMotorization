@@ -2223,6 +2223,89 @@ input[type="range"]::-moz-range-thumb {
 .hardware-motors .setup-hint, .hardware-inputs .setup-hint { text-align: left; margin: 6px 0 10px; }
 @media (prefers-reduced-motion: reduce) { .motor-rotor.spinning { animation: none; } }
 
+/* Microcontroller settings follows ui_guide/microcontroller_settings/image.png. */
+.microcontroller-settings { width: 440px; top: calc(var(--topbar-h) + 12px); overflow: hidden; }
+.microcontroller-settings.visible { display: flex; flex-direction: column; }
+.microcontroller-settings > .panel-header { flex-shrink: 0; padding: 12px; }
+.microcontroller-settings > .panel-body { min-height: 0; overflow-y: auto; padding: 16px; }
+.microcontroller-model { color: var(--dim); font-size: 10px; font-weight: 400; }
+.microcontroller-settings :is(input, select, button):not(.panel-close) { min-width: 0; background: #0d0d11; border: 1px solid var(--border); border-radius: 5px; color: var(--text); padding: 6px; font: inherit; font-size: 12px; }
+.microcontroller-settings :is(input, select, button):focus-visible { outline: 2px solid var(--accent-2); outline-offset: 1px; }
+.microcontroller-settings :is(button, select) { cursor: pointer; }
+.microcontroller-settings button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.microcontroller-settings button:hover:not(:disabled) { border-color: var(--dim); background: #ffffff0a; }
+.microcontroller-settings button.active { color: var(--accent-1); border-color: #39766b; background: #00d4aa0b; }
+.microcontroller-settings :disabled, .microcontroller-settings fieldset:disabled { opacity: 0.5; cursor: not-allowed; }
+.microcontroller-settings fieldset:disabled :disabled { opacity: 1; }
+.microcontroller-settings fieldset { min-width: 0; border: 0; padding: 0; }
+.microcontroller-settings input[type="number"] { -moz-appearance: textfield; }
+.microcontroller-settings input[type="number"]::-webkit-inner-spin-button,
+.microcontroller-settings input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.micro-pin-headings, .micro-pin-row { display: grid; grid-template-columns: 28px repeat(4, minmax(0, 1fr)); align-items: center; gap: 6px; margin-bottom: 6px; }
+.micro-pin-headings { color: var(--dim); font-size: 10px; text-align: center; }
+.micro-row-label { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+.micro-pin { display: flex; align-items: center; border: 1px solid var(--border); border-radius: 5px; overflow: hidden; background: #0d0d11; }
+.micro-pin .ui-icon { width: 14px; height: 18px; flex-basis: 14px; margin-left: 5px; color: var(--dim); }
+.microcontroller-settings .micro-pin input { width: 100%; border: 0; padding: 6px 3px; text-align: center; background: transparent; }
+.micro-axes { margin: 16px 0; }
+.micro-axis-row { display: grid; grid-template-columns: 28px 64px 96px minmax(0, 1fr) 32px; gap: 6px; align-items: center; margin: 6px 0; }
+.microcontroller-settings .micro-reverse { justify-content: flex-start; }
+.micro-reverse .ui-icon, .micro-startup-toggle .ui-icon { width: 15px; height: 15px; flex-basis: 15px; }
+.micro-backlash { display: flex; align-items: center; gap: 6px; }
+.microcontroller-settings .micro-backlash input { width: 100%; text-align: center; }
+.micro-backlash .ui-icon { width: 20px; flex-basis: 20px; color: var(--dim); }
+.microcontroller-settings .micro-icon-button { width: 32px; height: 32px; padding: 5px; }
+.microcontroller-settings .hardware-led--compact { margin: 0; padding: 14px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.hardware-led--compact .micro-led-primary { margin: 0; }
+.micro-led-row { display: grid; grid-template-columns: 40px 64px minmax(0, 1fr) minmax(0, 1fr); align-items: center; gap: 6px; }
+.micro-led-startup { display: grid; grid-template-columns: 92px minmax(0, 1fr) 80px; gap: 6px; align-items: center; margin-top: 8px; }
+.micro-color { display: flex; align-items: center; min-width: 0; border: 1px solid var(--border); border-radius: 5px; background: #0d0d11; }
+.microcontroller-settings .micro-color input[type="color"] { border: 0; padding: 2px; width: 28px; height: 30px; flex: 0 0 28px; }
+.microcontroller-settings .micro-color input[type="text"] { border: 0; width: 100%; padding-left: 2px; font-family: 'JetBrains Mono', monospace; }
+.micro-white { display: flex; gap: 4px; align-items: center; color: var(--dim); font-size: 11px; }
+.micro-white input { width: 100%; }
+.microcontroller-settings .micro-startup-toggle { padding: 6px 4px; font-size: 11px; }
+.hardware-led--compact .micro-led-details { margin-top: 6px; }
+.hardware-led--compact .micro-led-details > summary { color: var(--dim); font-size: 11px; padding: 6px 0 0; }
+.micro-field { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 8px; align-items: center; margin: 8px 0; font-size: 12px; }
+.micro-connection { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--dim); margin: 18px 0 8px; }
+.micro-connection .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dim); }
+.micro-connection .dot.connected { background: var(--accent-1); }
+.micro-actions { display: grid; gap: 8px; }
+.microcontroller-settings .micro-action { justify-content: flex-start; padding: 10px 14px; gap: 12px; font-size: 13px; }
+.microcontroller-settings .micro-action--flash { border-color: #66552e; }
+.micro-action--flash .ui-icon { color: var(--yellow); }
+.micro-hint, .micro-status, .micro-error { font-size: 11px; line-height: 1.5; margin: 8px 0; overflow-wrap: anywhere; }
+.micro-hint { color: var(--dim); }
+.micro-status { color: var(--accent-1); }
+.micro-error { color: var(--danger); }
+.microcontroller-settings .micro-details { margin: 10px 0 0; padding: 0; border: 0; }
+.micro-details > summary { display: flex; align-items: center; gap: 8px; padding: 7px 0; cursor: pointer; color: var(--dim); font-size: 11px; list-style: none; }
+.micro-details > summary::after { content: '›'; margin-left: auto; font-size: 16px; }
+.micro-details[open] > summary::after { transform: rotate(90deg); }
+.micro-details > summary .ui-icon { width: 16px; height: 16px; flex-basis: 16px; }
+.micro-wifi-row { display: flex; gap: 8px; }
+.micro-wifi-row input { flex: 1; }
+.microcontroller-settings .hardware-motor { padding: 10px; margin: 10px 0; }
+.microcontroller-settings .hardware-motor h3 { font-size: 12px; }
+.microcontroller-settings .hardware-motor-readout { font-size: 11px; margin: 8px 0; }
+.microcontroller-settings .setup-hint { font-size: 11px; text-align: left; }
+.microcontroller-settings .flash-console { max-height: 160px; margin: 8px 0; }
+.micro-flash-progress { margin-top: 12px; }
+@media (max-width: 480px) {
+  .microcontroller-settings > .panel-body { padding: 12px; }
+  .microcontroller-model { display: none; }
+  .micro-axis-row { grid-template-columns: 16px 54px 78px minmax(0, 1fr) 28px; gap: 4px; }
+  .microcontroller-settings .micro-reverse { font-size: 10px; gap: 4px; padding: 6px 3px; }
+  .microcontroller-settings .micro-icon-button { width: 28px; }
+  .micro-backlash { gap: 3px; }
+  .micro-backlash .ui-icon { width: 16px; flex-basis: 16px; }
+  .micro-led-row { grid-template-columns: 34px 48px minmax(0, 1fr) minmax(0, 1fr); gap: 4px; }
+  .micro-led-startup { grid-template-columns: 76px minmax(0, 1fr) 56px; gap: 4px; }
+  .microcontroller-settings .micro-color input[type="text"] { font-size: 10px; }
+  .microcontroller-settings .micro-color input[type="color"] { width: 22px; flex-basis: 22px; }
+}
+
 /* PlayStation-style live gamepad display */
 .panel-gamepad { top: var(--topbar-h); left: 50%; transform: translateX(-50%); width: 460px; max-width: calc(100vw - 32px); }
 .panel-gamepad .panel-body { max-height: calc(100dvh - var(--topbar-h) - 80px); overflow-y: auto; }
@@ -2249,7 +2332,10 @@ input[type="range"]::-moz-range-thumb {
 
 /* Action search and per-profile keymap editor. */
 .action-backdrop { position: fixed; inset: 0; z-index: 10000; background: #0009; display: flex; justify-content: center; align-items: flex-start; padding: 7vh 1rem; }
-.action-dialog { background: var(--bg, #181b22); color: var(--text, #eee); border: 1px solid var(--dim, #666); border-radius: 10px; padding: 1rem; width: 760px; max-width: 100%; max-height: 85vh; overflow: auto; }
+.action-dialog { top: calc(var(--topbar-h) + 16px); left: 50%; transform: translateX(-50%); background: var(--bg, #181b22); color: var(--text, #eee); width: 760px; max-width: calc(100vw - 32px); max-height: calc(100dvh - var(--topbar-h) - 32px); }
+.action-dialog.visible { display: flex; flex-direction: column; }
+.action-dialog .panel-header { flex-shrink: 0; }
+.action-dialog .panel-body { min-height: 0; overflow: auto; }
 .action-dialog input, .action-dialog select, .action-dialog button { padding: .4rem; margin: .2rem; color: inherit; background: var(--bg, #181b22); border: 1px solid var(--dim, #666); border-radius: 4px; }
 .action-dialog input[aria-label="Search actions"] { width: 95%; }
 .action-results { max-height: 36vh; overflow: auto; margin: .6rem 0; }
@@ -2260,7 +2346,7 @@ input[type="range"]::-moz-range-thumb {
 .action-dialog input[type="number"] { width: 6rem; }
 .action-error { position: fixed; right: 1rem; bottom: 1rem; z-index: 11000; padding: 1rem; background: #742e2e; color: white; max-width: 80vw; }
 .action-dialog input[aria-label="Search actions"] { display: block; width: calc(100% - .4rem); box-sizing: border-box; }
-.action-dialog > label { display: inline-flex; align-items: center; white-space: nowrap; }
+.action-dialog .panel-body > label { display: inline-flex; align-items: center; white-space: nowrap; }
 
 .hardware-calibration { margin: 10px 0; --card-accent: var(--yellow); }
 .hardware-calibration-controls { display: flex; align-items: center; gap: 10px; }
@@ -2270,7 +2356,7 @@ input[type="range"]::-moz-range-thumb {
 .hardware-calibration-checklist-body { padding: 8px 0; }
 
 /* Always-visible manual speeds, also shared by Setup and Gamepad. */
-.manual-speeds { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
+.manual-speeds { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 16px; --card-accent: var(--yellow); }
 .manual-speed { display: flex; align-items: center; gap: 6px; }
 .manual-speed label { white-space: nowrap; font-size: 12px; }
 .manual-speed input[type="range"] { width: 130px; }
@@ -2278,71 +2364,98 @@ input[type="range"]::-moz-range-thumb {
 .manual-speed span { font-size: 11px; color: var(--dim); }
 .manual-speed-presets { display: flex; gap: 4px; }
 
-/* Compact first layer; advanced controls stay available in Quick settings. */
+/* A single, fixed-height bar leaves the live camera image in the foreground. */
 .ui-icon { width: 20px; height: 20px; flex: 0 0 20px; vertical-align: middle; }
-.toolbar-row--primary { flex-wrap: wrap; gap: 8px 16px; padding: 8px 12px; }
-.toolbar-group { display: flex; align-items: center; gap: 6px; min-width: 0; }
-.toolbar-group--camera { flex: 1 1 390px; flex-wrap: wrap; gap: 8px 16px; }
-.toolbar-group--utilities { margin-left: auto; }
-.toolbar .toolbar-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
-.toolbar-row--primary .toolbar-toggle { min-height: 38px; color: #b8b8c2; }
-.toolbar .toolbar-icon { padding: 8px; width: 38px; height: 38px; flex-shrink: 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.toolbar-row--primary { height: 54px; flex-wrap: nowrap; gap: 12px; padding: 7px 12px; }
+.toolbar-group { display: flex; align-items: center; gap: 6px; min-width: 0; flex-shrink: 0; }
+.toolbar-shortcuts { display: flex; align-items: center; gap: 5px; min-width: 38px; max-width: max-content; overflow-x: auto; scrollbar-width: none; }
+.toolbar-shortcuts::-webkit-scrollbar { display: none; }
+.toolbar-shortcuts:empty { display: none; }
+.toolbar-group--camera { margin-right: auto; }
+.toolbar-group--utilities { margin-left: auto; border-left: 1px solid var(--border); padding-left: 10px; }
+.toolbar-toggle { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.toolbar-row--primary .toolbar-toggle { min-height: 36px; color: #b8b8c2; }
+.toolbar-icon { padding: 8px; width: 36px; height: 36px; flex-shrink: 0; }
+.toolbar-shortcut { position: relative; }
 .toolbar-row--primary .toolbar-toggle.active { color: var(--text); }
 .toolbar-row--primary .toolbar-toggle.running { color: var(--accent-1); }
-.toolbar-row--primary .toolbar-mouse-jog.active { color: var(--yellow); }
 .toolbar-row--primary .toolbar-stop { color: var(--danger); }
 .toolbar-row--primary .toolbar-stop.active { color: #000; }
-.toolbar .toolbar-toggle:focus-visible, .toolbar select:focus-visible,
-.toolbar input:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
-.toolbar .toolbar-camera-select { width: 150px; height: 34px; min-width: 0; }
-.toolbar .manual-speeds--compact { gap: 8px; flex-wrap: wrap; }
-.manual-speeds--compact .manual-speed { gap: 4px; }
-.manual-speeds--compact .manual-speed input[type="number"] { width: 58px; height: 34px; }
-.toolbar .manual-speed-select { width: 84px; height: 34px; }
-.toolbar-setup { position: relative; }
-.toolbar-connection-dot { position: absolute; right: 3px; top: 3px; width: 7px; height: 7px; background: var(--danger); border-radius: 50%; }
+.toolbar button:focus-visible, .toolbar-select:focus-within, .toolbar-tools button:focus-visible,
+.toolbar-details :is(button, input, select):focus-visible { outline: 2px solid var(--accent-2); outline-offset: -2px; }
+.toolbar-select { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 36px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-size: 12px; white-space: nowrap; cursor: pointer; }
+.toolbar-select:hover { border-color: var(--dim); background: #ffffff08; }
+.toolbar-select .ui-icon:last-of-type { width: 12px; flex-basis: 12px; }
+.toolbar .toolbar-select select { position: absolute; inset: 0; width: 100%; height: 100%; max-width: none; opacity: 0; cursor: pointer; }
+.toolbar .manual-speeds--compact { flex-wrap: nowrap; }
+.toolbar-connection-dot { position: absolute; right: 3px; top: 3px; width: 6px; height: 6px; background: var(--danger); border-radius: 50%; }
 .toolbar-connection-dot.connected { background: var(--accent-1); }
-.toolbar-row--activity { flex-wrap: wrap; padding-top: 0; }
-.toolbar-row--changes { flex-wrap: nowrap; overflow-x: auto; padding-top: 0; max-width: 100%; }
-.toolbar-changes-label { flex: 0 0 auto; font-size: 11px; color: var(--text-muted, #a8b3c2); }
-.toolbar-setting-reset { position: relative; flex: 0 0 auto; border-color: #39766b; color: #8ce0c6; }
+.toolbar-setting-reset { position: relative; border-color: #39766b; color: #8ce0c6; }
 .toolbar-setting-reset:hover, .toolbar-setting-reset:focus-visible { background: #334549; border-color: #e7b979; }
-.setting-reset-mark { position: absolute; right: 2px; top: -2px; font-size: 13px; line-height: 1; }
-.toolbar-control-notice { display: flex; align-items: center; gap: 8px; padding: 4px 12px; font-size: 12px; }
-.toolbar-control-notice button { color: inherit; background: transparent; border: 0; cursor: pointer; }
+.setting-reset-mark { position: absolute; right: 2px; top: 1px; font-size: 13px; line-height: 1; }
+.ui-tooltip { position: fixed; z-index: 12000; pointer-events: none; max-width: min(320px, calc(100vw - 16px)); padding: 8px 11px; border: 1px solid #464650; border-radius: 6px; background: #202026; color: var(--text); box-shadow: 0 4px 18px #0006; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.panel-header h2 { display: flex; align-items: center; gap: 8px; }
+.panel-drag-hint { margin-left: auto; margin-right: 12px; color: var(--dim); }
+.panel-drag-hint .ui-icon { width: 16px; height: 16px; }
+.toolbar-details, .toolbar-tools, .panel-toolbar-notice { top: calc(var(--topbar-h) + 12px); right: 12px; max-width: calc(100vw - 24px); max-height: calc(100dvh - var(--topbar-h) - 24px); }
+.toolbar-details { width: 460px; }
+.toolbar-tools { width: 570px; background: var(--surface-solid); }
+.toolbar-tools.visible, .toolbar-details.visible, .panel-toolbar-notice.visible { display: flex; flex-direction: column; }
+:is(.toolbar-tools, .toolbar-details, .panel-toolbar-notice) > .panel-header { flex-shrink: 0; }
+:is(.toolbar-tools, .toolbar-details, .panel-toolbar-notice) > .panel-body { overflow-y: auto; overscroll-behavior: contain; min-height: 0; }
+.toolbar-details .toolbar-row { flex-wrap: wrap; padding: 12px 0; gap: 8px; }
+.toolbar-details .toolbar-row:first-child { padding-top: 0; }
+.toolbar-details .toolbar-row--camera { overflow: visible; border-top: 1px solid var(--border); }
+.toolbar-details .toolbar-row--context { display: grid; grid-template-columns: 48px minmax(0, 1fr) 36px; }
+.toolbar-details .toolbar-row--context label { grid-column: 1; }
+.toolbar-details .toolbar-row--context select { grid-column: 2; }
+.toolbar-details select { min-width: 0; width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 5px; padding: 7px; }
+.toolbar-details .manual-speeds { width: 100%; min-width: 0; }
+.toolbar-details .manual-speed { width: 100%; min-width: 0; }
+.toolbar-details .manual-speed label { flex: 0 0 48px; }
+.toolbar-details .manual-speed input[type="range"] { flex: 1; width: 0; min-width: 30px; background: #33333d; }
+.toolbar-details .manual-speed input[type="number"] { width: 60px; }
+.toolbar-details .toolbar-row--hardware { border-top: 1px solid var(--border); }
+.toolbar-row--hardware .hardware-overview { flex-wrap: wrap; }
+.panel-toolbar-notice { width: 360px; }
+.toolbar-error { color: var(--danger); font-size: 0.8rem; overflow-wrap: anywhere; }
+.toolbar-pin-hint { font-size: 11px; color: #92929f; margin-bottom: 14px; }
+.toolbar-tools-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; }
+.toolbar-tools h3 { font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.09em; color: #92929f; margin-bottom: 7px; }
+.toolbar-tool-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 4px; }
+.toolbar-tool-item { position: relative; min-width: 0; }
+.toolbar-tool { width: 100%; justify-content: flex-start; text-align: left; min-height: 36px; color: #c9c9d2; padding: 7px 32px 7px 9px; font-family: inherit; font-weight: 500; font-size: 0.8rem; border-color: transparent; }
+.toolbar-tool span { overflow: hidden; text-overflow: ellipsis; }
+.toolbar-tool .ui-icon { margin-right: 4px; }
+.toolbar-pin { position: absolute; right: 4px; top: 5px; width: 26px; height: 26px; background: transparent; border: 0; color: var(--dim); border-radius: 4px; cursor: pointer; }
+.toolbar-pin .ui-icon { width: 14px; height: 14px; }
+.toolbar-pin:hover, .toolbar-pin:focus-visible { color: var(--text); background: #ffffff15; }
+.toolbar-tool-item.pinned .toolbar-pin { color: var(--accent-1); }
+@media (min-width: 900px) {
+  .toolbar-tools { width: 680px; }
+  .toolbar-tools-groups { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 12px; }
+}
+@media (max-width: 600px) {
+  .toolbar-row--primary { padding: 6px; gap: 6px; }
+  .toolbar-group { gap: 4px; }
+  .toolbar-group--utilities { padding-left: 5px; }
+  .toolbar-select { gap: 3px; padding: 0 5px; }
+  .toolbar-select .ui-icon { width: 16px; flex-basis: 16px; }
+  .toolbar-tools-groups { gap: 14px 8px; }
+  .toolbar-tools .panel-body { padding: 12px; }
+  .toolbar-tool { font-size: 11px; padding-left: 4px; gap: 3px; }
+  .toolbar-tool .ui-icon { width: 17px; flex-basis: 17px; margin-right: 0; }
+}
+@media (max-width: 340px) {
+  .toolbar-select > span { display: none; }
+}
+
 .filter-slider label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .filter-exact-value { width: 6.5em; padding: 4px; color: inherit; background: var(--bg, #181b22); border: 1px solid var(--dim, #666); border-radius: 4px; }
 .camera-setting-group input[type="range"] { --card-accent: var(--accent-1); display: block; margin: 10px 0; }
 .control-highlight { outline: 3px solid #8ce0c6 !important; outline-offset: 3px; }
 .action-search-hint { color: var(--text-muted, #a8b3c2); margin: 4px; font-size: 12px; }
-.toolbar-details { max-height: 45dvh; overflow: auto; border-top: 1px solid var(--border); }
-.toolbar-details .toolbar-row { flex-wrap: wrap; }
-.toolbar-details .toolbar-row--camera { overflow: visible; }
-.toolbar-details .toolbar-context-select { min-width: 0; max-width: min(280px, 100%); }
-.toolbar-row--hardware .hardware-overview { flex-wrap: wrap; }
-.toolbar-error { padding: 6px 16px; color: var(--danger); font-size: 0.8rem; }
-.toolbar-tools {
-  position: absolute; top: calc(100% + 8px); right: 12px; width: 620px;
-  max-width: calc(100vw - 24px); max-height: calc(100dvh - var(--topbar-h) - 20px);
-  overflow-y: auto; overscroll-behavior: contain;
-  background: var(--surface-solid); border: 1px solid var(--border);
-  border-radius: var(--radius); box-shadow: 0 12px 40px #0009; padding: 12px;
-}
-.toolbar-tools-header { display: flex; align-items: center; justify-content: space-between; font-weight: 600; margin-bottom: 4px; }
-.toolbar-tools-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 16px; }
-.toolbar-tools h3 { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: #aaaab8; margin: 8px 0; }
-.toolbar-tool-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-.toolbar .toolbar-tool { justify-content: flex-start; white-space: normal; text-align: left; min-height: 46px; color: #c9c9d2; padding: 8px; font-family: inherit; font-weight: 500; font-size: 0.8rem; }
-@media (max-width: 1100px) {
-  .toolbar-group--camera { order: 3; flex-basis: 100%; }
-}
-@media (max-width: 600px) {
-  .toolbar-row--primary { gap: 6px; padding: 6px 8px; }
-  .toolbar-group--utilities { margin-left: 0; }
-  .toolbar-tools-groups { grid-template-columns: minmax(0, 1fr); }
-  .toolbar-details .manual-speed input[type="range"] { width: 85px; }
-}
-
 /* Training captures use a fixed, full-frame coordinate system. */
 .panel-training { top: var(--topbar-h); right: 16px; width: min(760px, calc(100vw - 32px)); }
 .panel-training .panel-body { max-height: calc(100dvh - var(--topbar-h) - 70px); overflow-y: auto; }

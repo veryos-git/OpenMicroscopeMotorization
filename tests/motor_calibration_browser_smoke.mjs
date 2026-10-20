@@ -9,6 +9,7 @@ try {
     await page.goto(process.env.BASE_URL || 'http://127.0.0.1:8000');
     await page.getByRole('button', { name: 'Setup', exact: true }).click();
     await page.locator('.panel-setup.visible').waitFor();
+    await page.locator('.micro-diagnostics > summary').click();
     const cards = page.locator('.hardware-motor');
     assert.equal(await cards.count(), 3);
     assert.equal(await page.locator('.panel-backlash, .panel-calibration').count(), 0);

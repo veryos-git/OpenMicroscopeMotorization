@@ -1,9 +1,10 @@
+import { f_reset_control, f_reset_title } from '../webserved_dir/control_catalog.module.js';
 import assert from 'node:assert/strict';
 import { f_n_rpm__manual } from '../webserved_dir/manual_speed.module.js';
 import { o_component__icon } from '../webserved_dir/o_component__icon.js';
 
 async function component(name, bindings) {
-    bindings = { o_component__icon, ...bindings };
+    bindings = { f_reset_control, f_reset_title, o_component__icon, ...bindings };
     const source = (await Deno.readTextFile(new URL('../webserved_dir/o_component__' + name + '.js', import.meta.url)))
         .replace(/^import\s*\{[\s\S]*?\}\s*from\s*['"][^'"]+['"];?/gm, '')
         .replace(/export \{[^}]+\};?/, '');

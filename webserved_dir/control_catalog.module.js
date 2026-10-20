@@ -190,6 +190,7 @@ async function f_reveal_control(item) {
             if (parent.tagName === 'DETAILS') parent.open = true;
         }
         if (el.closest('#toolbar-details')) window.dispatchEvent(new Event('control-show-quick-settings'));
+        if (el.closest('#toolbar-tools')) window.dispatchEvent(new Event('control-show-tools'));
         await nextTick();
         el.scrollIntoView({ block: 'center', behavior: 'smooth' });
         if (!f_blocked(el)) el.focus({ preventScroll: true });

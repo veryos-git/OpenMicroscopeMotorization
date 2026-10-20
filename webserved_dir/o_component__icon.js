@@ -1,5 +1,16 @@
 // Local SVG pictograms: no font, network request, or platform emoji dependency.
 const o_path = {
+    chevron: 'M8 10l4 4 4-4',
+    speed: 'M5 8l4 4-4 4 M11 8l4 4-4 4 M17 8l4 4-4 4',
+    pin: 'M8 3h8 M9 3v6l-3 5h12l-3-5V3 M12 14v7',
+    chip: 'M6 6h12v12H6z M9 2v4 M15 2v4 M9 18v4 M15 18v4 M2 9h4 M2 15h4 M18 9h4 M18 15h4',
+    gpio: 'M7 3h10v18H7z M14 8a2 2 0 1 1-4 0 2 2 0 0 1 4 0 M12 10v5',
+    checked: 'M3 3h18v18H3z M7 12l3 3 7-7',
+    unchecked: 'M3 3h18v18H3z',
+    backlash: 'M10 3h4l1 3 3-1 2 3-2 3 2 3-2 3-3-1-1 3h-4l-1-3-3 1-2-3 2-3-2-3 2-3 3 1z M15 11a3 3 0 1 1-6 0 3 3 0 0 1 6 0 M23 5v8 M23 17v1',
+    usb: 'M12 21V3 M9 6l3-3 3 3 M12 15l-6-4V8 M12 12l6-4V5 M16 3h4v4h-4z M7 6a1 1 0 1 1-2 0 1 1 0 0 1 2 0 M14 19a2 2 0 1 1-4 0 2 2 0 0 1 4 0',
+    flash: 'M13 2L4 14h7l-1 8 10-13h-7z',
+    wifi: 'M3 8a15 15 0 0 1 18 0 M6 12a10 10 0 0 1 12 0 M9 16a5 5 0 0 1 6 0 M12 20h.01',
     camera: 'M3 7h4l2-3h6l2 3h4v13H3z M16 13a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
     scan: 'M8 3H3v5 M16 3h5v5 M3 16v5h5 M21 16v5h-5 M7 7h10v10H7z M12 7v10 M7 12h10',
     focus: 'M8 3H3v5 M16 3h5v5 M3 16v5h5 M21 16v5h-5 M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0 M12 10v4 M10 12h4',
