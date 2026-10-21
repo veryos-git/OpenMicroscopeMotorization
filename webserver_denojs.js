@@ -69,17 +69,12 @@ import {
 // ─── CLI args ───────────────────────────────────────────────────────
 
 let n_port = 8000;
-let s_ip__esp = '';
 let s_path_db = '';
 
 let a_s_arg = Deno.args;
 for(let n_idx = 0; n_idx < a_s_arg.length; n_idx++){
     if(a_s_arg[n_idx] === '--port' && a_s_arg[n_idx + 1]){
         n_port = parseInt(a_s_arg[n_idx + 1], 10);
-        n_idx++;
-    }
-    if(a_s_arg[n_idx] === '--esp' && a_s_arg[n_idx + 1]){
-        s_ip__esp = a_s_arg[n_idx + 1];
         n_idx++;
     }
     if(a_s_arg[n_idx] === '--db' && a_s_arg[n_idx + 1]){
@@ -215,11 +210,10 @@ let f_handler = async function(o_request, o_conninfo) {
 
         o_socket.onopen = async function() {
             console.log('websocket connected');
-            // send init message with ESP IP from CLI
+            // send init message
             o_socket.send(JSON.stringify({
                 s_type: 'init',
                 s_root_dir: s_root_dir,
-                s_ip__esp: s_ip__esp,
             }));
 
             // send all model data
@@ -774,7 +768,7 @@ let f_handler = async function(o_request, o_conninfo) {
                 };
 
                 let o_result = await f_compile_esp(
-                    v.s_wifi_ssid, v.s_wifi_password, v.a_o_pin_config, f_on_line, v.o_config__hardware_led,
+                    v.a_o_pin_config, f_on_line, v.o_config__hardware_led,
                 );
 
                 o_socket.send(JSON.stringify({

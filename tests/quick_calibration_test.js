@@ -157,17 +157,17 @@ for(const s_input of ['keyboard', 'mouse', 'gamepad']) {
             n_rpm__focus_jog: 0.5, o_key_held: {},
             o_mapping__q: { s_dir: 'cw' }, o_mapping__e: { s_dir: 'ccw' },
             o_mapping__mouse_right: { s_dir: 'cw' },
-            n_index__gamepad: -1, b_enabled__gamepad: true,
+            n_index__gamepad: -1, b_enabled__gamepad: true, b_connected__esp: true,
         });
-        // Use the production resolver and command helpers through a fake socket;
+        // Use the production resolver and command helpers through a fake USB writer;
         // a resolver stub would hide the calibration lockout this test covers.
         const s_source = await Deno.readTextFile(new URL('../webserved_dir/index.js', import.meta.url));
         const a_s_function = ['f_n_motor__axis', 'f_send_esp', 'f_send_esp_run_continuous', 'f_send_esp_stop'];
         const a_s_message = [];
-        const o_command = new Function('o_state', 'o_ws__esp', 'WebSocket',
+        const o_command = new Function('o_state', 'o_writer__serial',
             a_s_function.map(s_name => s_source.match(new RegExp('let ' + s_name + ' = [\\s\\S]*?\\n};'))[0]).join('\n')
             + '\nreturn { ' + a_s_function.join(', ') + ' };'
-        )(state, { readyState: 1, send: s_message => a_s_message.push(JSON.parse(s_message)) }, { OPEN: 1 });
+        )(state, { write: a_n_byte => { a_s_message.push(JSON.parse(new TextDecoder().decode(a_n_byte))); return Promise.resolve(); } });
         const o_pad = { index: 0, id: 'test', connected: true, axes: [0, 0, 0, 0], buttons: [] };
         const o_component = await component('jog', {
             o_state: state, f_n_rpm__manual, ...o_command,

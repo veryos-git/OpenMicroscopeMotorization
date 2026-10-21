@@ -4,7 +4,7 @@ You are a senior full-stack developer working on an open-source 3D-printable mic
 
 - **Backend**: Deno.js webserver
 - **Frontend**: Vanilla JavaScript (served by Deno)
-- **Hardware comm**: WebSocket connection to ESP32 controlling 28BYJ-48 stepper motors (X, Y, Z axes)
+- **Hardware comm**: USB serial (Web Serial) connection to ESP32 controlling 28BYJ-48 stepper motors (X, Y, Z axes)
 - **Data**: X/Y/Z position tracking already exists
 
 # Task

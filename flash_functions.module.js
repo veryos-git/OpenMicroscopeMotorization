@@ -2,8 +2,8 @@ import { createHash } from "node:crypto";
 import { s_root_dir, s_ds } from "./runtimedata.module.js";
 import { f_o_hardware_led_config, f_s_hardware_led_config_error } from './webserved_dir/hardware_led.module.js';
 
-let s_path__ino_template = `${s_root_dir}${s_ds}stepper_websocket.ino`;
-let s_path__tmp_dir = '/tmp/stepper_websocket';
+let s_path__ino_template = `${s_root_dir}${s_ds}stepper_serial.ino`;
+let s_path__tmp_dir = '/tmp/stepper_serial';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -126,7 +126,7 @@ let f_o_check_arduino_cli = async function() {
 
 // ─── Generate .ino firmware from template ───────────────────────────
 
-let f_generate_ino = async function(s_wifi_ssid, s_wifi_password, a_o_pin_config = [
+let f_generate_ino = async function(a_o_pin_config = [
     { n_pin1: 4, n_pin2: 5, n_pin3: 6, n_pin4: 7 },
     { n_pin1: 15, n_pin2: 16, n_pin3: 17, n_pin4: 18 },
     { n_pin1: 8, n_pin2: 3, n_pin3: 46, n_pin4: 9 },
@@ -135,10 +135,6 @@ let f_generate_ino = async function(s_wifi_ssid, s_wifi_password, a_o_pin_config
     let s_error = f_s_hardware_led_config_error(o_led, a_o_pin_config);
     if (s_error) throw new Error(s_error);
     let s_ino = await Deno.readTextFile(s_path__ino_template);
-
-    // replace WiFi placeholders
-    s_ino = s_ino.replace('{{wifi_ssid}}', () => JSON.stringify(s_wifi_ssid || '').slice(1, -1));
-    s_ino = s_ino.replace('{{wifi_password}}', () => JSON.stringify(s_wifi_password || '').slice(1, -1));
 
     // replace pin placeholders for each motor
     for (let n_idx = 0; n_idx < a_o_pin_config.length; n_idx++) {
@@ -161,9 +157,9 @@ let f_generate_ino = async function(s_wifi_ssid, s_wifi_password, a_o_pin_config
     }
 
     await Deno.mkdir(s_dir, { recursive: true });
-    await Deno.writeTextFile(`${s_dir}/stepper_websocket.ino`, s_ino);
+    await Deno.writeTextFile(`${s_dir}/stepper_serial.ino`, s_ino);
 
-    return `${s_dir}/stepper_websocket.ino`;
+    return `${s_dir}/stepper_serial.ino`;
 };
 
 // ─── Install arduino-cli ────────────────────────────────────────────
@@ -238,18 +234,7 @@ let f_install_esp32_deps = async function(f_on_line) {
     b_ok = await f_run_and_stream(s_bin, ['core', 'install', 'esp32:esp32'], f_on_line);
     if (!b_ok) return false;
 
-    // remove old conflicting libraries
-    let s_lib_dir = `${Deno.env.get('HOME')}/Arduino/libraries`;
-    for (let s_old_lib of ['ESPAsyncWebServer', 'AsyncTCP', 'ESPAsyncTCP']) {
-        try {
-            await Deno.remove(`${s_lib_dir}/${s_old_lib}`, { recursive: true });
-            f_on_line(`Removed old conflicting library: ${s_old_lib}`, 'stdout');
-        } catch { /* not present */ }
-    }
-
-    // 'Async TCP' (ESP32Async fork) provides AsyncTCP.h, which ESPAsyncWebServer.h includes.
-    // arduino-cli does not resolve it automatically here, so install it explicitly.
-    for (let s_lib of ['ESP Async WebServer', 'Async TCP', 'ArduinoJson']) {
+    for (let s_lib of ['ArduinoJson']) {
         f_on_line(`Installing ${s_lib}...`, 'stdout');
         b_ok = await f_run_and_stream(s_bin, ['lib', 'install', s_lib], f_on_line);
         if (!b_ok) {
@@ -263,7 +248,7 @@ let f_install_esp32_deps = async function(f_on_line) {
 
 // Only compilation runs on the server; the browser owns the USB device.
 let b_building = false;
-let f_compile_esp = async function(s_wifi_ssid, s_wifi_password, a_o_pin_config, f_on_line, o_config__hardware_led = {}) {
+let f_compile_esp = async function(a_o_pin_config, f_on_line, o_config__hardware_led = {}) {
     if (b_building) return { b_success: false, s_error: 'Another firmware build is running. Try again when it finishes.' };
     b_building = true;
     let s_dir;
@@ -277,8 +262,8 @@ let f_compile_esp = async function(s_wifi_ssid, s_wifi_password, a_o_pin_config,
         }
         if (!await f_install_esp32_deps(f_on_line)) throw new Error('Failed to install ESP32 dependencies');
         s_dir = await Deno.makeTempDir({ prefix: 'microscope-firmware-' });
-        let s_sketch = `${s_dir}/stepper_websocket`;
-        await f_generate_ino(s_wifi_ssid, s_wifi_password, a_o_pin_config, s_sketch, o_config__hardware_led);
+        let s_sketch = `${s_dir}/stepper_serial`;
+        await f_generate_ino(a_o_pin_config, s_sketch, o_config__hardware_led);
         let s_output = `${s_dir}/output`;
         f_on_line('--- Compiling ESP32-S3 firmware ---', 'stdout');
         if (!await f_run_and_stream(s_bin, [
@@ -286,11 +271,11 @@ let f_compile_esp = async function(s_wifi_ssid, s_wifi_password, a_o_pin_config,
         ], f_on_line)) throw new Error('Compilation failed');
         let a_o_image = [];
         for (let [s_suffix, n_address] of [['bootloader.bin', 0], ['partitions.bin', 0x8000], ['bin', 0x10000]]) {
-            let a_bytes = await Deno.readFile(`${s_output}/stepper_websocket.ino.${s_suffix}`);
+            let a_bytes = await Deno.readFile(`${s_output}/stepper_serial.ino.${s_suffix}`);
             a_o_image.push(f_o_image(a_bytes, n_address));
         }
         // The Arduino core's merged image includes its matching OTA boot selector.
-        let a_merged = await Deno.readFile(`${s_output}/stepper_websocket.ino.merged.bin`);
+        let a_merged = await Deno.readFile(`${s_output}/stepper_serial.ino.merged.bin`);
         if (a_merged.length < 0x10000) throw new Error('Incomplete merged firmware image');
         a_o_image.splice(2, 0, f_o_image(a_merged.slice(0xe000, 0x10000), 0xe000));
         f_on_line('Firmware ready for browser USB upload.', 'stdout');

@@ -10,7 +10,6 @@ const o_path = {
     backlash: 'M10 3h4l1 3 3-1 2 3-2 3 2 3-2 3-3-1-1 3h-4l-1-3-3 1-2-3 2-3-2-3 2-3 3 1z M15 11a3 3 0 1 1-6 0 3 3 0 0 1 6 0 M23 5v8 M23 17v1',
     usb: 'M12 21V3 M9 6l3-3 3 3 M12 15l-6-4V8 M12 12l6-4V5 M16 3h4v4h-4z M7 6a1 1 0 1 1-2 0 1 1 0 0 1 2 0 M14 19a2 2 0 1 1-4 0 2 2 0 0 1 4 0',
     flash: 'M13 2L4 14h7l-1 8 10-13h-7z',
-    wifi: 'M3 8a15 15 0 0 1 18 0 M6 12a10 10 0 0 1 12 0 M9 16a5 5 0 0 1 6 0 M12 20h.01',
     camera: 'M3 7h4l2-3h6l2 3h4v13H3z M16 13a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
     scan: 'M8 3H3v5 M16 3h5v5 M3 16v5h5 M21 16v5h-5 M7 7h10v10H7z M12 7v10 M7 12h10',
     focus: 'M8 3H3v5 M16 3h5v5 M3 16v5h5 M21 16v5h-5 M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0 M12 10v4 M10 12h4',
@@ -32,6 +31,9 @@ const o_path = {
     slide: 'M3 6h18v12H3z M7 6v12 M17 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0',
     filter: 'M3 4h18l-7 8v7l-4 2v-9z',
     brightness: 'M12 2v2 M12 20v2 M2 12h2 M20 12h2 M5 5l2 2 M17 17l2 2 M5 19l2-2 M17 7l2-2 M17 12a5 5 0 1 1-10 0 5 5 0 0 1 10 0',
+    led: 'M8.5 16V10a3.5 3.5 0 0 1 7 0v6 M6.5 16h11v2h-11z M10 18v4 M14 18v4 M12 1.5v2 M5.6 3.8l1.3 1.3 M18.4 3.8l-1.3 1.3 M3 9.5h2.2 M18.8 9.5h2.2',
+    darkness: 'M12 3.5v2 M12 18.5v2 M3.5 12h2 M18.5 12h2 M6 6l1.4 1.4 M18 6l-1.4 1.4 M6 18l1.4-1.4 M18 18l-1.4-1.4 M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
+    lightness: 'M12 3.5v2 M12 18.5v2 M3.5 12h2 M18.5 12h2 M6 6l1.4 1.4 M18 6l-1.4 1.4 M6 18l1.4-1.4 M18 18l-1.4-1.4 M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0',
     contrast: 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0 M12 3v18 M12 6h5 M12 9h8 M12 12h9 M12 15h8 M12 18h5',
     gamma: 'M3 3v18h18 M5 19c11 0 2-14 14-14',
     color: 'M12 3s7 8 7 12a7 7 0 0 1-14 0c0-4 7-12 7-12z M9 15a3 3 0 0 0 3 3',
@@ -47,10 +49,17 @@ const o_path = {
     stats: 'M3 3v18h18 M7 17v-4 M12 17V8 M17 17V4',
     refresh: 'M20 10a8 8 0 0 0-14-4L3 9 M3 3v6h6 M4 14a8 8 0 0 0 14 4l3-3 M15 15h6v6',
 };
+// Solid parts drawn on top of the outline, e.g. the dark half of 'darkness'.
+const o_path__fill = {
+    darkness: 'M12 8a4 4 0 0 1 0 8z',
+};
 
 export const o_component__icon = {
     props: { s_name: { type: String, required: true } },
-    computed: { s_path() { return o_path[this.s_name] || o_path.tools; } },
+    computed: {
+        s_path() { return o_path[this.s_name] || o_path.tools; },
+        s_path__fill() { return o_path__fill[this.s_name] || ''; },
+    },
     template: `<svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-        stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path :d="s_path" /></svg>`,
+        stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path :d="s_path" /><path v-if="s_path__fill" :d="s_path__fill" fill="currentColor" stroke="none" /></svg>`,
 };

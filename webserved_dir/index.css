@@ -1328,6 +1328,25 @@ input[type="range"]::-moz-range-thumb {
   max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
   --card-accent: var(--yellow);
 }
+.panel-header-action {
+  width: 24px; height: 24px; margin-left: auto; margin-right: 8px; padding: 0; border-radius: 6px;
+  border: 1px solid var(--border); background: transparent; color: var(--dim);
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.panel-header-action:hover, .panel-header-action:focus-visible { color: var(--text); border-color: var(--text); }
+.panel-header-action .ui-icon { width: 16px; height: 16px; flex-basis: 16px; }
+.led-channel-list { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 14px; }
+.led-channel-list:disabled { opacity: 0.6; }
+.led-channel {
+  display: grid; grid-template-columns: 4.2em 20px minmax(40px, 1fr) 20px 4.6em auto;
+  align-items: center; gap: 8px; font-size: 12px;
+}
+.led-channel-name { font-weight: 600; letter-spacing: 0.04em; color: var(--dim); }
+.led-channel .ui-icon { width: 20px; height: 20px; flex-basis: 20px; color: var(--dim); }
+.led-channel input[type="number"] {
+  width: 100%; min-width: 0; box-sizing: border-box; padding: 3px 4px; text-align: right;
+  background: var(--bg); color: var(--text); border: 1px solid var(--dim); border-radius: 4px; font: inherit;
+}
 
 .camera-setting-placeholder {
   font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
@@ -2210,21 +2229,17 @@ input[type="range"]::-moz-range-thumb {
 .hardware-motor-actions .btn-small { margin: 0; }
 .hardware-step-count { width: 80px; }
 .hardware-wiring { margin-top: 12px; }
-.hardware-wiring summary, .hardware-inputs summary, .hardware-controller summary { cursor: pointer; color: var(--dim); padding: 8px 0; }
+.hardware-wiring summary, .hardware-inputs summary { cursor: pointer; color: var(--dim); padding: 8px 0; }
 .hardware-pin-grid { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 8px; margin: 8px 0; }
 .hardware-pin-grid input { width: 100%; }
 .hardware-led fieldset { border: 0; padding: 0; margin: 10px 0; min-width: 0; }
 .hardware-led fieldset:disabled { opacity: 0.6; }
 .hardware-led legend { font-weight: 600; margin-bottom: 8px; }
-.hardware-led-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; margin: 12px 0; }
-.hardware-led-grid label { display: flex; flex-direction: column; gap: 5px; font-size: 0.8rem; }
-.hardware-led-grid input, .hardware-led-grid select { width: 100%; min-width: 0; box-sizing: border-box; }
-.hardware-led-grid input[type="color"] { height: 32px; padding: 2px; }
 .hardware-led details summary { cursor: pointer; padding: 8px 0; }
 .hardware-backlash { display: flex; gap: 10px; align-items: center; }
 .hardware-backlash input { width: 90px; }
 .hardware-pin-grid label, .hardware-backlash { font-size: 0.75rem; color: var(--dim); }
-.hardware-inputs, .hardware-controller { margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border); }
+.hardware-inputs { margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--border); }
 .hardware-inputs h3 { font-size: 0.9rem; margin-bottom: 12px; }
 .hardware-motors input, .hardware-motors select, .hardware-inputs select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 7px; }
 .hardware-motors .setup-hint, .hardware-inputs .setup-hint { text-align: left; margin: 6px 0 10px; }
@@ -2291,8 +2306,6 @@ input[type="range"]::-moz-range-thumb {
 .micro-details > summary::after { content: '›'; margin-left: auto; font-size: 16px; }
 .micro-details[open] > summary::after { transform: rotate(90deg); }
 .micro-details > summary .ui-icon { width: 16px; height: 16px; flex-basis: 16px; }
-.micro-wifi-row { display: flex; gap: 8px; }
-.micro-wifi-row input { flex: 1; }
 .microcontroller-settings .hardware-motor { padding: 10px; margin: 10px 0; }
 .microcontroller-settings .hardware-motor h3 { font-size: 12px; }
 .microcontroller-settings .hardware-motor-readout { font-size: 11px; margin: 8px 0; }
@@ -2454,7 +2467,7 @@ input[type="range"]::-moz-range-thumb {
   .toolbar-tool { font-size: 11px; padding-left: 4px; gap: 3px; }
   .toolbar-tool .ui-icon { width: 17px; flex-basis: 17px; margin-right: 0; }
 }
-@media (max-width: 340px) {
+@media (max-width: 380px) {
   .toolbar-select > span { display: none; }
 }
 

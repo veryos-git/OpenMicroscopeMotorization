@@ -10,7 +10,7 @@ Deno.test({ name: 'real LED firmware encodes channels, brightness, latch, queued
     try {
         for (const config of [{}, { b_enabled: true }, { b_enabled: true, n_count: 3, s_order: 'rgb' },
             { b_enabled: true, s_protocol: 'rgb' }, { b_enabled: true, s_protocol: 'rgb', s_order: 'rgb', n_count: 16 }]) {
-            const path = await f_generate_ino('', '', undefined, dir, config);
+            const path = await f_generate_ino(undefined, dir, config);
             const source = await Deno.readTextFile(path);
             const hardware = source.slice(source.indexOf('// Optional addressable LED chain.'), source.indexOf('static const uint8_t HALF_STEP_SEQ'));
             const command = source.slice(source.indexOf('void ledSendError('), source.indexOf('// Read complete newline-terminated JSON commands'));

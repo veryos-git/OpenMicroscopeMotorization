@@ -513,8 +513,8 @@ finish
    hardware? decides whether channels and phototoxicity budgeting are real.
 4. **environmental control:** incubator / temperature / CO2 stage to log or control?
 5. **retention:** what gets deleted, by whom, and is there a quota per project?
-6. **unattended autofocus:** may the server talk to the ESP directly over WiFi,
-   or must the browser stay the only motor driver?
+6. **unattended autofocus:** may the server drive the ESP directly (taking over
+   its USB port), or must the browser stay the only motor driver?
 
 ---
 

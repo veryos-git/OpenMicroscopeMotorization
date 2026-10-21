@@ -18,7 +18,7 @@ Deno.test('search reaches hidden inputs and reset icons restore individual setti
             export const calls = { stop: 0, capture: 0, settings: {}, camera: [] };
             export const o_state = reactive({
                 o_panel_visibility: ${JSON.stringify(Object.fromEntries(panels.map(key => [key, false])))},
-                b_connected__server: true, b_connected__esp: true, s_transport__esp: 'usb', b_streaming__webcam: true,
+                b_connected__server: true, b_connected__esp: true, b_streaming__webcam: true,
                 s_id__webcam_device: 'test', a_o_device__webcam: [{deviceId: 'test', label: 'Microscope camera'}],
                 o_motor__axis: { x: 0, y: 1, z: 2 }, a_o_motor: [{b_running: false}],
                 n_rpm__jog: 5, n_rpm__focus_jog: 0.5, o_key_held: {},
@@ -79,7 +79,7 @@ Deno.test('search reaches hidden inputs and reset icons restore individual setti
                     compile(component.template, {onError(error) {throw Error(name + ': ' + error.message);}});
                 }
                 check(f_a_control_results().some(o => /Bright pixel threshold/.test(o.name)), 'Production inputs catalogued');
-                check(f_a_control_results().some(o => /ESP32 IP/.test(o.name)), 'Connection inputs catalogued');
+                check(f_a_control_results().some(o => /Connect via USB/.test(o.name)), 'Connection controls catalogued');
                 o_state.b_streaming__webcam = false;
                 o_state.o_filter = f_o_filter__default();
                 o_state.o_filter.n_contrast = 1.7; // saved setting must have a reset immediately

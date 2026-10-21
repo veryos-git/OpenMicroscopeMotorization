@@ -207,18 +207,17 @@ Deno.test('shared motor dispatch rejects competing training motion but permits e
         s_source.indexOf('// Axis assignments resolve'),
     );
     let a_s_write = [];
-    let o_state = { b_training_busy: true, b_connected__esp: true, s_transport__esp: 'serial' };
+    let o_state = { b_training_busy: true, b_connected__esp: true };
     let f_send = new Function(
         'o_state',
         'o_writer__serial',
-        'o_ws__esp',
         s_function + '\nreturn f_send_esp;',
     )(o_state, {
         write: (a) => {
             a_s_write.push(new TextDecoder().decode(a));
             return Promise.resolve();
         },
-    }, null);
+    });
     assert.throws(() => f_send({ command: 'moveSteps', motor: 0, n_step: 3 }), /Training is using/);
     assert.equal(a_s_write.length, 0);
     f_send({ command: 'moveSteps', motor: 2, n_step: 3 }, 'training');

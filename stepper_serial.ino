@@ -1,9 +1,7 @@
 /**
- * ESP32-S3 — Three 28BYJ-48 steppers, WebSocket + USB Serial API
+ * ESP32-S3 — Three 28BYJ-48 steppers, USB Serial API
  *
  * Libraries required (Arduino Library Manager):
- *   - ESP Async WebServer  (by mathieucarbou)
- *   - AsyncTCP             (by mathieucarbou)
  *   - ArduinoJson          (by Benoît Blanchon)
  *
  * Wiring (ULN2003 driver boards, external 5 V supply):
@@ -11,12 +9,11 @@
  *   Motor 1: GPIO15, GPIO16, GPIO17, GPIO18
  *   Motor 2: { s_name: 'Motor 3', n_pin1: 8, n_pin2: 3, n_pin3: 46, n_pin4: 9 },
  *
- * WebSocket endpoint: ws://<ESP_IP>/ws
  * USB Serial endpoint: 115200 baud, one JSON command per line (newline-terminated)
  *
- * The same JSON API is served over both transports. Responses go back over the
- * transport the command arrived on. USB Serial (Web Serial API in the browser)
- * is the low-latency primary path; WebSocket remains as a network fallback.
+ * The same JSON API is served on the native USB port and the USB-to-UART
+ * connector. Responses go back over the port the command arrived on; the
+ * browser talks to it with the Web Serial API.
  *
  * API (JSON):
  *   → { "motor": 0, "command": "runContinuous", "n_rpm": 10.0, "direction": "cw" }
@@ -36,8 +33,6 @@
  *   ← { "type":"circleStopped" }
  */
 
-#include <WiFi.h>
-#include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
 #include <HWCDC.h>
 #include <esp32-hal-rmt.h>
@@ -49,10 +44,6 @@
 #else
 HWCDC MotorUSBSerial;
 #endif
-
-// ─── WiFi credentials ───────────────────────────────────────────────
-const char* WIFI_SSID = "{{wifi_ssid}}";
-const char* WIFI_PASS = "{{wifi_password}}";
 
 // ─── Motor hardware ─────────────────────────────────────────────────
 
@@ -107,7 +98,7 @@ void ledInit() {
     b_dirty__led = true;
 }
 
-// Only loop() touches RMT or its frame buffer. WebSocket callbacks only queue
+// Only ledUpdate() touches RMT or its frame buffer. Command handlers only queue
 // output under the lock. Keep the buffer intact until transmission completes.
 void ledUpdate() {
     portENTER_CRITICAL(&o_mux__led);
@@ -231,7 +222,7 @@ struct MotorState {
 MotorState motors[NUM_MOTORS];
 
 // flag: set to true in motorsUpdate when a move completes or is cancelled
-// processed in loop() to send WS messages outside the tight stepping loop
+// processed in loop() to send messages outside the tight stepping loop
 struct MoveEvent {
     bool     b_pending;
     bool     b_complete;   // true = complete, false = cancelled
@@ -268,35 +259,22 @@ struct CircleState {
 
 CircleState circle;
 
-// ─── WebSocket server ───────────────────────────────────────────────
+// ─── Serial ports ───────────────────────────────────────────────────
+// The same JSON API is served on both ports. Commands are answered on the
+// port they arrived on; async events (moveComplete, circleComplete) also
+// follow that port.
 
-AsyncWebServer server(80);
-AsyncWebSocket ws("/ws");
-
-// ─── Transport (WebSocket vs USB Serial) ────────────────────────────
-// The same JSON API is served over both transports. Commands are answered on
-// the transport they arrived on; async events (moveComplete, circleComplete)
-// also follow that transport.
-
-enum Transport { TR_WS, TR_SERIAL };
-Transport g_transport = TR_SERIAL;
-
-bool b_wifi_reported = false;
 String s_serial_buffer__uart = "";
 String s_serial_buffer__usb = "";
 Stream* o_serial__reply = &Serial0;
 
 void handleCommand(const uint8_t *data, size_t len);
 
-// Serialise a JSON document and send it over the active transport.
+// Serialise a JSON document and send it over the active serial port.
 void sendJson(JsonDocument &doc) {
     String json;
     serializeJson(doc, json);
-    if (g_transport == TR_SERIAL) {
-        o_serial__reply->println(json);
-    } else {
-        ws.textAll(json);
-    }
+    o_serial__reply->println(json);
 }
 
 void sendJsonError(const char* s_error) {
@@ -342,13 +320,12 @@ bool ledSetOutput(JsonDocument &doc) {
 }
 
 // Read complete newline-terminated JSON commands from USB Serial and dispatch
-// them exactly like WebSocket frames.
+// them.
 void handleSerialPort(Stream &port, String &s_serial_buffer) {
     while (port.available()) {
         char c = (char)port.read();
         if (c == '\n' || c == '\r') {
             if (s_serial_buffer.length() > 0) {
-                g_transport = TR_SERIAL;
                 o_serial__reply = &port;
                 handleCommand((const uint8_t*)s_serial_buffer.c_str(), s_serial_buffer.length());
                 s_serial_buffer = "";
@@ -722,9 +699,9 @@ void motorsUpdate() {
     }
 }
 
-// ─── WebSocket handling ─────────────────────────────────────────────
+// ─── Status and command handling ────────────────────────────────────
 
-void sendStatus(AsyncWebSocketClient *client = nullptr) {
+void sendStatus() {
     JsonDocument doc;
     doc["type"] = "status";
     doc["b_axis_assignment__circle"] = true;
@@ -759,14 +736,7 @@ void sendStatus(AsyncWebSocketClient *client = nullptr) {
         o_circle["b_loop"]  = circle.b_loop;
     }
 
-    String json;
-    serializeJson(doc, json);
-    if (client != nullptr && g_transport == TR_WS) {
-        client->text(json);
-    } else {
-        if (g_transport == TR_SERIAL) o_serial__reply->println(json);
-        else                          ws.textAll(json);
-    }
+    sendJson(doc);
 }
 
 void sendMoveEvent(bool b_complete, int m, long n_position) {
@@ -871,68 +841,25 @@ void handleCommand(const uint8_t *data, size_t len) {
     }
 }
 
-void onWsEvent(AsyncWebSocket *srv, AsyncWebSocketClient *client,
-               AwsEventType type, void *arg, uint8_t *data, size_t len)
-{
-    switch (type) {
-        case WS_EVT_CONNECT:
-            g_transport = TR_WS;
-            Serial.printf("WS client #%u connected from %s\n",
-                          client->id(), client->remoteIP().toString().c_str());
-            sendStatus(client);
-            break;
-        case WS_EVT_DISCONNECT:
-            Serial.printf("WS client #%u disconnected\n", client->id());
-            break;
-        case WS_EVT_DATA: {
-            AwsFrameInfo *info = (AwsFrameInfo*)arg;
-            if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
-                g_transport = TR_WS;
-                handleCommand(data, len);
-            }
-            break;
-        }
-        default: break;
-    }
-}
-
 // ─── Setup ──────────────────────────────────────────────────────────
 
 void setup() {
     Serial0.begin(115200);
     MotorUSBSerial.begin(115200);
     delay(500);
-    Serial.println("\n=== Stepper Serial + WebSocket API ===\n");
+    Serial.println("\n=== Stepper Serial API ===\n");
 
     motorInit();
     circleInit();
     ledInit();
     ledUpdate();
     Serial.println("Motors initialised.");
-
-    // WiFi is best-effort and non-blocking: the USB Serial API must stay
-    // responsive even without a network. Connect in the background; loop()
-    // reports the IP once the link comes up.
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(WIFI_SSID, WIFI_PASS);
-    Serial.println("Connecting to WiFi (in background)");
-    Serial.println("USB Serial API: 115200 baud, one JSON command per line");
-    Serial.println("WebSocket endpoint: ws://<IP>/ws (once WiFi connects)\n");
-
-    ws.onEvent(onWsEvent);
-    server.addHandler(&ws);
-    server.begin();
+    Serial.println("USB Serial API: 115200 baud, one JSON command per line\n");
 }
 
 // ─── Loop ───────────────────────────────────────────────────────────
 
 void loop() {
-    // report the IP once WiFi comes up (non-blocking)
-    if (!b_wifi_reported && WiFi.status() == WL_CONNECTED) {
-        b_wifi_reported = true;
-        Serial.printf("Connected!  IP: %s\n", WiFi.localIP().toString().c_str());
-    }
-
     handleSerial();
     motorsUpdate();
     circleUpdate();
@@ -956,6 +883,4 @@ void loop() {
         // compact: just reset counter since we processed all
         n_cnt__move_event = 0;
     }
-
-    ws.cleanupClients();
 }

@@ -26,8 +26,7 @@ irm https://deno.land/install.ps1 | iex
 this installs every missing dependency and then starts the web server on http://localhost:8000
 
 installed on first run (skipped afterwards, so `deno task start` stays fast):
-- `arduino-cli` into `~/.local/bin` + the `esp32:esp32` board package + the `ESP Async WebServer` / `Async TCP` / `ArduinoJson` libraries — these compile the ESP32 firmware on the server
-  (`Async TCP` provides `AsyncTCP.h` and must be installed explicitly — arduino-cli does not pull it in as a dependency when run non-interactively)
+- `arduino-cli` into `~/.local/bin` + the `esp32:esp32` board package + the `ArduinoJson` library — these compile the ESP32 firmware on the server
 - `./venv` with `numpy` + `opencv-python` — used by `stitch.py` (the tile scan mosaic) and `stich_image_in_folder.py`
 - `torch` (cpu build) + `lightglue` + `kornia` — used by `autostitch.py` and by `stitch.py --matcher loftr`
 - `./venv_cellpose` with `torch` + `cellpose` — used by `cellpose_worker.py` for the `Cell pose` panel
@@ -55,18 +54,18 @@ of the ~3 GB CUDA one.
 ## hardware setup and browser flashing
 
 Open the Setup overlay from the toolbar to configure motor axes (including the optional Z/focus motor),
-GPIO pins, backlash compensation, WiFi, and the controller connection. These
+GPIO pins, backlash compensation, and the USB controller connection. These
 assignments are shared by all tools in Control. Each physical motor appears once,
 with its axis assignment, live movement/direction/position, move and stop buttons,
 and expandable wiring/backlash settings. Keyboard, mouse, and gamepad settings
 are below the cards; the separate Jog and Motors windows have been removed. Firmware flashing is included
-in the same overlay; there is no separate Setup or flashing page. Pin and WiFi changes require
+in the same overlay; there is no separate Setup or flashing page. Pin changes require
 flashing; axis assignments apply immediately.
 
 For flashing, use desktop Chrome or Edge over HTTPS or `http://localhost:8000`.
 Plug the ESP32-S3 into the **computer running the browser**, then click
-**Generate Firmware & Flash ESP32** and select its USB port. WiFi credentials
-are optional when using USB control.
+**Generate Firmware & Flash ESP32** and select its USB port. The controller is
+connected over USB only; the firmware has no WiFi.
 
 The server compiles the firmware; the browser uploads it with Web Serial,
 verifies the written images, and reconnects USB control after reset. The firmware
@@ -88,11 +87,10 @@ then use **Generate Firmware & Flash ESP32**. The option is disabled by default.
 GPIO 21, one LED, GRBW and a low white startup brightness of 8/255 are suggested.
 The default motor wiring already uses GPIO 18 from the reference LED sketch.
 
-After flashing, open **LED settings** using the light icon beside the camera
-selector in the main toolbar (also under **Tools → Image → LED**).
-**Live light** provides RGB colour, a separate white channel,
-brightness and off/on controls over USB or WiFi. Click **Apply light** to send
-the chosen output. Live changes last until the controller restarts; hardware
+After flashing, open the **LED** window using the LED icon beside the camera
+selector in the main toolbar (also under **Tools → Image → LED**). It has a
+slider and a percent field for red, green, blue and the warm/cold white channel;
+every change is applied to the LED immediately. Live changes last until the controller restarts; hardware
 and startup changes require another flash. Up to 16 chained LEDs can share the
 same output. See the [LED setup and protocol notes](hgc_features/hgc_hardware_led/readme.md)
 for wiring, supported formats and verification.
@@ -214,7 +212,7 @@ on the firmware side the compensation tracks where the drive currently sits
 inside its play, so a reversal that follows a short move (or another reversal)
 only inserts what is actually left instead of the full value. compensation steps
 turn the motor but not the stage, so they are no longer counted into the reported
-position. **these live in `stepper_websocket.ino`, so they need a re-flash**
+position. **these live in `stepper_serial.ino`, so they need a re-flash**
 (`deno task flash`).
 
 for the focus motor pick the sharpness signal instead of image shift, and park the
@@ -433,12 +431,6 @@ sudo usermod -aG dialout $USER
 ```
 then log out and back in.
 
-## find out the ESP32 IP address
-the setup page prints the ESP32 IP at the end of a successful flash. to read it
-by hand instead, open the serial monitor of the arduino IDE at 115200 baud and
-click the `RET` button on the ESP32 — the firmware prints its IP on boot. then
-open http://localhost:8000; USB serial works without the IP.
-
 ---
 
 # microscope motorization
@@ -450,7 +442,7 @@ https://makerworld.com/en/models/2389756-microscope-motorized-xy-table-28byj-48#
 
 
 # this project in short 
-Project: Low-cost, open-source microscope automation. A fully 3D-printed XY-stage powered by an ESP32 and 28BYJ-48 stepper motors, assembled in ~3 hours. Controlled via web app (Web Serial over USB as the low-latency primary transport, WebSocket as a network fallback), keyboard, game controllers (e.g. PS4 DualShock), or programmable API, it enables local or remote automated slide scanning using a microscope camera as a webcam. The system requires only four M3 screws in addition to widely available electronics (ESP32, ULN2003 drivers, motors). All structural parts are 3D printed and field-replaceable, allowing independent production and repair even in remote locations. Designed as a 99.75% lower-cost alternative to commercial systems, it democratizes lab automation for education, DIY biology, and resource-limited laboratories
+Project: Low-cost, open-source microscope automation. A fully 3D-printed XY-stage powered by an ESP32 and 28BYJ-48 stepper motors, assembled in ~3 hours. Controlled via web app (Web Serial over USB), keyboard, game controllers (e.g. PS4 DualShock), or programmable API, it enables local or remote automated slide scanning using a microscope camera as a webcam. The system requires only four M3 screws in addition to widely available electronics (ESP32, ULN2003 drivers, motors). All structural parts are 3D printed and field-replaceable, allowing independent production and repair even in remote locations. Designed as a 99.75% lower-cost alternative to commercial systems, it democratizes lab automation for education, DIY biology, and resource-limited laboratories
 
 
 # stepper motor info 
@@ -486,9 +478,8 @@ License, version 3 or later** (see [`LICENSE`](./LICENSE)).
 
 third-party components and their licences are listed in
 [`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md). note that the firmware
-links the LGPL-3.0 `ESP Async WebServer` / `Async TCP` libraries and the
-LGPL-2.1 ESP32 arduino core; the full source of this project is provided, so the
-relinking condition of those licences is met.
+links the LGPL-2.1 ESP32 arduino core; the full source of this project is
+provided, so the relinking condition of that licence is met.
 
 ### Focus stacking: Easy and Expert modes
 

@@ -3,9 +3,8 @@
 import { f_generate_ino } from './flash_functions.module.js';
 
 const SCRIPT_DIR = new URL(".", import.meta.url).pathname;
-const ENV_FILE = `${SCRIPT_DIR}.env`;
 const SERVER_FILE = `${SCRIPT_DIR}webserver_denojs.js`;
-const TMP_DIR = "/tmp/stepper_websocket";
+const TMP_DIR = "/tmp/stepper_serial";
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -137,52 +136,12 @@ if (await hasBinary("arduino-cli")) {
 
 // ─── Step 2: Ask about flashing ─────────────────────────────────────
 
-let espIp = "";
 let espPort = "";
 
 const shouldFlash = confirm("\n  Flash ESP32 firmware? (skip if already flashed)");
 
 if (shouldFlash) {
-  // ─── Step 3: Read .env for WiFi credentials ────────────────────────
-
-  logStep("Reading WiFi credentials...");
-
-  let wifiSsid = "";
-  let wifiPassword = "";
-
-  try {
-    const envContent = await Deno.readTextFile(ENV_FILE);
-    for (const line of envContent.split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed || trimmed.startsWith("#")) continue;
-      const eqIdx = trimmed.indexOf("=");
-      if (eqIdx === -1) continue;
-      const key = trimmed.slice(0, eqIdx).trim();
-      const value = trimmed.slice(eqIdx + 1).trim();
-      if (key === "wifi_ssid") wifiSsid = value;
-      if (key === "wifi_password") wifiPassword = value;
-    }
-  } catch {
-    log(".env file not found.");
-  }
-
-  if (!wifiSsid) {
-    wifiSsid = prompt("  Enter WiFi SSID:") ?? "";
-  }
-  if (!wifiPassword) {
-    wifiPassword = prompt("  Enter WiFi password:") ?? "";
-  }
-
-  if (!wifiSsid || !wifiPassword) {
-    logError("WiFi SSID and password are required.");
-    Deno.exit(1);
-  }
-
-  // Save to .env for next time
-  await Deno.writeTextFile(ENV_FILE, `wifi_ssid=${wifiSsid}\nwifi_password=${wifiPassword}\n`);
-  logOk(`WiFi credentials saved to .env (SSID: ${wifiSsid})`);
-
-  // ─── Step 4: Install ESP32 board package + libraries ───────────────
+  // ─── Step 3: Install ESP32 board package + libraries ───────────────
 
   logStep("Updating arduino-cli core index...");
   await runLive(arduinoCliBin, ["core", "update-index"]);
@@ -196,32 +155,20 @@ if (shouldFlash) {
 
   logStep("Installing required Arduino libraries...");
 
-  // Remove old me-no-dev libs that conflict with ESP32 core 3.x
-  const arduinoLibDir = `${Deno.env.get("HOME")}/Arduino/libraries`;
-  for (const oldLib of ["ESPAsyncWebServer", "AsyncTCP", "ESPAsyncTCP"]) {
-    try {
-      await Deno.remove(`${arduinoLibDir}/${oldLib}`, { recursive: true });
-      log(`Removed old conflicting library: ${oldLib}`);
-    } catch { /* not present, fine */ }
-  }
-
-  // Install the ESP32Async forks (compatible with ESP32 core 3.x)
-  // Note: 'Async TCP' must be listed explicitly — it is NOT pulled in automatically
-  // as a dependency of ESP Async WebServer, and ESPAsyncWebServer.h includes AsyncTCP.h
-  for (const lib of ["ESP Async WebServer", "Async TCP", "ArduinoJson"]) {
+  for (const lib of ["ArduinoJson"]) {
     log(`Installing ${lib}...`);
     await runLive(arduinoCliBin, ["lib", "install", lib]);
   }
   logOk("Libraries installed.");
 
-  // ─── Step 5: Prepare firmware with WiFi credentials ────────────────
+  // ─── Step 4: Prepare firmware ──────────────────────────────────────
 
   logStep("Preparing firmware...");
 
-  await f_generate_ino(wifiSsid, wifiPassword, undefined, TMP_DIR);
+  await f_generate_ino(undefined, TMP_DIR);
   logOk("Firmware prepared with default motor pins and LED disabled. Configure the optional LED in Hardware Setup.");
 
-  // ─── Step 6: Detect ESP32 board ────────────────────────────────────
+  // ─── Step 5: Detect ESP32 board ────────────────────────────────────
 
   logStep("Detecting connected ESP32...");
 
@@ -263,7 +210,7 @@ if (shouldFlash) {
 
   logOk(`ESP32 detected on ${espPort}`);
 
-  // ─── Step 6b: Ensure serial port is accessible ─────────────────────
+  // ─── Step 5b: Ensure serial port is accessible ─────────────────────
 
   try {
     await Deno.open(espPort, { read: true });
@@ -277,7 +224,7 @@ if (shouldFlash) {
     logOk("Serial port permissions set.");
   }
 
-  // ─── Step 7: Compile + upload ──────────────────────────────────────
+  // ─── Step 6: Compile + upload ──────────────────────────────────────
 
   logStep("Compiling firmware (this may take a while on first run)...");
   if (!await runLive(arduinoCliBin, [
@@ -301,29 +248,9 @@ if (shouldFlash) {
     Deno.exit(1);
   }
   logOk("Firmware uploaded successfully!");
-
-  // ─── Step 8: Read ESP32 IP from serial ─────────────────────────────
-
-  logStep("Waiting for ESP32 to connect to WiFi...");
-  log("(reading serial output, timeout 20s)");
-
-  try {
-    espIp = await readEspIpFromSerial(espPort, 20_000);
-    logOk(`ESP32 connected! IP: ${espIp}`);
-  } catch {
-    log("Could not detect ESP32 IP automatically.");
-    const manualIp = prompt("  Enter ESP32 IP manually (or leave blank to skip):");
-    if (manualIp) espIp = manualIp;
-  }
 }
 
-// If we didn't flash but user might know the IP
-if (!espIp && !shouldFlash) {
-  const manualIp = prompt("\n  Enter ESP32 IP address (or leave blank to enter in UI):");
-  if (manualIp) espIp = manualIp;
-}
-
-// ─── Step 9: Open browser + start server ────────────────────────────
+// ─── Step 7: Open browser + start server ────────────────────────────
 
 logStep("Starting web server...");
 
@@ -341,9 +268,6 @@ setTimeout(async () => {
 // Start the Deno web server as the foreground process
 // -A: the server also spawns python/arduino-cli (--allow-run) and reads HOME (--allow-env)
 const serverArgs = ["run", "-A", SERVER_FILE, "--port", String(port)];
-if (espIp) {
-  serverArgs.push("--esp", espIp);
-}
 
 const serverCmd = new Deno.Command(Deno.execPath(), {
   args: serverArgs,
@@ -354,47 +278,3 @@ const serverCmd = new Deno.Command(Deno.execPath(), {
 
 const serverProcess = serverCmd.spawn();
 await serverProcess.output();
-
-// ─── Serial IP reader ───────────────────────────────────────────────
-
-async function readEspIpFromSerial(port, timeoutMs) {
-  const command = new Deno.Command(arduinoCliBin, {
-    args: ["monitor", "-p", port, "--raw", "-c", "baudrate=115200"],
-    stdout: "piped",
-    stderr: "piped",
-    stdin: "null",
-  });
-
-  const process = command.spawn();
-  const reader = process.stdout.getReader();
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  const timeout = new Promise((_, reject) =>
-    setTimeout(() => reject(new Error("timeout")), timeoutMs)
-  );
-
-  const readLoop = (async () => {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      // The firmware prints: "Connected!  IP: 192.168.x.x"
-      const match = buffer.match(/IP:\s*(\d+\.\d+\.\d+\.\d+)/);
-      if (match) {
-        process.kill("SIGTERM");
-        return match[1];
-      }
-    }
-    throw new Error("Serial closed without IP");
-  })();
-
-  try {
-    return await Promise.race([readLoop, timeout]);
-  } finally {
-    try {
-      process.kill("SIGTERM");
-    } catch { /* already dead */ }
-  }
-}

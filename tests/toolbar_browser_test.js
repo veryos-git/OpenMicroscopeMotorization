@@ -13,7 +13,7 @@ for (const width of [1440, 800, 360, 320]) Deno.test(`compact toolbar actions an
             export const calls = { stop: 0, capture: 0, settings: {}, camera: [] };
             export const o_state = reactive({
                 o_panel_visibility: ${JSON.stringify(Object.fromEntries(panels.map(key => [key, false])))},
-                b_connected__server: true, b_connected__esp: true, s_transport__esp: 'usb', b_streaming__webcam: true,
+                b_connected__server: true, b_connected__esp: true, b_streaming__webcam: true,
                 s_id__webcam_device: 'test', a_o_device__webcam: [{deviceId: 'test', label: 'Microscope camera'}],
                 o_motor__axis: { x: 0, y: 1, z: 2 }, a_o_motor: [{b_running: false}],
                 n_rpm__jog: 5, n_rpm__focus_jog: 0.5, o_key_held: {},
@@ -90,20 +90,16 @@ for (const width of [1440, 800, 360, 320]) Deno.test(`compact toolbar actions an
                 for (const el of document.querySelectorAll('.toolbar-row--primary button')) {
                     check(el.title && el.getAttribute('aria-label'), 'Missing accessible name or tooltip');
                 }
-<<<<<<< HEAD
-                check(document.querySelector('.toolbar').scrollWidth <= innerWidth, 'Toolbar overflow');
-                await click('LED settings');
-                check(o_state.o_panel_visibility.led_setting && !o_state.o_panel_visibility.setup && calls.settings.o_panel_visibility.led_setting, 'LED settings open directly and persist without Setup');
-                check(button('LED settings').getAttribute('aria-pressed') === 'true', 'LED toolbar button reflects panel visibility');
-                await click('LED settings');
-                check(!o_state.o_panel_visibility.led_setting, 'LED toolbar button closes panel');
-=======
                 for (const el of document.querySelectorAll('.toolbar-group--utilities button, .toolbar-select')) {
                     const rect = el.getBoundingClientRect();
                     check(rect.x >= 0 && rect.right <= innerWidth && rect.bottom <= initialHeight, 'Fixed control outside bar');
                 }
                 check(bar.scrollWidth <= innerWidth, 'Toolbar overflow');
->>>>>>> 942bcdc04095cbb45a8e0cb9e7aff9776be3b37b
+                await click('LED settings');
+                check(o_state.o_panel_visibility.led_setting && !o_state.o_panel_visibility.setup && calls.settings.o_panel_visibility.led_setting, 'LED settings open directly and persist without Setup');
+                check(button('LED settings').getAttribute('aria-pressed') === 'true', 'LED toolbar button reflects panel visibility');
+                await click('LED settings');
+                check(!o_state.o_panel_visibility.led_setting, 'LED toolbar button closes panel');
                 await click('Capture Image'); check(calls.capture === 1 && window.downloadName.startsWith('capture-'), 'Capture dispatch');
                 await click('Mouse movement'); check(o_state.b_enabled__mouse_jog && button('Mouse movement').getAttribute('aria-pressed') === 'true', 'Mouse movement dispatch');
                 await click('Reset Mouse movement'); check(!o_state.b_enabled__mouse_jog, 'Mouse movement can be reset directly');

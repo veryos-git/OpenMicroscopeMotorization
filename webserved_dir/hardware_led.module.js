@@ -26,6 +26,18 @@ let f_s_hardware_led_output_error = function(o_output) {
     return '';
 };
 
+// Live control shows each channel as the share of full output it really emits:
+// brightness and on/off are folded in, rounded like the firmware does.
+let f_n_pct__led_channel = function(o_output, s_key) {
+    if (!o_output?.b_on) return 0;
+    let n_value = Math.floor((o_output[s_key] * o_output.n_brightness + 127) / 255);
+    return Math.round(n_value / 255 * 1000) / 10;
+};
+
+let f_n_led_channel__from_pct = function(n_pct) {
+    return Math.round(Math.min(100, Math.max(0, n_pct)) / 100 * 255);
+};
+
 let f_s_hardware_led_config_error = function(o_config, a_o_pin_config = []) {
     if (!o_config || typeof o_config !== 'object' || Array.isArray(o_config)) return 'Invalid LED configuration.';
     if (typeof o_config.b_enabled !== 'boolean') return 'Invalid LED enable setting.';
@@ -48,4 +60,4 @@ let f_s_hardware_led_config_error = function(o_config, a_o_pin_config = []) {
     return '';
 };
 
-export { f_o_hardware_led_config, f_s_hardware_led_config_error, f_s_hardware_led_output_error };
+export { f_o_hardware_led_config, f_s_hardware_led_config_error, f_s_hardware_led_output_error, f_n_pct__led_channel, f_n_led_channel__from_pct };

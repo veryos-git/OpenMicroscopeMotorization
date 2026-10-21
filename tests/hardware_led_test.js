@@ -1,9 +1,20 @@
 import { o_component__icon } from '../webserved_dir/o_component__icon.js';
 import assert from 'node:assert/strict';
-import { f_o_hardware_led_config, f_s_hardware_led_config_error, f_s_hardware_led_output_error } from '../webserved_dir/hardware_led.module.js';
+import { f_o_hardware_led_config, f_s_hardware_led_config_error, f_s_hardware_led_output_error, f_n_pct__led_channel, f_n_led_channel__from_pct } from '../webserved_dir/hardware_led.module.js';
 import { f_generate_ino, f_compile_esp } from '../flash_functions.module.js';
 
 const pins = [{ n_pin1: 4, n_pin2: 5, n_pin3: 6, n_pin4: 7 }, { n_pin1: 15, n_pin2: 16, n_pin3: 17, n_pin4: 18 }, { n_pin1: 8, n_pin2: 3, n_pin3: 46, n_pin4: 9 }];
+
+Deno.test('LED percent display keeps every channel level and folds in brightness and off', () => {
+    for (let n_value = 0; n_value <= 255; n_value++) {
+        const o_output = { b_on: true, n_red: n_value, n_brightness: 255 };
+        assert.equal(f_n_led_channel__from_pct(f_n_pct__led_channel(o_output, 'n_red')), n_value, 'Round trip ' + n_value);
+    }
+    assert.equal(f_n_pct__led_channel({ b_on: true, n_white: 255, n_brightness: 8 }, 'n_white'), 3.1);
+    assert.equal(f_n_pct__led_channel({ b_on: false, n_white: 255, n_brightness: 255 }, 'n_white'), 0);
+    assert.equal(f_n_led_channel__from_pct(150), 255);
+    assert.equal(f_n_led_channel__from_pct(-5), 0);
+});
 
 Deno.test('LED defaults are optional, one RGBW LED, and low white startup output', () => {
     const config = f_o_hardware_led_config();
@@ -38,29 +49,29 @@ Deno.test('LED validation rejects conflicting, reserved, malformed and excessive
 Deno.test('firmware generation includes LED settings and keeps old callers disabled', async () => {
     const dir = await Deno.makeTempDir();
     try {
-        let path = await f_generate_ino('a"b', '', pins, dir);
+        let path = await f_generate_ino(pins, dir);
         let ino = await Deno.readTextFile(path);
         assert.ok(!ino.includes('{{'));
         assert.ok(ino.includes('B_ENABLED__LED = false;'));
-        assert.ok(ino.includes('WIFI_SSID = "a\\"b";'));
-        path = await f_generate_ino('', '', pins, dir, f_o_hardware_led_config({ b_enabled: true, n_count: 3, n_pin: 21, s_order: 'rgb', o_startup: { n_brightness: 31 } }));
+        assert.ok(!/wifi|websocket/i.test(ino), 'Firmware has no WiFi or WebSocket code');
+        path = await f_generate_ino(pins, dir, f_o_hardware_led_config({ b_enabled: true, n_count: 3, n_pin: 21, s_order: 'rgb', o_startup: { n_brightness: 31 } }));
         ino = await Deno.readTextFile(path);
         for (const value of ['B_ENABLED__LED = true;', 'N_PIN__LED = 21;', 'N_COUNT__LED = 3;', 'B_RGBW__LED = true;', 'B_GREEN_FIRST__LED = false;', 'true, 0, 0, 0, 255, 31']) assert.ok(ino.includes(value), value);
         assert.ok(!ino.includes('{{'));
-        path = await f_generate_ino('', '', pins, dir, { o_startup: { b_enabled: true, n_pin: '18; bad()' } });
+        path = await f_generate_ino(pins, dir, { o_startup: { b_enabled: true, n_pin: '18; bad()' } });
         ino = await Deno.readTextFile(path);
         assert.ok(ino.includes('B_ENABLED__LED = false;') && ino.includes('N_PIN__LED = 21;'));
         assert.ok(!ino.includes('bad()'));
-        path = await f_generate_ino('', '', pins, dir, { b_enabled: false, n_pin: 2 });
+        path = await f_generate_ino(pins, dir, { b_enabled: false, n_pin: 2 });
         assert.ok((await Deno.readTextFile(path)).includes('N_PIN__LED = 2;'), 'Disabled LED retains its configured GPIO for status comparison');
-        await assert.rejects(() => f_generate_ino('', '', pins, dir, { b_enabled: true, n_pin: 18 }), /motor/);
-        const result = await f_compile_esp('', '', pins, () => assert.fail('Invalid LED config must fail before installation or compilation'), { b_enabled: true, n_pin: 19 });
+        await assert.rejects(() => f_generate_ino(pins, dir, { b_enabled: true, n_pin: 18 }), /motor/);
+        const result = await f_compile_esp(pins, () => assert.fail('Invalid LED config must fail before installation or compilation'), { b_enabled: true, n_pin: 19 });
         assert.equal(result.b_success, false);
         assert.match(result.s_error, /GPIO/);
     } finally { await Deno.remove(dir, { recursive: true }); }
 });
 
-Deno.test('LED status and errors use the shared serial/WebSocket handler and tolerate old firmware', async () => {
+Deno.test('LED status and errors use the shared serial handler and tolerate old firmware', async () => {
     const source = await Deno.readTextFile(new URL('../webserved_dir/index.js', import.meta.url));
     const body = source.slice(source.indexOf('let f_handle_esp_message ='), source.indexOf('let f_start_esp_status_poll ='));
     const state = { a_o_motor: [] };

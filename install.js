@@ -39,7 +39,7 @@ let s_path__venv__cellpose = `${s_root_dir}${s_ds}venv_cellpose`;
 let s_path__python__cellpose = `${s_path__venv__cellpose}${s_ds}bin${s_ds}python3`;
 let s_path__worker__cellpose = `${s_root_dir}${s_ds}cellpose_worker.py`;
 // arduino-cli requires the sketch file to be named exactly like its directory
-let s_dir__verify = '/tmp/microscope-verify/stepper_websocket';
+let s_dir__verify = '/tmp/microscope-verify/stepper_serial';
 let s_fqbn = 'esp32:esp32:esp32s3';
 
 // ─── CLI args ───────────────────────────────────────────────────────
@@ -561,15 +561,12 @@ let f_setup_arduino = async function() {
         }
     }
 
-    // arduino libraries required by stepper_websocket.ino
-    // 'Async TCP' (ESP32Async fork) provides AsyncTCP.h, which ESPAsyncWebServer.h
-    // includes — arduino-cli does NOT pull it in automatically when run non-interactively
-    let a_s_name_lib = ['ESP Async WebServer', 'Async TCP', 'ArduinoJson'];
+    // arduino libraries required by stepper_serial.ino
+    let a_s_name_lib = ['ArduinoJson'];
     let o_lib = await f_o_run(s_bin, ['lib', 'list']);
     let a_s_line__lib = o_lib.s_stdout.split('\n');
     let a_s_name_lib__missing = a_s_name_lib.filter(function(s_name) {
-        // the name is the first column, so anchor on the line start to keep
-        // 'ESP Async WebServer' from being mistaken for a match of 'Async TCP'
+        // the name is the first column, so anchor on the line start
         return !a_s_line__lib.some(function(s_line) { return s_line.startsWith(s_name); });
     });
 
@@ -579,14 +576,6 @@ let f_setup_arduino = async function() {
         f_log_todo(`arduino libraries missing: ${a_s_name_lib__missing.join(', ')}`);
         a_s_problem.push('arduino libraries missing');
     } else {
-        // the me-no-dev forks conflict with esp32 core 3.x, remove them first
-        let s_dir__lib__arduino = `${Deno.env.get('HOME')}${s_ds}Arduino${s_ds}libraries`;
-        for (let s_name_lib__old of ['ESPAsyncWebServer', 'AsyncTCP', 'ESPAsyncTCP']) {
-            try {
-                await Deno.remove(`${s_dir__lib__arduino}${s_ds}${s_name_lib__old}`, { recursive: true });
-                f_log(`removed conflicting library: ${s_name_lib__old}`);
-            } catch { /* not present, fine */ }
-        }
         for (let s_name_lib of a_s_name_lib__missing) {
             f_log(`installing ${s_name_lib}...`);
             await f_b_run_live(s_bin, ['lib', 'install', s_name_lib]);
@@ -603,13 +592,13 @@ let f_setup_arduino = async function() {
 // ─── Step: verify the firmware really compiles ──────────────────────
 
 // installing the libraries is not proof that they are complete — a missing
-// transitive header (AsyncTCP.h) only shows up at compile time. so compile the
-// firmware once against dummy values to prove the toolchain is whole.
+// header only shows up at compile time. so compile the firmware once against
+// the default configuration to prove the toolchain is whole.
 let f_b_verify_compile = async function(s_bin) {
     f_log_step('verifying the firmware compiles');
 
     try {
-        await f_generate_ino('verify', 'verify', undefined, s_dir__verify);
+        await f_generate_ino(undefined, s_dir__verify);
     } catch (o_error) {
         f_log_error(`could not generate verification firmware: ${o_error.message}`);
         a_s_problem.push('firmware generation failed');

@@ -79,20 +79,17 @@ use this path commercially.
 
 ## ESP32 firmware
 
-`stepper_websocket.ino` is compiled and uploaded by `arduino-cli`; the libraries
+`stepper_serial.ino` is compiled and uploaded by `arduino-cli`; the libraries
 below are installed into the user's arduino-cli data directory, not bundled here.
 
 | component | licence |
 | --- | --- |
 | ESP32 Arduino core (`esp32:esp32`) | LGPL-2.1 |
-| [ESP Async WebServer](https://github.com/me-no-dev/ESPAsyncWebServer) | LGPL-3.0 |
-| [Async TCP](https://github.com/me-no-dev/AsyncTCP) | LGPL-3.0 |
 | [ArduinoJson](https://arduinojson.org/) | MIT |
 
-The firmware links the LGPL libraries above. The complete source of this project
-is published, and the libraries are installed as separate, replaceable packages,
-so the relinking condition of the LGPL is satisfied (LGPL-3.0 §4.d.1). Note that
-LGPL-3.0 is compatible with this project's GPL-3.0 licence.
+The firmware links the LGPL-2.1 ESP32 Arduino core. The complete source of this
+project is published, and the core is installed as a separate, replaceable
+package, so the relinking condition of the LGPL is satisfied.
 
 ## Build tools
 

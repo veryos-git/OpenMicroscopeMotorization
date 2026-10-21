@@ -16,10 +16,10 @@ for (const width of [1440, 800, 360, 320]) Deno.test(`microcontroller drawing la
                 a_o_pin_config: [0, 1, 2].map(i => Object.fromEntries([1, 2, 3, 4].map(pin => ['n_pin' + pin, 4 + i * 4 + pin]))),
                 a_o_motor: [0, 1, 2].map(() => ({ b_running: false, n_position: 0, n_rpm: 0, s_direction: 'cw' })),
                 o_config__hardware_led: f_o_hardware_led_config(), o_hardware_led: null, s_error__hardware_led: '',
-                b_connected__esp: false, b_streaming__webcam: false, b_available__serial: true, s_transport__esp: 'serial',
+                b_connected__esp: false, b_streaming__webcam: false, b_available__serial: true,
                 b_scanning: false, b_flashing: false, n_cnt__stop_all: 0, b_connecting__esp_serial: false,
                 n_rpm__jog: 5, n_rpm__focus_jog: 0.5, a_o_setting: [], o_calibration: {},
-                s_wifi_ssid: '', s_wifi_password: '', s_ip__esp: '', s_error__esp_serial: '', s_flash_output: '', s_flash_status: 'idle',
+                s_error__esp_serial: '', s_flash_output: '', s_flash_status: 'idle',
                 ...Object.fromEntries(['a', 'd', 'w', 's', 'q', 'e', 'mouse_right'].map(key => ['o_mapping__' + key, { s_motor: '0', s_dir: ['a', 's', 'q'].includes(key) ? 'ccw' : 'cw' }]))
             });
             export function f_save_setting(key, value) { calls.saved[key] = JSON.parse(JSON.stringify(value)); }
@@ -34,7 +34,6 @@ for (const width of [1440, 800, 360, 320]) Deno.test(`microcontroller drawing la
             export function f_register_handler() { return () => {}; }
             export async function f_connect_esp_serial() { calls.usb++; o_state.b_connected__esp = true; return true; }
             export async function f_disconnect_esp() { o_state.b_connected__esp = false; }
-            export function f_connect_esp(ip) { calls.ip = ip; }
             export async function f_send_wsmsg_with_response(message) {
                 if (message.s_type === 'check_arduino_cli') return {v_data:{b_installed:true,s_version:'test'}};
                 calls.compile = JSON.parse(JSON.stringify(message)); return {v_data:{b_success:true}};
@@ -82,7 +81,8 @@ for (const width of [1440, 800, 360, 320]) Deno.test(`microcontroller drawing la
                 check(document.querySelectorAll('.micro-pin-row').length === 3 && document.querySelectorAll('.micro-pin-row input').length === 12, 'Three motor pin rows');
                 check(document.querySelectorAll('.micro-axis-row').length === 3, 'Three logical axis rows');
                 check(field('Calibrate X').disabled && field('Calibrate Z').disabled, 'Offline calibration blocked');
-                check(!document.querySelector('.micro-diagnostics').open && !document.querySelector('.hardware-controller').open, 'Details start closed');
+                check(!document.querySelector('.micro-diagnostics').open, 'Details start closed');
+                check(!document.querySelector('[aria-label="ESP32 IP address"]') && !document.querySelector('input[type="password"]'), 'No Wi-Fi controls');
                 await edit('Motor 1 pin 1', '18');
                 check(calls.saved.a_o_pin_config[0].n_pin1 === 18, 'Motor pin saved');
                 await edit('Motor 1 pin 1', '9');

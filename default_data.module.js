@@ -7,7 +7,6 @@ import {
 
 let a_o_data_default = [
     { o_setting: { s_key: 'o_config__hardware_led', s_value: JSON.stringify(f_o_hardware_led_config()) } },
-    { o_setting: { s_key: 's_ip__esp', s_value: '' } },
     { o_setting: { s_key: 'n_speed__jog', s_value: '50' } },
     { o_setting: { s_key: 's_id__webcam_device', s_value: '' } },
     { o_setting: { s_key: 'o_panel_visibility', s_value: JSON.stringify({ map: false, motion: false, optics: false, slide_library: false, jog: true, motors: true }) } },
@@ -15,14 +14,15 @@ let a_o_data_default = [
     { o_setting: { s_key: 'o_mapping__s', s_value: JSON.stringify({ s_motor: '1', s_dir: 'ccw' }) } },
     { o_setting: { s_key: 'o_mapping__a', s_value: JSON.stringify({ s_motor: '0', s_dir: 'ccw' }) } },
     { o_setting: { s_key: 'o_mapping__d', s_value: JSON.stringify({ s_motor: '0', s_dir: 'cw' }) } },
-    { o_setting: { s_key: 's_wifi_ssid', s_value: '' } },
-    { o_setting: { s_key: 's_wifi_password', s_value: '' } },
     { o_setting: { s_key: 'a_o_pin_config', s_value: JSON.stringify([
         { s_name: 'Motor 1', n_pin1: 4, n_pin2: 5, n_pin3: 6, n_pin4: 7 },
         { s_name: 'Motor 2', n_pin1: 15, n_pin2: 16, n_pin3: 17, n_pin4: 18 },
         { s_name: 'Motor 3', n_pin1: 8, n_pin2: 3, n_pin3: 46, n_pin4: 9 },
     ]) } },
 ]
+
+// settings of the removed WiFi connection; deleted so no stored password lingers
+let a_s_key__setting_obsolete = ['s_ip__esp', 's_wifi_ssid', 's_wifi_password'];
 
 let f_ensure_default_data = function(){
     let o_model__setting = a_o_model.find(function(o){ return o.s_name === 'o_setting'; });
@@ -36,6 +36,13 @@ let f_ensure_default_data = function(){
         let a_o_existing = f_v_crud__indb('read', s_name_table, { s_key: o_data.s_key });
         if(!a_o_existing || a_o_existing.length === 0){
             f_v_crud__indb('create', s_name_table, o_data);
+        }
+    }
+
+    for(let s_key of a_s_key__setting_obsolete){
+        let a_o_obsolete = f_v_crud__indb('read', s_name_table, { s_key }) || [];
+        for(let o_obsolete of a_o_obsolete){
+            f_v_crud__indb('delete', s_name_table, o_obsolete);
         }
     }
 };

@@ -40,7 +40,7 @@ soll: eine software die in echtzeit das mikroskop bild zeigt und mit der man ein
 3 technische schritte
 hardware haben , bereits vorhanden , 3d printed xzy teile + stepper motoren + esp32 + usb webcam
 
-software bauen, esp32 flashen so dass es gesteuert werden kann via websocket
+software bauen, esp32 flashen so dass es gesteuert werden kann via USB (Web Serial)
 client js html als software gui frontend , backend mit denojs und benötigten executables (python etc. )
 eine art von datenspeicher (sql + image / vdieo files)
 

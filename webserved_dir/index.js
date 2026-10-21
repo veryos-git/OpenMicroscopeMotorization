@@ -91,11 +91,9 @@ let o_state = reactive({
     n_id__slide__current: 0,
 
     // ESP32 connection
-    s_ip__esp: '',
     b_connected__esp: false,
     b_connecting__esp_serial: false,
     s_error__esp_serial: '',
-    s_transport__esp: '',       // 'serial' | 'ws' | '' (empty = disconnected)
     b_available__serial: (typeof navigator !== 'undefined') && ('serial' in navigator),
     s_port__esp: '',            // USB serial port path/name when connected via Web Serial
 
@@ -334,8 +332,6 @@ let o_state = reactive({
     o_config__hardware_led: f_o_hardware_led_config(),
     o_hardware_led: null,
     s_error__hardware_led: '',
-    s_wifi_ssid: '',
-    s_wifi_password: '',
     a_o_pin_config: [
         { s_name: 'Motor 1', n_pin1: 4, n_pin2: 5, n_pin3: 6, n_pin4: 7 },
         { s_name: 'Motor 2', n_pin1: 15, n_pin2: 16, n_pin3: 17, n_pin4: 18 },
@@ -417,11 +413,8 @@ let f_connect = async function() {
             o_socket.onmessage = function(o_evt) {
                 let o_data = JSON.parse(o_evt.data);
 
-                // init message with ESP IP from CLI
+                // init message
                 if(o_data.s_type === 'init'){
-                    if(o_data.s_ip__esp && !o_state.s_ip__esp){
-                        o_state.s_ip__esp = o_data.s_ip__esp;
-                    }
                     return;
                 }
 
@@ -483,7 +476,6 @@ let f_apply_setting_from_db = function(){
         try { return JSON.parse(s_val); } catch(e) { return v_default; }
     };
 
-    o_state.s_ip__esp = o_state.s_ip__esp || f_get('s_ip__esp', '');
     const o_manual_speed = f_o_manual_speed(f_get_json('o_rpm__manual', null), f_get('n_rpm__jog', '5.0'));
     o_state.n_rpm__jog = o_manual_speed.xy;
     o_state.n_rpm__focus_jog = o_manual_speed.z;
@@ -569,8 +561,6 @@ let f_apply_setting_from_db = function(){
 
     // Setup overlay settings
     o_state.o_config__hardware_led = f_o_hardware_led_config(f_get_json('o_config__hardware_led', {}));
-    o_state.s_wifi_ssid = f_get('s_wifi_ssid', o_state.s_wifi_ssid);
-    o_state.s_wifi_password = f_get('s_wifi_password', o_state.s_wifi_password);
     o_state.a_o_pin_config = f_get_json('a_o_pin_config', o_state.a_o_pin_config)
         .map((o_pin, n_idx) => ({ ...o_pin, s_name: 'Motor ' + (n_idx + 1) }));
 
@@ -731,13 +721,11 @@ let f_try_open_setup = async function() {
     o_state.o_panel_visibility.setup = true;
 };
 
-// ─── ESP32 transport (Web Serial primary, WebSocket fallback) ───────
+// ─── ESP32 connection (Web Serial over USB) ─────────────────────────
 
-let o_ws__esp = null;
 let o_serial__esp = null;
 let o_reader__serial = null;
 let o_writer__serial = null;
-let n_id__esp_reconnect = 0;
 let n_id__esp_status_poll = 0;
 
 // message handlers (used by move/step + circle promise wrappers)
@@ -885,10 +873,7 @@ let f_push_esp_config = function() {
 };
 
 let f_b_esp_connected = function() {
-    if (!o_state.b_connected__esp) return false;
-    if (o_state.s_transport__esp === 'serial') return !!o_writer__serial;
-    if (o_state.s_transport__esp === 'ws') return !!(o_ws__esp && o_ws__esp.readyState === WebSocket.OPEN);
-    return false;
+    return o_state.b_connected__esp && !!o_writer__serial;
 };
 
 let f_close_esp_serial = async function() {
@@ -896,11 +881,8 @@ let f_close_esp_serial = async function() {
     let o_reader = o_reader__serial;
     let o_writer = o_writer__serial;
     o_serial__esp = o_reader__serial = o_writer__serial = null;
-    if (o_state.s_transport__esp === 'serial') {
-        o_state.s_transport__esp = '';
-        o_state.s_port__esp = '';
-        o_state.b_connected__esp = false;
-    }
+    o_state.s_port__esp = '';
+    o_state.b_connected__esp = false;
     if (o_writer) { try { o_writer.releaseLock(); } catch {} }
     if (o_reader) { try { await o_reader.cancel(); } catch {} }
     if (o_port) { try { await o_port.close(); } catch {} }
@@ -908,12 +890,9 @@ let f_close_esp_serial = async function() {
 
 let f_disconnect_esp = function() {
     clearInterval(n_id__esp_status_poll);
-    clearInterval(n_id__esp_reconnect);
-    if (o_ws__esp) { try { o_ws__esp.close(); } catch {} o_ws__esp = null; }
     let o_closed = f_close_esp_serial();
     f_notify_esp_disconnect();
     o_state.b_connected__esp = false;
-    o_state.s_transport__esp = '';
     return o_closed;
 };
 
@@ -948,56 +927,7 @@ let f_read_esp_serial = async function(o_port) {
     }
 };
 
-// ─── WebSocket transport (fallback) ─────────────────────────────────
-
-let f_connect_esp = function(s_ip) {
-    if (!s_ip) return;
-    f_disconnect_esp();
-    o_state.s_ip__esp = s_ip;
-    o_state.s_transport__esp = 'ws';
-
-    let f_open_ws = function() {
-        if (o_state.s_transport__esp !== 'ws') return;
-        try {
-            o_ws__esp = new WebSocket('ws://' + s_ip + '/ws');
-
-            o_ws__esp.onopen = function() {
-                if (o_state.s_transport__esp !== 'ws') return;
-                o_state.b_connected__esp = true;
-                console.log('ESP32 websocket connected');
-                f_push_esp_config();
-            };
-
-            o_ws__esp.onmessage = function(o_evt) {
-                try { f_handle_esp_message(JSON.parse(o_evt.data)); } catch {}
-            };
-
-            o_ws__esp.onclose = function() {
-                if (o_state.s_transport__esp !== 'ws') return;
-                o_state.b_connected__esp = false;
-                clearInterval(n_id__esp_status_poll);
-                f_notify_esp_disconnect();
-                console.log('ESP32 websocket disconnected');
-            };
-
-            o_ws__esp.onerror = function() {
-                if (o_state.s_transport__esp !== 'ws') return;
-                o_state.b_connected__esp = false;
-            };
-        } catch (o_err) {
-            console.error('ESP32 WS error:', o_err);
-        }
-    };
-
-    f_open_ws();
-    n_id__esp_reconnect = setInterval(function() {
-        if (o_state.s_transport__esp === 'ws' && !o_state.b_connected__esp) {
-            f_open_ws();
-        }
-    }, 2000);
-};
-
-// ─── Web Serial transport (primary) ─────────────────────────────────
+// ─── Web Serial transport ───────────────────────────────────────────
 
 let f_connect_esp_serial = async function(b_request_if_none, o_selected_port = null) {
     if (!o_state.b_available__serial || o_state.b_flashing || o_state.b_connecting__esp_serial) return false;
@@ -1017,7 +947,6 @@ let f_connect_esp_serial = async function(b_request_if_none, o_selected_port = n
         await o_port.open({ baudRate: 115200 });
 
         o_serial__esp = o_port;
-        o_state.s_transport__esp = 'serial';
         o_state.s_port__esp = 'USB (Web Serial)';
         o_state.b_connected__esp = false;
         // Release boot/reset lines left by flashing or the USB-UART driver.
@@ -1046,9 +975,7 @@ let f_connect_esp_serial = async function(b_request_if_none, o_selected_port = n
     }
 };
 
-// USB Serial is the default transport. Auto-connect only re-opens an
-// already-authorized port (no user gesture). WebSocket is never auto-connected
-// here — it must be enabled from the Setup overlay.
+// Auto-connect only re-opens an already-authorized port (no user gesture).
 let f_connect_esp__auto = async function() {
     if (o_state.b_available__serial) {
         try {
@@ -1075,10 +1002,8 @@ let f_send_esp = function(o_msg, s_owner) {
         o_state.a_o_command__macro.push({ n_ms__delta, o_msg: JSON.parse(JSON.stringify(o_msg)) });
     }
 
-    if (o_state.s_transport__esp === 'serial' && o_writer__serial && o_state.b_connected__esp) {
+    if (o_writer__serial && o_state.b_connected__esp) {
         o_writer__serial.write(new TextEncoder().encode(JSON.stringify(o_msg) + '\n')).catch(function(){});
-    } else if (o_ws__esp && o_ws__esp.readyState === WebSocket.OPEN) {
-        o_ws__esp.send(JSON.stringify(o_msg));
     }
 };
 
@@ -1282,7 +1207,6 @@ export {
     o_router,
     f_send_wsmsg_with_response,
     f_register_handler,
-    f_connect_esp,
     f_connect_esp_serial,
     f_connect_esp__auto,
     f_disconnect_esp,

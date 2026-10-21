@@ -11,8 +11,9 @@ before refining an overlay that does not have one.
 
 The microcontroller overlay follows `ui_guide/microcontroller_settings/image.png`:
 M1–M3 wiring, X/Y/Z assignments and reverse/backlash/calibration controls, LED
-hardware and startup colour/white, then USB connection and Flash. Wi-Fi, motor
-tests, detailed calibration, and live LED output remain in expandable sections.
+hardware and startup colour/white, then USB connection and Flash. Motor tests
+and detailed calibration remain in an expandable section; live LED output is in
+the separate LED settings window.
 The startup W value is the existing single white channel intensity on a 0–1 scale;
 warm/cool colour temperature is determined by the LED module.
 

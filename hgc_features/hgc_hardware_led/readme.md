@@ -43,29 +43,38 @@ board-specific wiring still matters. See Espressif's
 
 ## Live control
 
-Open **LED settings** from the light icon beside the camera selector in the main
-toolbar, or **Tools → Image → LED**. The panel is available without opening Setup.
-**Live light** offers a colour picker, independent white level, master brightness
-and an on/off checkbox. Click **Apply light** to send the selection, or
-**Turn light off** for immediate off. RGB black with nonzero white uses only the
-white emitter; white zero uses only RGB. Every channel is scaled by brightness,
-with values from 0 to 255. Off and brightness zero transmit an all-zero frame.
+Open the **LED** window from the LED icon beside the camera selector in the main
+toolbar, or **Tools → Image → LED**. The window is available without opening Setup
+and follows the drawing in [overlay_led_control](overlay_led_control/).
+It has one slider and one percent field for each channel: **RED**, **GREEN**,
+**BLUE** and **WW/CW** (the module's single warm or cold white emitter; hidden
+for RGB-only firmware). Every change is sent immediately, without an apply
+button. While a slider is dragged, only one command is in flight; the latest
+value follows as soon as the controller replies, so the USB link is not flooded.
+Set all channels to 0 % for off.
+
+Percentages describe the real output of each emitter: live commands use full
+brightness (255) and map 0–100 % to 0–255, with 0.1 % steps so the dim levels
+used for illumination remain reachable. A firmware output with a different
+brightness, such as the startup light, is shown as its effective percentage
+(white 255 at brightness 8 is 3.1 %).
 
 Live output lives in the controller's RAM and survives a browser reconnect.
 Restarting the controller restores the flashed startup settings. Changing GPIO,
 count, protocol, order, startup values or the enable option requires flashing.
 The UI reports when saved settings differ from the connected firmware and uses
 that firmware's protocol for live controls. Older firmware displays upgrade
-guidance. Controller initialization and transmission errors appear in LED settings
-and Setup. Wiring, protocol and startup configuration remain in Setup, accessible
-through **Open LED hardware setup** in the LED panel.
+guidance. Controller initialization and transmission errors appear in the LED
+window and Setup. Wiring, protocol and startup configuration remain in Setup,
+opened with the setup icon in the LED window header (its tooltip shows the
+flashed GPIO, LED count and protocol).
 
 The legacy `deno task flash` terminal workflow generates default motor pins with
 the LED disabled; use Hardware Setup for an LED-enabled build.
 
 ## Firmware API and timing
 
-Both newline-delimited USB serial JSON and WebSocket `/ws` accept:
+Newline-delimited USB serial JSON accepts:
 
 ```json
 {"command":"setLed","b_on":true,"n_red":0,"n_green":0,"n_blue":0,"n_white":255,"n_brightness":8}

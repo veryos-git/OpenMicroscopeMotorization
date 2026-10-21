@@ -36,7 +36,7 @@ Deno.test('USB write failure fails connection promptly and removes listener', as
 Deno.test('serial connect only marks connected and pushes config after firmware reply', async () => {
     const source = await Deno.readTextFile(new URL('../webserved_dir/index.js', import.meta.url));
     const start = source.indexOf('let f_connect_esp_serial =');
-    const end = source.indexOf('// USB Serial is the default transport.', start);
+    const end = source.indexOf('// Auto-connect only re-opens', start);
     const state = { b_available__serial: true, b_connected__esp: false, s_error__esp_serial: 'old error' };
     const calls = [];
     const port = {

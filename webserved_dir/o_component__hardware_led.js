@@ -1,18 +1,13 @@
-<<<<<<< HEAD
+import { o_component__icon } from './o_component__icon.js';
 import { o_state, f_save_setting, f_save_setting__debounced } from './index.js';
 import { f_s_hardware_led_config_error } from './hardware_led.module.js';
-=======
-import { o_component__icon } from './o_component__icon.js';
-import { o_state, f_save_setting, f_send_esp } from './index.js';
-import { f_o_hardware_led_config, f_s_hardware_led_config_error, f_s_hardware_led_output_error } from './hardware_led.module.js';
->>>>>>> 942bcdc04095cbb45a8e0cb9e7aff9776be3b37b
 
 let o_component__hardware_led = {
     name: 'component-hardware-led',
     components: { ui_icon: o_component__icon },
     props: { b_busy: Boolean },
     data: function() {
-        return { o_state };
+        return { o_state, s_error: '' };
     },
     computed: {
         s_startup_color() {
@@ -98,48 +93,20 @@ let o_component__hardware_led = {
                     </label>
                 </div>
             </fieldset>
-<<<<<<< HEAD
-            <p class="setup-hint">Hardware and startup changes are saved automatically. Use “Generate Firmware &amp; Flash ESP32” below to apply them.</p>
-            <p v-if="s_config_error" class="setup-hint setup-hint--blocked" role="alert">{{ s_config_error }}</p>
-            <p v-else-if="b_needs_flash" class="setup-hint">Saved LED settings differ from the connected controller. Flash to apply them.</p>
-            <button class="btn-small" @click="f_open_live" :disabled="o_state.b_flashing">Open LED settings</button>
-            <p class="setup-hint">Control live brightness, colour and on/off from LED settings in the main toolbar.</p>
-            <p v-if="o_report?.s_error || o_state.s_error__hardware_led" class="setup-hint setup-hint--blocked" role="alert">{{ o_report?.s_error || o_state.s_error__hardware_led }}</p>
-=======
             <details class="micro-led-details">
-                <summary>LED options &amp; live light</summary>
+                <summary>LED options</summary>
                 <fieldset :disabled="b_busy || !o_config.b_enabled" class="micro-led-options">
                     <label class="micro-field">LED count<input type="number" min="1" max="16" step="1" v-model.number="o_config.n_count" @change="f_save" /></label>
                     <label class="micro-field">Startup brightness<input type="number" min="0" max="255" step="1" v-model.number="o_config.o_startup.n_brightness" @change="f_save" /></label>
                     <p class="micro-hint">Brightness: 0–255. The W channel is warm or cool white according to the LED module.</p>
                 </fieldset>
-            <p class="setup-hint" role="status">{{ s_status }}</p>
-            <template v-if="o_report?.o_config.b_enabled">
-                <p class="setup-hint">Connected LED: GPIO {{ o_report.o_config.n_pin }} · {{ o_report.o_config.n_count }} LED(s) · {{ o_report.o_config.s_protocol.toUpperCase() }}</p>
-                <fieldset :disabled="!b_ready">
-                    <legend>Live light</legend>
-                    <label><input type="checkbox" v-model="o_output.b_on" @change="b_dirty = true" /> Light on</label>
-                    <div class="hardware-led-grid">
-                        <label>RGB colour <input type="color" v-model="s_color" /></label>
-                        <label v-if="b_rgbw">White channel ({{ o_output.n_white }}/255)
-                            <input type="range" min="0" max="255" step="1" v-model.number="o_output.n_white" @input="b_dirty = true" />
-                        </label>
-                        <label>Brightness ({{ o_output.n_brightness }}/255)
-                            <input type="range" min="0" max="255" step="1" v-model.number="o_output.n_brightness" @input="b_dirty = true" />
-                        </label>
-                    </div>
-                    <div class="hardware-motor-actions">
-                        <button class="btn-small" @click="f_apply">Apply light</button>
-                        <button class="btn-small" @click="f_off">Turn light off</button>
-                    </div>
-                    <p class="setup-hint">RGB and white mix independently. Set RGB to black for white only, or white to zero for RGB only. Live changes last until the next controller restart.</p>
-                </fieldset>
-            </template>
             </details>
+            <p class="setup-hint">Hardware and startup changes are saved automatically. Use “Generate Firmware &amp; Flash ESP32” below to apply them.</p>
             <p v-if="s_config_error" class="setup-hint setup-hint--blocked" role="alert">{{ s_config_error }}</p>
             <p v-else-if="b_needs_flash" class="setup-hint">Saved LED settings differ from the connected controller. Flash to apply them.</p>
-            <p v-if="s_error || o_state.s_error__hardware_led" class="setup-hint setup-hint--blocked" role="alert">{{ s_error || o_state.s_error__hardware_led }}</p>
->>>>>>> 942bcdc04095cbb45a8e0cb9e7aff9776be3b37b
+            <button class="btn-small" @click="f_open_live" :disabled="o_state.b_flashing">Open LED settings</button>
+            <p class="setup-hint">Control live brightness, colour and on/off from LED settings in the main toolbar.</p>
+            <p v-if="s_error || o_report?.s_error || o_state.s_error__hardware_led" class="setup-hint setup-hint--blocked" role="alert">{{ s_error || o_report?.s_error || o_state.s_error__hardware_led }}</p>
         </section>
     `,
 };

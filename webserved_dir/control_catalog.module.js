@@ -11,7 +11,7 @@ const o_supplement = new Map();
 const o_control_ui = shallowReactive({ notice: '' });
 let f_open_panel = () => {};
 let n_instance = 0;
-const o_icon = { filter: 'filter', camera_setting: 'camera', led_setting: 'brightness', flat: 'flat', setup: 'setup', scan: 'scan', focus: 'focus', record: 'record', video: 'video', training: 'training', gamepad: 'gamepad', motion_detection: 'detection', scale: 'scale', zoom: 'zoom', macro: 'macro' };
+const o_icon = { filter: 'filter', camera_setting: 'camera', led_setting: 'led', flat: 'flat', setup: 'setup', scan: 'scan', focus: 'focus', record: 'record', video: 'video', training: 'training', gamepad: 'gamepad', motion_detection: 'detection', scale: 'scale', zoom: 'zoom', macro: 'macro' };
 const f_human = s => String(s || '').replace(/\b[abnosv]_+/g, '').replaceAll('_', ' ').trim();
 const f_text = s => String(s || '').replace(/{{[\s\S]*?}}/g, '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 const f_escape = s => String(s).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');

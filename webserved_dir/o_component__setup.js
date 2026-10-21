@@ -1,6 +1,6 @@
 import { o_component__icon } from './o_component__icon.js';
 import { f_n_rpm__manual } from './manual_speed.module.js';
-import { o_state, f_send_esp, f_send_esp_move_step, f_send_esp_stop, f_send_esp_stop_all, f_send_esp_set_backlash, f_save_setting__debounced, f_send_wsmsg_with_response, f_register_handler, f_save_setting, f_connect_esp, f_connect_esp_serial, f_disconnect_esp } from './index.js';
+import { o_state, f_send_esp, f_send_esp_move_step, f_send_esp_stop, f_send_esp_stop_all, f_send_esp_set_backlash, f_save_setting__debounced, f_send_wsmsg_with_response, f_register_handler, f_save_setting, f_connect_esp_serial, f_disconnect_esp } from './index.js';
 import { f_flash_browser } from './flash_browser.module.js';
 import { f_o_wsmsg } from './constructors.module.js';
 import { f_s_hardware_led_config_error } from './hardware_led.module.js';
@@ -81,20 +81,12 @@ let o_component__setup = {
                 <p class="micro-hint">Pin and startup changes apply after Flash.</p>
                 <p v-if="s_pin_error" class="micro-error" role="alert">{{ s_pin_error }}</p>
                 <p v-if="o_state.s_error__esp_serial" class="micro-error" role="alert">{{ o_state.s_error__esp_serial }}</p>
-                <p v-if="!o_state.b_available__serial" class="micro-hint">USB requires Chrome or Edge on HTTPS or localhost. Wi-Fi is available below.</p>
+                <p v-if="!o_state.b_available__serial" class="micro-hint">USB requires Chrome or Edge on HTTPS or localhost.</p>
                 <section v-if="o_state.b_flashing || o_state.s_flash_output" class="micro-flash-progress" aria-label="Flash progress">
                     <span class="flash-status-badge" :class="o_state.s_flash_status" role="status">{{ s_flash_status_label }}</span>
                     <pre class="flash-console" ref="el_pre__flash">{{ o_state.s_flash_output }}</pre>
                 </section>
 
-                <details class="micro-details hardware-controller">
-                    <summary><ui_icon s_name="wifi" /> Wi-Fi</summary>
-                    <div class="micro-wifi-row"><input type="text" v-model="o_state.s_ip__esp" aria-label="ESP32 IP address" placeholder="ESP32 IP address" :disabled="b_hardware_busy" />
-                        <button @click="f_connect_wifi" :disabled="b_hardware_busy || !o_state.s_ip__esp">Connect</button></div>
-                    <label class="micro-field">SSID<input type="text" v-model="o_state.s_wifi_ssid" @change="f_save_wifi" :disabled="b_hardware_busy" /></label>
-                    <label class="micro-field">Password<input type="password" v-model="o_state.s_wifi_password" @change="f_save_wifi" :disabled="b_hardware_busy" /></label>
-                    <p class="micro-hint">Wi-Fi credentials apply after Flash.</p>
-                </details>
                 <details class="micro-details micro-diagnostics">
                     <summary><ui_icon s_name="settings" /> Motor tests &amp; calibration</summary>
                     <div class="hardware-calibration-controls">
@@ -152,7 +144,7 @@ let o_component__setup = {
         s_connection_status() {
             if (o_state.b_connecting__esp_serial) return 'Connecting…';
             if (!o_state.b_connected__esp) return 'Disconnected';
-            return o_state.s_transport__esp === 'serial' ? 'USB connected' : 'Wi-Fi connected';
+            return 'USB connected';
         },
         b_can_move: function() {
             return o_state.b_connected__esp && !this.b_hardware_busy && !this.b_move_pending;
@@ -170,7 +162,7 @@ let o_component__setup = {
             return o_map[o_state.s_flash_status] || o_state.s_flash_status;
         },
         b_connected__serial: function() {
-            return o_state.b_connected__esp && o_state.s_transport__esp === 'serial';
+            return o_state.b_connected__esp;
         },
         // stays true until port.close() has actually handed the tty back
         b_locked__serial: function() {
@@ -186,7 +178,7 @@ let o_component__setup = {
             let s_error = f_s_hardware_led_config_error(o_state.o_config__hardware_led, o_state.a_o_pin_config);
             if (s_error) return s_error;
             if (!o_state.b_available__serial) return 'USB flashing requires Chrome or Edge over HTTPS or localhost.';
-            return 'Firmware is compiled on the server and flashed over USB from this browser. WiFi is optional for USB control.';
+            return 'Firmware is compiled on the server and flashed over USB from this browser.';
         },
     },
     methods: {
@@ -376,8 +368,6 @@ let o_component__setup = {
                 await f_disconnect_esp();
                 f_log('--- Compiling firmware on the server ---');
                 let o_resp = await f_send_wsmsg_with_response(f_o_wsmsg('compile_esp', {
-                    s_wifi_ssid: o_state.s_wifi_ssid,
-                    s_wifi_password: o_state.s_wifi_password,
                     a_o_pin_config: o_state.a_o_pin_config,
                     o_config__hardware_led: o_state.o_config__hardware_led,
                 }), 15 * 60 * 1000);
@@ -402,10 +392,6 @@ let o_component__setup = {
                 }
             }
         },
-        f_connect_wifi: function() {
-            f_save_setting('s_ip__esp', o_state.s_ip__esp);
-            f_connect_esp(o_state.s_ip__esp);
-        },
         f_connect_usb: async function() {
             if (o_state.b_flashing) return;
             await f_connect_esp_serial(true);
@@ -414,10 +400,6 @@ let o_component__setup = {
             this.b_disconnecting__usb = true;
             await f_disconnect_esp();
             this.b_disconnecting__usb = false;
-        },
-        f_save_wifi: function() {
-            f_save_setting('s_wifi_ssid', o_state.s_wifi_ssid);
-            f_save_setting('s_wifi_password', o_state.s_wifi_password);
         },
         f_save_pin_config: function() {
             if (this.b_hardware_busy || this.s_pin_error) return;

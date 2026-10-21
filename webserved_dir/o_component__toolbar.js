@@ -32,17 +32,6 @@ let o_component__toolbar = {
                         @click="f_toggle_panel(item.s_panel)" :aria-label="item.s_label" :title="item.s_label" :data-tooltip="item.s_label"><ui_icon :s_name="item.s_icon" /></button>
                 </div>
                 <div class="toolbar-group toolbar-group--camera">
-<<<<<<< HEAD
-                    <select class="toolbar-camera-select" v-model="o_state.s_id__webcam_device" @change="f_on_webcam_change"
-                        aria-label="Camera" title="Select the microscope camera">
-                        <option value="">Select camera</option>
-                        <option v-for="o_dev in o_state.a_o_device__webcam" :key="o_dev.deviceId" :value="o_dev.deviceId">{{ o_dev.label || o_dev.deviceId }}</option>
-                    </select>
-                    <button class="toolbar-toggle toolbar-icon" :class="{ active: o_state.o_panel_visibility.led_setting }"
-                        @click="f_toggle_panel('led_setting')" aria-label="LED settings" :aria-pressed="!!o_state.o_panel_visibility.led_setting"
-                        title="LED settings — brightness, colour, white channel and on/off"><ui_icon s_name="brightness" /></button>
-                    <o_component__manual_speed v-if="!b_details" s_context="quick" :b_compact="true" />
-=======
                     <o_component__manual_speed s_context="quick" :b_compact="true" />
                     <label class="toolbar-select" :data-tooltip="'USB camera · ' + s_camera_label" :title="'USB camera · ' + s_camera_label">
                         <ui_icon s_name="camera" /><span aria-hidden="true">{{ f_short_label(s_camera_label) }}</span><ui_icon s_name="chevron" />
@@ -51,7 +40,9 @@ let o_component__toolbar = {
                             <option v-for="o_dev in o_state.a_o_device__webcam" :key="o_dev.deviceId" :value="o_dev.deviceId">{{ o_dev.label || o_dev.deviceId }}</option>
                         </select>
                     </label>
->>>>>>> 942bcdc04095cbb45a8e0cb9e7aff9776be3b37b
+                    <button class="toolbar-toggle toolbar-icon" :class="{ active: o_state.o_panel_visibility.led_setting }"
+                        @click="f_toggle_panel('led_setting')" aria-label="LED settings" :aria-pressed="!!o_state.o_panel_visibility.led_setting"
+                        title="LED · red, green, blue and warm/cold white" data-tooltip="LED · red, green, blue and warm/cold white"><ui_icon s_name="led" /></button>
                 </div>
                 <div class="toolbar-group toolbar-group--utilities">
                     <button class="toolbar-toggle toolbar-icon toolbar-stop" :class="{ active: b_any_motor_running }"
@@ -218,7 +209,7 @@ let o_component__toolbar = {
                 { s_label: 'Image', a_o_tool: [
                     { s_panel: 'zoom', s_icon: 'zoom', s_label: 'Zoom', s_title: 'Digital zoom · Ctrl + drag on the image' },
                     { s_panel: 'camera_setting', s_icon: 'camera', s_label: 'Camera', s_title: 'Camera resolution, frame rate, exposure and white balance' },
-                    { s_panel: 'led_setting', s_icon: 'brightness', s_label: 'LED', s_title: 'LED brightness, colour, white channel and on/off' },
+                    { s_panel: 'led_setting', s_icon: 'led', s_label: 'LED', s_title: 'LED · red, green, blue and warm/cold white' },
                     { s_panel: 'filter', s_icon: 'filter', s_label: 'Filters', s_title: 'Adjust live image processing' },
                     { s_panel: 'flat', s_icon: 'flat', s_label: 'Flat field', s_title: 'Calibrate and correct uneven illumination' },
                     { s_panel: 'scale', s_icon: 'scale', s_label: 'Scale', s_title: 'Show a calibrated scale on the image' },
@@ -375,9 +366,7 @@ let o_component__toolbar = {
         },
         s_connection_label: function() {
             if (!o_state.b_connected__esp) return 'disconnected';
-            if (o_state.s_transport__esp === 'serial') return 'connected (USB)';
-            if (o_state.s_transport__esp === 'ws') return 'connected (IP)';
-            return 'connected';
+            return 'connected (USB)';
         },
         b_any_motor_running: function() {
             return o_state.a_o_motor.some(function(o_motor){ return o_motor.b_running; });
