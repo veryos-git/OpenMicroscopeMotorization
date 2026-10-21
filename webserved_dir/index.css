@@ -1322,6 +1322,13 @@ input[type="range"]::-moz-range-thumb {
   --card-accent: var(--accent-0);
 }
 
+.panel-led-setting {
+  top: var(--topbar-h); right: 16px;
+  width: 380px; max-width: calc(100vw - 32px);
+  max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
+  --card-accent: var(--yellow);
+}
+
 .camera-setting-placeholder {
   font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
   color: var(--dim); text-align: center; padding: 24px 0;

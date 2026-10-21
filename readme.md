@@ -88,7 +88,9 @@ then use **Generate Firmware & Flash ESP32**. The option is disabled by default.
 GPIO 21, one LED, GRBW and a low white startup brightness of 8/255 are suggested.
 The default motor wiring already uses GPIO 18 from the reference LED sketch.
 
-After flashing, **Live light** provides RGB colour, a separate white channel,
+After flashing, open **LED settings** using the light icon beside the camera
+selector in the main toolbar (also under **Tools → Image → LED**).
+**Live light** provides RGB colour, a separate white channel,
 brightness and off/on controls over USB or WiFi. Click **Apply light** to send
 the chosen output. Live changes last until the controller restarts; hardware
 and startup changes require another flash. Up to 16 chained LEDs can share the

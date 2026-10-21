@@ -11,7 +11,7 @@ const o_supplement = new Map();
 const o_control_ui = shallowReactive({ notice: '' });
 let f_open_panel = () => {};
 let n_instance = 0;
-const o_icon = { filter: 'filter', camera_setting: 'camera', flat: 'flat', setup: 'setup', scan: 'scan', focus: 'focus', record: 'record', video: 'video', training: 'training', gamepad: 'gamepad', motion_detection: 'detection', scale: 'scale', zoom: 'zoom', macro: 'macro' };
+const o_icon = { filter: 'filter', camera_setting: 'camera', led_setting: 'brightness', flat: 'flat', setup: 'setup', scan: 'scan', focus: 'focus', record: 'record', video: 'video', training: 'training', gamepad: 'gamepad', motion_detection: 'detection', scale: 'scale', zoom: 'zoom', macro: 'macro' };
 const f_human = s => String(s || '').replace(/\b[abnosv]_+/g, '').replaceAll('_', ' ').trim();
 const f_text = s => String(s || '').replace(/{{[\s\S]*?}}/g, '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 const f_escape = s => String(s).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;');
@@ -159,7 +159,7 @@ function f_install_control_catalog(app, { components, openPanel, effects = [] })
     } });
     const seen = new Set();
     for (const [key, component] of Object.entries(components)) {
-        const parent = /calibration|backlash|jog|manual_speed/.test(key) ? 'setup' : /training/.test(key) ? 'training' : /hardware_crop/.test(key) ? 'camera_setting' : undefined;
+        const parent = /calibration|backlash|jog|manual_speed|hardware_led/.test(key) ? 'setup' : /training/.test(key) ? 'training' : /hardware_crop/.test(key) ? 'camera_setting' : undefined;
         f_prepare_component(component, key, parent, seen);
     }
 }

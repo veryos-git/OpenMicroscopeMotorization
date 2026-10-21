@@ -43,6 +43,8 @@ board-specific wiring still matters. See Espressif's
 
 ## Live control
 
+Open **LED settings** from the light icon beside the camera selector in the main
+toolbar, or **Tools → Image → LED**. The panel is available without opening Setup.
 **Live light** offers a colour picker, independent white level, master brightness
 and an on/off checkbox. Click **Apply light** to send the selection, or
 **Turn light off** for immediate off. RGB black with nonzero white uses only the
@@ -54,7 +56,9 @@ Restarting the controller restores the flashed startup settings. Changing GPIO,
 count, protocol, order, startup values or the enable option requires flashing.
 The UI reports when saved settings differ from the connected firmware and uses
 that firmware's protocol for live controls. Older firmware displays upgrade
-guidance. Controller initialization and transmission errors appear in Setup.
+guidance. Controller initialization and transmission errors appear in LED settings
+and Setup. Wiring, protocol and startup configuration remain in Setup, accessible
+through **Open LED hardware setup** in the LED panel.
 
 The legacy `deno task flash` terminal workflow generates default motor pins with
 the LED disabled; use Hardware Setup for an LED-enabled build.

@@ -33,6 +33,9 @@ let o_component__toolbar = {
                         <option value="">Select camera</option>
                         <option v-for="o_dev in o_state.a_o_device__webcam" :key="o_dev.deviceId" :value="o_dev.deviceId">{{ o_dev.label || o_dev.deviceId }}</option>
                     </select>
+                    <button class="toolbar-toggle toolbar-icon" :class="{ active: o_state.o_panel_visibility.led_setting }"
+                        @click="f_toggle_panel('led_setting')" aria-label="LED settings" :aria-pressed="!!o_state.o_panel_visibility.led_setting"
+                        title="LED settings — brightness, colour, white channel and on/off"><ui_icon s_name="brightness" /></button>
                     <o_component__manual_speed v-if="!b_details" s_context="quick" :b_compact="true" />
                 </div>
                 <div class="toolbar-group toolbar-group--utilities">
@@ -211,6 +214,7 @@ let o_component__toolbar = {
                 ] },
                 { s_label: 'Image', a_o_tool: [
                     { s_panel: 'camera_setting', s_icon: 'camera', s_label: 'Camera', s_title: 'Camera resolution, frame rate, exposure and white balance' },
+                    { s_panel: 'led_setting', s_icon: 'brightness', s_label: 'LED', s_title: 'LED brightness, colour, white channel and on/off' },
                     { s_panel: 'filter', s_icon: 'filter', s_label: 'Filters', s_title: 'Adjust live image processing' },
                     { s_panel: 'flat', s_icon: 'flat', s_label: 'Flat field', s_title: 'Calibrate and correct uneven illumination' },
                     { s_panel: 'scale', s_icon: 'scale', s_label: 'Scale', s_title: 'Show a calibrated scale on the image' },

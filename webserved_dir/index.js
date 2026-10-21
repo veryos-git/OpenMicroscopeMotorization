@@ -28,6 +28,7 @@ import { o_component__motion } from './o_component__motion.js';
 import { o_component__optics } from './o_component__optics.js';
 import { o_component__scan } from './o_component__scan.js';
 import { o_component__camera_setting } from './o_component__camera_setting.js';
+import { o_component__led_setting } from './o_component__led_setting.js';
 import { o_component__manual_stitch } from './o_component__manual_stitch.js';
 import { o_component__macro } from './o_component__macro.js';
 import { o_component__auto_move } from './o_component__auto_move.js';
@@ -255,7 +256,7 @@ let o_state = reactive({
 
     // UI
     o_motion_detection: f_o_motion_config(),
-    o_panel_visibility: { motion_detection: false, setup: false, map: false, motion: false, gamepad: false, optics: false, slide_library: false, scan: false, camera_setting: false, manual_stitch: false, macro: false, auto_move: false, autostitch: false, filter: false, flat: false, focus: false, focus_step: false, focus_stack: false, scale: false, stats: false, cellpose: false, zoom: false, record: false, recording_library: false, video: false, training: false },
+    o_panel_visibility: { motion_detection: false, setup: false, map: false, motion: false, gamepad: false, optics: false, slide_library: false, scan: false, camera_setting: false, led_setting: false, manual_stitch: false, macro: false, auto_move: false, autostitch: false, filter: false, flat: false, focus: false, focus_step: false, focus_stack: false, scale: false, stats: false, cellpose: false, zoom: false, record: false, recording_library: false, video: false, training: false },
     o_key_held: {},
 
     // scan
@@ -500,6 +501,7 @@ let f_apply_setting_from_db = function(){
     o_state.o_panel_visibility.slide_library = o_vis.slide_library || false;
     o_state.o_panel_visibility.scan = o_vis.scan || false;
     o_state.o_panel_visibility.camera_setting = o_vis.camera_setting || false;
+    o_state.o_panel_visibility.led_setting = o_vis.led_setting || false;
     o_state.o_panel_visibility.manual_stitch = o_vis.manual_stitch || false;
     o_state.o_panel_visibility.macro = o_vis.macro || false;
     o_state.o_panel_visibility.auto_move = o_vis.auto_move || false;
@@ -1223,6 +1225,7 @@ o_app.component('o_component__motion', o_component__motion);
 o_app.component('o_component__optics', o_component__optics);
 o_app.component('o_component__scan', o_component__scan);
 o_app.component('o_component__camera_setting', o_component__camera_setting);
+o_app.component('o_component__led_setting', o_component__led_setting);
 o_app.component('o_component__manual_stitch', o_component__manual_stitch);
 o_app.component('o_component__macro', o_component__macro);
 o_app.component('o_component__auto_move', o_component__auto_move);

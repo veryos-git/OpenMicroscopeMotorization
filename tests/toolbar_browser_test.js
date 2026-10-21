@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 
 // Real Vue, toolbar, speed controls and action registry; no camera or motors used.
-const panels = ['motion_detection', 'setup', 'map', 'motion', 'gamepad', 'optics', 'slide_library', 'scan', 'camera_setting', 'manual_stitch', 'macro', 'auto_move', 'autostitch', 'filter', 'flat', 'focus', 'focus_step', 'focus_stack', 'scale', 'stats', 'cellpose', 'zoom', 'record', 'recording_library', 'video', 'training'];
+const panels = ['motion_detection', 'setup', 'map', 'motion', 'gamepad', 'optics', 'slide_library', 'scan', 'camera_setting', 'led_setting', 'manual_stitch', 'macro', 'auto_move', 'autostitch', 'filter', 'flat', 'focus', 'focus_step', 'focus_stack', 'scale', 'stats', 'cellpose', 'zoom', 'record', 'recording_library', 'video', 'training'];
 const javascript = text => new Response(text, { headers: { 'content-type': 'text/javascript' } });
 
 for (const width of [1440, 800, 360]) Deno.test(`compact toolbar actions and layout at ${width}px`, async () => {
@@ -92,6 +92,11 @@ for (const width of [1440, 800, 360]) Deno.test(`compact toolbar actions and lay
                     check(rect.x >= 0 && rect.right <= innerWidth && rect.bottom < innerHeight, 'Primary button outside viewport');
                 }
                 check(document.querySelector('.toolbar').scrollWidth <= innerWidth, 'Toolbar overflow');
+                await click('LED settings');
+                check(o_state.o_panel_visibility.led_setting && !o_state.o_panel_visibility.setup && calls.settings.o_panel_visibility.led_setting, 'LED settings open directly and persist without Setup');
+                check(button('LED settings').getAttribute('aria-pressed') === 'true', 'LED toolbar button reflects panel visibility');
+                await click('LED settings');
+                check(!o_state.o_panel_visibility.led_setting, 'LED toolbar button closes panel');
                 await click('Capture Image'); check(calls.capture === 1 && window.downloadName.startsWith('capture-'), 'Capture dispatch');
                 await click('Mouse movement'); check(o_state.b_enabled__mouse_jog && button('Mouse movement').getAttribute('aria-pressed') === 'true', 'Mouse movement dispatch');
                 for (const name of ['Scan', 'Focus', 'Zoom']) { await click(name); check(o_state.o_panel_visibility[name.toLowerCase()], 'Quick panel: ' + name); }

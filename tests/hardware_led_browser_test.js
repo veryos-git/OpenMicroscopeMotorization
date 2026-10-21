@@ -12,9 +12,11 @@ Deno.test('LED UI saves hardware settings, mixes RGB/white, applies brightness a
             export const o_state = reactive({
                 o_config__hardware_led: f_o_hardware_led_config(), o_hardware_led: null,
                 b_connected__esp: false, b_flashing: false, s_error__hardware_led: '',
+                o_panel_visibility: { setup: true, led_setting: false },
                 a_o_pin_config: [{ n_pin1: 18 }],
             });
             export function f_save_setting(key, value) { saved[key] = JSON.parse(JSON.stringify(value)); }
+            export const f_save_setting__debounced = f_save_setting;
             export function f_send_esp(command) {
                 sent.push(command);
                 const { command: _, ...patch } = command;
@@ -25,12 +27,16 @@ Deno.test('LED UI saves hardware settings, mixes RGB/white, applies brightness a
         if (path === '/test.js') return javascript(`
             import { createApp, nextTick } from './lib/vue.esm-browser.js';
             import { o_component__hardware_led } from './o_component__hardware_led.js';
+            import { o_component__led_setting } from './o_component__led_setting.js';
             import { o_state, sent, saved } from './index.js';
             const errors = [];
-            const app = createApp(o_component__hardware_led);
+            const app = createApp({
+                components: { o_component__hardware_led, o_component__led_setting },
+                template: '<o_component__hardware_led/><o_component__led_setting ref="led"/>',
+            });
             app.config.warnHandler = message => errors.push(message);
             app.config.errorHandler = error => errors.push(error.message);
-            const vm = app.mount('#app');
+            const vm = app.mount('#app').$refs.led;
             const check = (ok, message) => { if (!ok) throw new Error(message); };
             const field = label => [...document.querySelectorAll('label')].find(el => el.textContent.trim().startsWith(label))?.querySelector('input,select');
             const edit = async (label, value) => {
@@ -53,6 +59,10 @@ Deno.test('LED UI saves hardware settings, mixes RGB/white, applies brightness a
                 await edit('Startup Brightness', 12);
                 check(saved.o_config__hardware_led.o_startup.n_brightness === 12, 'Startup persisted');
                 check(sent.length === 0, 'Configuration changes do not send live output');
+                await click('Open LED settings');
+                check(o_state.o_panel_visibility.led_setting && !o_state.o_panel_visibility.setup, 'Setup links to the live LED panel');
+                check(document.querySelector('.panel-led-setting').classList.contains('visible'), 'LED panel is visible');
+                check(!document.querySelector('.panel-led-setting .hardware-led-config'), 'Live controls do not require hardware configuration');
                 o_state.b_connected__esp = true; await nextTick();
                 check(document.body.textContent.includes('Flash updated firmware'), 'Old firmware guidance');
                 o_state.o_hardware_led = { b_ready: true, b_pending: false, s_error: '',
@@ -70,11 +80,18 @@ Deno.test('LED UI saves hardware settings, mixes RGB/white, applies brightness a
                 check(sent[0].n_red === 255 && sent[0].n_green === 128 && sent[0].n_blue === 64 && sent[0].n_white === 64 && sent[0].n_brightness === 128 && sent[0].b_on, 'RGBW and brightness command');
                 await click('Turn light off'); check(sent[1].b_on === false, 'Off command');
                 await edit('Light on', true); await click('Apply light'); check(sent[2].b_on, 'On command');
+                document.querySelector('[aria-label="Close LED settings"]').click(); await nextTick();
+                check(!saved.o_panel_visibility.led_setting && !document.querySelector('.panel-led-setting').classList.contains('visible'), 'Closing LED panel persists visibility');
+                await click('Open LED settings');
+                check(vm.o_output.b_on && vm.o_output.n_brightness === 128, 'Reopening keeps current output');
+                await click('Open LED hardware setup');
+                check(saved.o_panel_visibility.setup && !saved.o_panel_visibility.led_setting, 'LED panel links back to Setup');
                 await edit('LED protocol', 'rgb');
                 check(saved.o_config__hardware_led.o_startup.n_white === 0 && saved.o_config__hardware_led.o_startup.n_red === 255, 'RGB startup remains useful');
                 check(document.body.textContent.includes('Saved LED settings differ'), 'Flash needed');
                 check(field('White channel'), 'Live protocol follows connected firmware until flash');
                 o_state.o_hardware_led.o_config = JSON.parse(JSON.stringify(saved.o_config__hardware_led)); await nextTick();
+                await click('Open LED settings');
                 check(!field('White channel'), 'RGB-only hides separate white');
                 await click('Apply light'); check(sent.at(-1).n_white === 0, 'RGB sends zero white');
                 o_state.b_flashing = true; await nextTick();
