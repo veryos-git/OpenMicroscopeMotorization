@@ -6,7 +6,7 @@ export function f_install_overlay_windows(o_document = document) {
     let o_drag = null;
     let el_active = null;
 
-    function f_place(el_panel, n_x, n_y) {
+    function f_place(el_panel, n_x, n_y, b_snap = false) {
         const o_rect = el_panel.getBoundingClientRect();
         const el_header = el_panel.querySelector('.panel-header');
         const n_header = el_header?.getBoundingClientRect().height || 48;
@@ -17,6 +17,25 @@ export function f_install_overlay_windows(o_document = document) {
         // Keep the whole window visible when it fits; tall panels retain a
         // reachable header and their existing internal scrolling.
         const n_max_y = Math.max(n_top, o_window.innerHeight - Math.min(o_rect.height, o_window.innerHeight - n_top));
+        if (b_snap) {
+            const a_x = [0, o_window.innerWidth - o_rect.width];
+            const a_y = [n_top, n_max_y];
+            for (const el_other of o_document.querySelectorAll('.overlay-panel.visible')) {
+                if (el_other === el_panel || !el_other.getClientRects().length) continue;
+                const other = el_other.getBoundingClientRect();
+                if (n_y < other.bottom + 12 && n_y + o_rect.height > other.top - 12) {
+                    a_x.push(other.left, other.right - o_rect.width, other.left - o_rect.width - 8, other.right + 8);
+                }
+                if (n_x < other.right + 12 && n_x + o_rect.width > other.left - 12) {
+                    a_y.push(other.top, other.bottom - o_rect.height, other.top - o_rect.height - 8, other.bottom + 8);
+                }
+            }
+            const f_nearest = (value, candidates) => candidates.reduce((best, candidate) =>
+                Math.abs(candidate - value) < Math.min(10, Math.abs(best - value)) ? candidate : best, Infinity);
+            const x = f_nearest(n_x, a_x), y = f_nearest(n_y, a_y);
+            if (Number.isFinite(x)) n_x = x;
+            if (Number.isFinite(y)) n_y = y;
+        }
         el_panel.style.setProperty('--panel-x', Math.min(Math.max(0, n_x), Math.max(0, o_window.innerWidth - o_rect.width)) + 'px');
         el_panel.style.setProperty('--panel-y', Math.min(Math.max(n_top, n_y), n_max_y) + 'px');
         el_panel.dataset.panelMoved = '';
@@ -64,7 +83,7 @@ export function f_install_overlay_windows(o_document = document) {
             f_stop();
             return;
         }
-        f_place(o_drag.el_panel, o_evt.clientX - o_drag.n_offset_x, o_evt.clientY - o_drag.n_offset_y);
+        f_place(o_drag.el_panel, o_evt.clientX - o_drag.n_offset_x, o_evt.clientY - o_drag.n_offset_y, true);
         o_evt.preventDefault();
         o_evt.stopPropagation();
     }

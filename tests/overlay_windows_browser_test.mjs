@@ -119,10 +119,26 @@ try {
     assert.equal(moved.x, right.x - 200);
     assert.equal(moved.y, right.y + 70);
     assert.equal(moved.width, right.width);
+    // Snap adjacent windows with an 8px gap, and snap near viewport edges.
+    await evaluate(`
+        document.querySelector('.panel-training').classList.remove('visible');
+        for (const [id, left] of [['snap-a', 40], ['snap-b', 600]]) {
+            const panel = document.createElement('div');
+            panel.className = 'overlay-panel visible'; panel.id = id;
+            panel.style.cssText = 'left:' + left + 'px;top:100px;width:240px;height:180px';
+            panel.innerHTML = '<div class="panel-header">Snap window</div>';
+            document.body.append(panel);
+        }
+    `);
+    await drag(80, 120, 316, 0);
+    assert.equal((await rect('#snap-a')).x, 352);
+    await drag(392, 120, -346, 0);
+    assert.equal((await rect('#snap-a')).x, 0);
+    await evaluate("document.querySelector('#snap-a').remove(); document.querySelector('#snap-b').remove(); document.querySelector('.panel-training').classList.add('visible')");
     await evaluate('cleanup()');
     await drag(moved.x + 40, moved.y + 20, 30, 30);
     assert.deepEqual(await rect('.panel-training'), moved);
-    console.log('Passed: centered/right-anchored panels, mouse/touch, controls, responsive bounds, reopen, cancellation and cleanup.');
+    console.log('Passed: centered/right-anchored panels, mouse/touch, controls, responsive bounds, reopen, snapping, cancellation and cleanup.');
 } finally {
     socket?.close();
     chrome.kill();

@@ -1,3 +1,4 @@
+import { f_install_tooltips } from './tooltips.module.js';
 import { o_component__icon } from './o_component__icon.js';
 import { o_actions } from './o_actions.js';
 import { o_state, f_save_setting__debounced, f_save_library_current, f_refresh_maps } from './index.js';
@@ -10,24 +11,28 @@ let o_component__toolbar = {
     components: { ui_icon: o_component__icon },
     template: `
         <div class="toolbar" ref="el_toolbar">
-            <div class="toolbar-row toolbar-row--primary" aria-label="Microscope controls">
-                <div class="toolbar-group" aria-label="Image and movement">
-                    <button class="toolbar-toggle toolbar-icon" @click="f_capture_image" aria-label="Capture Image"
-                        title="Capture image — download the current camera frame"><ui_icon s_name="camera" /></button>
-                    <button v-for="tool in a_o_quick" :key="tool.s_panel" class="toolbar-toggle toolbar-icon"
-                        :class="{ active: o_state.o_panel_visibility[tool.s_panel], running: tool.s_panel === 'scan' && o_state.b_scanning }"
-                        :aria-label="tool.s_label" :title="tool.s_title" :aria-pressed="!!o_state.o_panel_visibility[tool.s_panel]"
-                        @click="f_toggle_panel(tool.s_panel)"><ui_icon :s_name="tool.s_icon" /></button>
-                    <button class="toolbar-toggle toolbar-icon toolbar-mouse-jog" :class="{ active: o_state.b_enabled__mouse_jog }"
-                        :aria-pressed="!!o_state.b_enabled__mouse_jog" aria-label="Mouse movement"
-                        :title="'Mouse movement ' + (o_state.b_enabled__mouse_jog ? 'on' : 'off') + ' — hold left on the image for XY; right for focus'"
-                        data-control-model="o_state.b_enabled__mouse_jog" data-control-reset="f_mouse_jog()" @click="f_mouse_jog"><ui_icon s_name="move" /></button>
-                    <button class="toolbar-toggle toolbar-stop" :class="{ active: b_any_motor_running }"
-                        @click="f_stop_all" aria-label="Stop all motors" title="Stop all motors immediately">
-                        <ui_icon s_name="stop" /><span>Stop</span>
+            <div class="toolbar-row toolbar-row--primary" role="toolbar" aria-label="Microscope controls">
+                <div class="toolbar-shortcuts" aria-label="Pinned tools and active settings" @wheel="f_scroll_shortcuts">
+                    <button v-for="tool in a_o_quick" :key="tool.s_panel" class="toolbar-toggle toolbar-icon toolbar-shortcut"
+                        :class="{ active: f_tool_active(tool.s_panel), running: f_tool_running(tool.s_panel) }"
+                        :aria-label="tool.s_label" :title="f_tool_title(tool) + ' · Right-click to unpin'" :data-tooltip="f_tool_title(tool) + ' · Right-click to unpin'"
+                        :aria-pressed="f_tool_active(tool.s_panel)" :data-tool="tool.s_panel"
+                        @contextmenu.prevent="f_toggle_pin(tool.s_panel)" @click="f_run_tool(tool.s_panel)">
+                        <ui_icon :s_name="tool.s_icon" />
+                        <span v-if="tool.s_panel === 'setup'" class="toolbar-connection-dot" :class="{ connected: o_state.b_connected__esp }"></span>
                     </button>
+                    <span v-if="a_o_changed.length || a_o_activity.length || o_state.o_record.b_running" class="toolbar-sep" aria-hidden="true"></span>
+                    <button v-for="item in a_o_changed" :key="item.id" class="toolbar-toggle toolbar-icon toolbar-setting-reset"
+                        data-control-skip :aria-label="'Reset ' + item.name" :title="f_reset_title(item)" :data-tooltip="f_reset_title(item)"
+                        @click="f_reset_control(item)"><ui_icon :s_name="item.icon" /><span class="setting-reset-mark" aria-hidden="true">×</span></button>
+                    <button v-if="o_state.o_record.b_running" class="toolbar-toggle toolbar-icon toolbar-record-stop" @click="f_stop_recording"
+                        aria-label="Stop time-lapse recording" :title="'Stop time-lapse · ' + o_state.o_record.n_its__frame__done + ' frames'"
+                        :data-tooltip="'Stop time-lapse · ' + o_state.o_record.n_its__frame__done + ' frames'"><ui_icon s_name="record" /></button>
+                    <button v-for="item in a_o_activity" :key="item.s_panel" class="toolbar-toggle toolbar-icon running"
+                        @click="f_toggle_panel(item.s_panel)" :aria-label="item.s_label" :title="item.s_label" :data-tooltip="item.s_label"><ui_icon :s_name="item.s_icon" /></button>
                 </div>
                 <div class="toolbar-group toolbar-group--camera">
+<<<<<<< HEAD
                     <select class="toolbar-camera-select" v-model="o_state.s_id__webcam_device" @change="f_on_webcam_change"
                         aria-label="Camera" title="Select the microscope camera">
                         <option value="">Select camera</option>
@@ -37,46 +42,38 @@ let o_component__toolbar = {
                         @click="f_toggle_panel('led_setting')" aria-label="LED settings" :aria-pressed="!!o_state.o_panel_visibility.led_setting"
                         title="LED settings — brightness, colour, white channel and on/off"><ui_icon s_name="brightness" /></button>
                     <o_component__manual_speed v-if="!b_details" s_context="quick" :b_compact="true" />
+=======
+                    <o_component__manual_speed s_context="quick" :b_compact="true" />
+                    <label class="toolbar-select" :data-tooltip="'USB camera · ' + s_camera_label" :title="'USB camera · ' + s_camera_label">
+                        <ui_icon s_name="camera" /><span aria-hidden="true">{{ f_short_label(s_camera_label) }}</span><ui_icon s_name="chevron" />
+                        <select class="toolbar-camera-select" v-model="o_state.s_id__webcam_device" @change="f_on_webcam_change" aria-label="Camera" :title="s_camera_label">
+                            <option value="">Select camera</option>
+                            <option v-for="o_dev in o_state.a_o_device__webcam" :key="o_dev.deviceId" :value="o_dev.deviceId">{{ o_dev.label || o_dev.deviceId }}</option>
+                        </select>
+                    </label>
+>>>>>>> 942bcdc04095cbb45a8e0cb9e7aff9776be3b37b
                 </div>
                 <div class="toolbar-group toolbar-group--utilities">
-                    <button class="toolbar-toggle toolbar-icon" @click="f_action_search" aria-label="Search actions"
-                        title="Search settings, controls and actions — Ctrl+Shift+P / Ctrl+F / F3"><ui_icon s_name="search" /></button>
-                    <button class="toolbar-toggle toolbar-icon" :class="{ active: b_details }" @click="f_toggle_details"
-                        aria-label="Quick settings" :aria-expanded="b_details" aria-controls="toolbar-details"
-                        title="Quick settings — camera tuning, movement speeds, project and slide"><ui_icon s_name="settings" /></button>
-                    <button class="toolbar-toggle toolbar-icon toolbar-setup" :class="{ active: o_state.o_panel_visibility.setup }"
-                        @click="f_open_setup" aria-label="Setup" :aria-pressed="!!o_state.o_panel_visibility.setup"
-                        :title="'Hardware setup — ' + s_connection_label + '. ' + s_hardware_summary">
-                        <ui_icon s_name="setup" /><span class="toolbar-connection-dot" :class="{ connected: o_state.b_connected__esp }"></span>
-                    </button>
-                    <button ref="el_tools_button" class="toolbar-toggle toolbar-tools-toggle" :class="{ active: b_tools }"
+                    <button class="toolbar-toggle toolbar-icon toolbar-stop" :class="{ active: b_any_motor_running }"
+                        @click="f_stop_all" aria-label="Stop all motors" title="Stop all motors · Esc" data-tooltip="Stop all motors · Esc"><ui_icon s_name="stop" /></button>
+                    <button ref="el_tools_button" class="toolbar-toggle toolbar-icon" :class="{ active: b_tools }"
                         @click="f_toggle_tools" aria-label="All tools" :aria-expanded="b_tools" aria-controls="toolbar-tools"
-                        title="All tools — recording, image processing, library and hardware"><ui_icon s_name="tools" /><span>Tools</span></button>
-                    <button v-if="b_fullscreen_available" class="toolbar-toggle toolbar-icon" @click="f_fullscreen"
-                        :aria-label="b_fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'" :title="b_fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'">
-                        <ui_icon :s_name="b_fullscreen ? 'restore' : 'fullscreen'" /></button>
+                        title="All tools" data-tooltip="All tools"><ui_icon s_name="tools" /></button>
+                    <button class="toolbar-toggle toolbar-icon" @click="f_action_search" aria-label="Search actions"
+                        title="Search settings and actions · Ctrl+Shift+P" data-tooltip="Search settings and actions · Ctrl+Shift+P"><ui_icon s_name="search" /></button>
                 </div>
             </div>
-            <div v-if="a_o_changed.length" class="toolbar-row toolbar-row--changes" aria-label="Changed settings">
-                <span class="toolbar-changes-label">Reset</span>
-                <button v-for="item in a_o_changed" :key="item.id" class="toolbar-toggle toolbar-icon toolbar-setting-reset"
-                    data-control-skip :aria-label="'Reset ' + item.name" :title="f_reset_title(item)"
-                    @click="f_reset_control(item)"><ui_icon :s_name="item.icon" /><span class="setting-reset-mark" aria-hidden="true">×</span></button>
-            </div>
-            <div v-if="o_control_ui.notice" class="toolbar-control-notice" role="status">{{ o_control_ui.notice }}
-                <button data-control-skip @click="o_control_ui.notice = ''" aria-label="Dismiss setting notice">×</button>
-            </div>
-            <div v-if="a_o_activity.length || o_state.o_record.b_running" class="toolbar-row toolbar-row--activity" aria-label="Active processes">
-                <button v-if="o_state.o_record.b_running" class="toolbar-toggle toolbar-record-stop" @click="f_stop_recording"
-                    aria-label="Stop time-lapse recording" title="Stop the running time-lapse recording">
-                    <ui_icon s_name="stop" /> {{ o_state.o_record.n_its__frame__done }} frames
-                </button>
-                <button v-for="item in a_o_activity" :key="item.s_panel" class="toolbar-toggle running"
-                    @click="f_toggle_panel(item.s_panel)" :title="'Open ' + item.s_label + ' controls'"><ui_icon :s_name="item.s_icon" />{{ item.s_label }}</button>
-            </div>
-            <div v-if="s_error || o_cam.s_error__setting" class="toolbar-error" role="alert">{{ s_error || o_cam.s_error__setting }}</div>
-
-            <div id="toolbar-details" v-show="b_details" class="toolbar-details">
+        </div>
+        <span class="sr-only" role="status">{{ s_pin_notice }}</span>
+        <section class="overlay-panel panel-toolbar-notice" :class="{ visible: s_error || o_cam.s_error__setting || o_control_ui.notice }" aria-label="Notice">
+            <div class="panel-header"><h2>Notice</h2><button class="panel-close" @click="f_clear_notice" aria-label="Dismiss notice">×</button></div>
+            <div class="panel-body"><p v-if="s_error || o_cam.s_error__setting" class="toolbar-error" role="alert">{{ s_error || o_cam.s_error__setting }}</p>
+                <p v-if="o_control_ui.notice" role="status">{{ o_control_ui.notice }}</p></div>
+        </section>
+        <section id="toolbar-details" class="overlay-panel toolbar-details" :class="{ visible: b_details }" aria-label="Quick settings">
+            <div class="panel-header"><h2><ui_icon s_name="settings" /> Quick settings</h2><span class="panel-drag-hint" title="Drag to move"><ui_icon s_name="move" /></span>
+                <button class="panel-close" @click="b_details = false" aria-label="Close quick settings">×</button></div>
+            <div class="panel-body">
                 <div class="toolbar-row toolbar-row--speed"><o_component__manual_speed s_context="toolbar" /></div>
                 <!-- USB camera hardware quick bar (UVC settings, shown while streaming) -->
                 <div class="toolbar-row toolbar-row--camera" v-if="o_state.o_camera.b_active">
@@ -173,22 +170,30 @@ let o_component__toolbar = {
                     <span class="conn-badge" :class="{ connected: o_state.b_connected__esp }"><span class="dot"></span>{{ s_connection_label }}</span>
                 </div>
             </div>
-            <section v-if="b_tools" id="toolbar-tools" ref="el_tools" class="toolbar-tools" aria-label="All tools">
-                <div class="toolbar-tools-header"><span>All tools</span>
-                    <button class="toolbar-toggle toolbar-icon" aria-label="Close tools" title="Close tools" @click="f_close_tools(true)"><ui_icon s_name="close" /></button>
-                </div>
+        </section>
+        <section id="toolbar-tools" ref="el_tools" class="overlay-panel toolbar-tools" :class="{ visible: b_tools }" aria-label="All tools">
+            <div class="panel-header"><h2><ui_icon s_name="tools" /> Tools</h2><span class="panel-drag-hint" title="Drag to move"><ui_icon s_name="move" /></span>
+                <button class="panel-close" aria-label="Close tools" title="Close tools" @click="f_close_tools(true)">×</button></div>
+            <div class="panel-body">
+                <p class="toolbar-pin-hint">Right-click a tool to pin it to the bar.</p>
                 <div class="toolbar-tools-groups">
                     <section v-for="group in a_o_tool_group" :key="group.s_label" :aria-label="group.s_label">
                         <h3>{{ group.s_label }}</h3>
                         <div class="toolbar-tool-grid">
-                            <button v-for="tool in group.a_o_tool" :key="tool.s_panel" class="toolbar-toggle toolbar-tool"
-                                :class="{ active: o_state.o_panel_visibility[tool.s_panel] }" :aria-pressed="!!o_state.o_panel_visibility[tool.s_panel]"
-                                :title="tool.s_title" @click="f_choose_tool(tool.s_panel)"><ui_icon :s_name="tool.s_icon" /><span>{{ tool.s_label }}</span></button>
+                            <div v-for="tool in group.a_o_tool" :key="tool.s_panel" class="toolbar-tool-item" :class="{ pinned: a_s_pinned.includes(tool.s_panel) }">
+                                <button class="toolbar-toggle toolbar-tool" :data-tool="tool.s_panel"
+                                    :class="{ active: f_tool_active(tool.s_panel), running: f_tool_running(tool.s_panel) }" :aria-pressed="f_tool_active(tool.s_panel)"
+                                    :title="f_tool_title(tool)" :data-tooltip="f_tool_title(tool)" :aria-label="tool.s_label"
+                                    @contextmenu.prevent="f_toggle_pin(tool.s_panel)" @click="f_choose_tool(tool.s_panel)"><ui_icon :s_name="tool.s_icon" /><span>{{ tool.s_label }}</span></button>
+                                <button class="toolbar-pin" data-control-skip :aria-label="(a_s_pinned.includes(tool.s_panel) ? 'Unpin ' : 'Pin ') + tool.s_label"
+                                    :aria-pressed="a_s_pinned.includes(tool.s_panel)" :data-tooltip="a_s_pinned.includes(tool.s_panel) ? 'Unpin from bar' : 'Pin to bar'"
+                                    @click="f_toggle_pin(tool.s_panel)"><ui_icon s_name="pin" /></button>
+                            </div>
                         </div>
                     </section>
                 </div>
-            </section>
-        </div>
+            </div>
+        </section>
     `,
     data: function() {
         return {
@@ -197,15 +202,13 @@ let o_component__toolbar = {
             b_details: false,
             b_tools: false,
             b_fullscreen: false,
-            b_fullscreen_available: false,
             s_error: '',
-            a_o_quick: [
-                { s_panel: 'scan', s_icon: 'scan', s_label: 'Scan', s_title: 'Scan — define an area, focus and stitch images' },
-                { s_panel: 'focus', s_icon: 'focus', s_label: 'Focus', s_title: 'Focus — live sharpness meter and autofocus controls' },
-                { s_panel: 'zoom', s_icon: 'zoom', s_label: 'Zoom', s_title: 'Digital zoom — Ctrl + drag a box on the live image' },
-            ],
+            a_s_pinned: ['capture', 'scan', 'focus', 'zoom', 'mouse', 'setup'],
+            s_pin_notice: '',
             a_o_tool_group: [
                 { s_label: 'Capture', a_o_tool: [
+                    { s_panel: 'capture', s_icon: 'camera', s_label: 'Capture Image', s_title: 'Download the current camera frame' },
+                    { s_panel: 'scan', s_icon: 'scan', s_label: 'Scan', s_title: 'Define an area, focus and stitch images' },
                     { s_panel: 'record', s_icon: 'record', s_label: 'Time-lapse', s_title: 'Record images at intervals, at one or more positions' },
                     { s_panel: 'video', s_icon: 'video', s_label: 'Video', s_title: 'Record real-time video, bursts or pre-roll' },
                     { s_panel: 'focus_stack', s_icon: 'stack', s_label: 'Focus stack', s_title: 'Combine images at different focus depths' },
@@ -213,6 +216,7 @@ let o_component__toolbar = {
                     { s_panel: 'autostitch', s_icon: 'scan', s_label: 'Auto stitch', s_title: 'Stitch images with feature matching' },
                 ] },
                 { s_label: 'Image', a_o_tool: [
+                    { s_panel: 'zoom', s_icon: 'zoom', s_label: 'Zoom', s_title: 'Digital zoom · Ctrl + drag on the image' },
                     { s_panel: 'camera_setting', s_icon: 'camera', s_label: 'Camera', s_title: 'Camera resolution, frame rate, exposure and white balance' },
                     { s_panel: 'led_setting', s_icon: 'brightness', s_label: 'LED', s_title: 'LED brightness, colour, white channel and on/off' },
                     { s_panel: 'filter', s_icon: 'filter', s_label: 'Filters', s_title: 'Adjust live image processing' },
@@ -231,6 +235,8 @@ let o_component__toolbar = {
                     { s_panel: 'motion_detection', s_icon: 'detection', s_label: 'Motion detection', s_title: 'Detect changes in the camera image' },
                 ] },
                 { s_label: 'Movement', a_o_tool: [
+                    { s_panel: 'focus', s_icon: 'focus', s_label: 'Focus', s_title: 'Sharpness meter and autofocus' },
+                    { s_panel: 'mouse', s_icon: 'move', s_label: 'Mouse movement', s_title: 'Hold left on the image for XY; right for focus' },
                     { s_panel: 'gamepad', s_icon: 'gamepad', s_label: 'Gamepad', s_title: 'Configure a game controller' },
                     { s_panel: 'auto_move', s_icon: 'auto', s_label: 'Auto move', s_title: 'Configure automatic stage movement' },
                     { s_panel: 'macro', s_icon: 'macro', s_label: 'Macros', s_title: 'Record and replay movement sequences' },
@@ -238,13 +244,30 @@ let o_component__toolbar = {
                     { s_panel: 'focus_step', s_icon: 'focus', s_label: 'Focus step', s_title: 'Measure depth of field for focus stacking' },
                     { s_panel: 'motion', s_icon: 'move', s_label: 'Motion', s_title: 'Open the stage movement overview' },
                 ] },
+                { s_label: 'Workspace', a_o_tool: [
+                    { s_panel: 'setup', s_icon: 'chip', s_label: 'Setup', s_title: 'Microcontroller settings · ESP32 connections, motors and LED' },
+                    { s_panel: 'quick_settings', s_icon: 'settings', s_label: 'Quick settings', s_title: 'Movement speeds, camera tuning, project and slide' },
+                    { s_panel: 'fullscreen', s_icon: 'fullscreen', s_label: 'Fullscreen', s_title: 'Toggle fullscreen' },
+                ] },
             ],
         };
     },
     computed: {
-        a_o_changed: f_a_changed_controls,
-        s_hardware_summary() {
-            return this.a_o_hardware.map(item => item.s_label + ': ' + item.s_value).join('; ');
+        a_o_changed() {
+            const changed = f_a_changed_controls();
+            if (o_state.b_enabled__mouse_jog) changed.push({
+                id: 'mouse.enabled', name: 'Mouse movement', icon: 'move', value: true, before: false,
+                reset: () => this.f_mouse_jog(),
+            });
+            return changed;
+        },
+        a_o_quick() {
+            const tools = this.a_o_tool_group.flatMap(group => group.a_o_tool);
+            return this.a_s_pinned.map(id => tools.find(tool => tool.s_panel === id)).filter(Boolean);
+        },
+        s_camera_label() {
+            const device = o_state.a_o_device__webcam.find(device => device.deviceId === o_state.s_id__webcam_device);
+            return device?.label || device?.deviceId || 'Select camera';
         },
         a_o_activity() {
             return [
@@ -394,16 +417,56 @@ let o_component__toolbar = {
         },
     },
     methods: {
+        f_scroll_shortcuts(event) {
+            const el = event.currentTarget;
+            if (el.scrollWidth <= el.clientWidth || Math.abs(event.deltaX) >= Math.abs(event.deltaY)) return;
+            event.preventDefault();
+            el.scrollLeft += event.deltaY;
+        },
+        f_short_label(label) { return label.length > 3 ? label.slice(0, 3) + '…' : label; },
+        f_tool_active(id) {
+            if (id === 'mouse') return !!o_state.b_enabled__mouse_jog;
+            if (id === 'quick_settings') return this.b_details;
+            if (id === 'fullscreen') return this.b_fullscreen;
+            return !!o_state.o_panel_visibility[id];
+        },
+        f_tool_running(id) {
+            return (id === 'scan' && o_state.b_scanning) || (id === 'record' && o_state.o_record.b_running)
+                || this.a_o_activity.some(item => item.s_panel === id);
+        },
+        f_tool_title(tool) {
+            if (tool.s_panel === 'setup') return tool.s_title + ' · ' + this.s_connection_label;
+            if (tool.s_panel === 'mouse') return tool.s_title + ' · ' + (o_state.b_enabled__mouse_jog ? 'On' : 'Off');
+            return tool.s_label + ' · ' + tool.s_title;
+        },
+        f_toggle_pin(id) {
+            const tool = this.a_o_tool_group.flatMap(group => group.a_o_tool).find(tool => tool.s_panel === id);
+            if (!tool) return;
+            const pinned = this.a_s_pinned.includes(id);
+            this.a_s_pinned = pinned ? this.a_s_pinned.filter(value => value !== id) : [...this.a_s_pinned, id];
+            this.s_pin_notice = tool.s_label + (pinned ? ' unpinned from bar' : ' pinned to bar');
+            try { localStorage.setItem('omm.toolbar.pins', JSON.stringify(this.a_s_pinned)); }
+            catch (_) { this.s_pin_notice += '. Could not save shortcuts in this browser.'; }
+        },
+        f_run_tool(id) {
+            if (id === 'capture') return this.f_capture_image();
+            if (id === 'mouse') return this.f_mouse_jog();
+            if (id === 'setup') return this.f_open_setup();
+            if (id === 'quick_settings') return this.f_toggle_details();
+            if (id === 'fullscreen') return this.f_fullscreen();
+            this.f_toggle_panel(id);
+        },
+        f_clear_notice() { this.s_error = ''; this.o_cam.s_error__setting = ''; o_control_ui.notice = ''; },
         f_reset_control,
         f_reset_title,
         f_show_quick_settings() { this.b_details = true; },
+        f_show_tools() { this.b_tools = true; },
         f_action_search() { this.f_close_tools(); o_actions.f_invoke('actions.search'); },
         f_capture_image() { o_actions.f_invoke('image.capture'); },
         f_mouse_jog() { o_actions.f_invoke('motion.mouse'); },
         f_toggle_details() {
             this.b_details = !this.b_details;
             this.f_close_tools();
-            try { localStorage.setItem('omm.toolbar.details', String(this.b_details)); } catch (_) {}
         },
         f_toggle_tools() {
             if (this.b_tools) return this.f_close_tools(true);
@@ -416,7 +479,7 @@ let o_component__toolbar = {
         },
         f_choose_tool(s_panel) {
             this.f_close_tools(true);
-            this.f_toggle_panel(s_panel);
+            this.f_run_tool(s_panel);
         },
         async f_fullscreen() {
             this.s_error = '';
@@ -517,23 +580,24 @@ let o_component__toolbar = {
     },
     mounted: function() {
         window.addEventListener('control-show-quick-settings', this.f_show_quick_settings);
+        window.addEventListener('control-show-tools', this.f_show_tools);
         if(o_state.b_connected__server) f_refresh_maps();
         let o_self = this;
-        try { this.b_details = localStorage.getItem('omm.toolbar.details') === 'true'; } catch (_) {}
-        this.b_fullscreen_available = !!document.fullscreenEnabled;
+        this.f_remove_tooltips = f_install_tooltips();
+        try {
+            const saved = JSON.parse(localStorage.getItem('omm.toolbar.pins'));
+            const ids = new Set(this.a_o_tool_group.flatMap(group => group.a_o_tool.map(tool => tool.s_panel)));
+            if (Array.isArray(saved)) this.a_s_pinned = [...new Set(saved.filter(id => ids.has(id)))];
+        } catch (_) {}
         this.f_on_fullscreen = () => { this.b_fullscreen = !!document.fullscreenElement; };
         this.f_on_fullscreen();
-        this.f_on_outside = event => {
-            if (this.b_tools && !this.$refs.el_tools?.contains(event.target) && !this.$refs.el_tools_button?.contains(event.target)) this.f_close_tools();
-        };
         this.f_on_escape = event => {
             // Let Escape also reach the existing stop-all-motors handler.
             if (event.key === 'Escape' && this.b_tools) this.f_close_tools(true);
         };
-        document.addEventListener('pointerdown', this.f_on_outside);
         document.addEventListener('keydown', this.f_on_escape);
         document.addEventListener('fullscreenchange', this.f_on_fullscreen);
-        // Details and responsive wrapping must keep floating panels below the bar.
+        // Keep floating windows below the single toolbar row.
         if (typeof ResizeObserver !== 'undefined' && o_self.$refs.el_toolbar) {
             o_self.o_observer_resize = new ResizeObserver(function(){ o_self.f_update_topbar_height(); });
             o_self.o_observer_resize.observe(o_self.$refs.el_toolbar);
@@ -543,8 +607,9 @@ let o_component__toolbar = {
     },
     beforeUnmount: function() {
         window.removeEventListener('control-show-quick-settings', this.f_show_quick_settings);
+        window.removeEventListener('control-show-tools', this.f_show_tools);
         if (this.o_observer_resize) this.o_observer_resize.disconnect();
-        document.removeEventListener('pointerdown', this.f_on_outside);
+        this.f_remove_tooltips?.();
         document.removeEventListener('keydown', this.f_on_escape);
         document.removeEventListener('fullscreenchange', this.f_on_fullscreen);
     },

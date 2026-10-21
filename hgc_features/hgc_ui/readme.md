@@ -4,12 +4,38 @@ the application is intented to work in combination with a microscope and hardwar
 the application is intented to run as a fullscreen window. all the functionalities can be accessed by toggling overlay windows. 
 each overlay window can be resized and moved. 
 
+Overlay design workflow: first build a coarse functional draft if needed, then
+the user draws the exact arrangement and chooses the controls for that function.
+Refine the window from that drawing. Drawings live in `ui_guide`; ask for a drawing
+before refining an overlay that does not have one.
+
+The microcontroller overlay follows `ui_guide/microcontroller_settings/image.png`:
+M1–M3 wiring, X/Y/Z assignments and reverse/backlash/calibration controls, LED
+hardware and startup colour/white, then USB connection and Flash. Wi-Fi, motor
+tests, detailed calibration, and live LED output remain in expandable sections.
+The startup W value is the existing single white channel intensity on a 0–1 scale;
+warm/cool colour temperature is determined by the LED module.
+
 
 Implemented: overlay windows can be moved by dragging their header with a mouse,
 pen, or touch. Selecting a window brings it forward; header buttons and fields
 remain interactive. Positions are kept while panels are hidden/reopened, and moved
 windows are kept within the viewport when it changes size. Digital zoom keeps its
 existing position handling. General window resizing remains a separate task.
+
+The general guide now uses one toolbar row: pinned tool icons, movement speed
+preset, camera selector, Stop, Tools and Search. Right-click a tool in Tools to
+pin/unpin it; right-click a toolbar shortcut to remove it. The pin buttons also
+work with keyboard and touch. Shortcuts are saved in this browser, and overflow
+scrolls horizontally without adding rows. Hover or focus shows immediate tooltips
+with full labels and current camera/speed values.
+
+Tools, Quick settings and Search have movable, closable window headers. Tools and
+Quick settings retain their position when reopened during the session. Shared
+windows snap to viewport edges and nearby windows; digital zoom retains its own
+movement handler. Changed settings and active processes stay in the toolbar as
+icons. Detailed speed values, camera tuning, project and slide selection are in
+Tools → Quick settings.
 
 
 

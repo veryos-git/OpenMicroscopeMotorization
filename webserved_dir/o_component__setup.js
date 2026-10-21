@@ -1,3 +1,4 @@
+import { o_component__icon } from './o_component__icon.js';
 import { f_n_rpm__manual } from './manual_speed.module.js';
 import { o_state, f_send_esp, f_send_esp_move_step, f_send_esp_stop, f_send_esp_stop_all, f_send_esp_set_backlash, f_save_setting__debounced, f_send_wsmsg_with_response, f_register_handler, f_save_setting, f_connect_esp, f_connect_esp_serial, f_disconnect_esp } from './index.js';
 import { f_flash_browser } from './flash_browser.module.js';
@@ -6,192 +7,123 @@ import { f_s_hardware_led_config_error } from './hardware_led.module.js';
 
 let o_component__setup = {
     name: 'component-setup',
+    components: { ui_icon: o_component__icon },
     template: `
-        <div class="overlay-panel panel-setup" :class="{ visible: o_state.o_panel_visibility.setup }">
+        <section class="overlay-panel panel-setup microcontroller-settings" :class="{ visible: o_state.o_panel_visibility.setup }" aria-label="Microcontroller settings">
             <div class="panel-header">
-                <h2>Hardware Setup</h2>
-                <button class="panel-close" @click="f_close" :disabled="o_state.b_flashing" aria-label="Close Setup">&times;</button>
+                <h2><ui_icon s_name="chip" /> Microcontroller <span class="microcontroller-model">ESP32</span></h2>
+                <span class="panel-drag-hint" title="Drag to move"><ui_icon s_name="move" /></span>
+                <button class="panel-close" @click="f_close" :disabled="o_state.b_flashing" aria-label="Close Setup">×</button>
             </div>
             <div class="panel-body">
-                <p class="setup-subtitle">Assign, move, and monitor your motors here. Position and movement are reported live by the controller.</p>
-
-                <section class="hardware-motors" aria-label="Motors">
-                    <div class="hardware-calibration-controls">
-                        <button v-if="!b_calibrating_all" class="btn-small" @click="f_calibrate_all" :disabled="!b_can_move || !o_state.b_streaming__webcam">Quick calibrate all</button>
-                        <button v-else class="btn-small" @click="f_stop_calibrating_all">Stop calibration</button>
-                        <span class="hardware-calibration-status" role="status">{{ s_status__calibrate_all }}</span>
-                    </div>
-                    <p class="setup-hint">Quick calibration measures both directions once per motor, with coarser probes. Use a textured sample; for focus, start clearly off focus on one side of the sharpness peak.</p>
-                    <p class="setup-hint">Assign each motor to an axis. Choosing an occupied axis swaps motors. Z controls focus; leave its motor unassigned if focus is manual.</p>
-                    <article class="hardware-motor" v-for="(o_pin, n_idx) in o_state.a_o_pin_config" :key="n_idx"
-                        :class="{ moving: o_state.b_connected__esp && o_state.a_o_motor[n_idx].b_running }">
-                        <div class="hardware-motor-heading">
-                            <span class="motor-rotor" aria-hidden="true"
-                                :class="{ spinning: o_state.b_connected__esp && o_state.a_o_motor[n_idx].b_running, reverse: o_state.a_o_motor[n_idx].s_direction === 'ccw' }"
-                                :style="{ animationDuration: (60 / Math.max(0.05, o_state.a_o_motor[n_idx].n_rpm)) + 's' }">✣</span>
-                            <h3>Motor {{ n_idx + 1 }}</h3>
-                            <span class="motor-motion-status">{{ !o_state.b_connected__esp ? 'Disconnected' : o_state.a_o_motor[n_idx].b_running ? 'Moving · ' + o_state.a_o_motor[n_idx].s_direction.toUpperCase() : 'Stopped' }}</span>
-                        </div>
-                        <div class="hardware-motor-assignment">
-                            <label :for="'motor-axis-' + n_idx">Axis</label>
-                            <select :id="'motor-axis-' + n_idx" :value="f_s_axis_motor(n_idx)" :disabled="b_hardware_busy"
-                                @change="f_assign_motor(n_idx, $event.target.value)">
-                                <option value="none" :disabled="['x', 'y'].includes(f_s_axis_motor(n_idx))">Unassigned</option>
-                                <option value="x">X · left / right</option>
-                                <option value="y">Y · forward / back</option>
-                                <option value="z">Z · focus</option>
-                            </select>
-                        </div>
-                        <label v-if="f_s_axis_motor(n_idx) !== 'none'" class="hardware-direction">
-                            <input type="checkbox" :checked="f_b_direction_reversed(n_idx)" :disabled="b_hardware_busy"
-                                @change="f_reverse_direction(n_idx, $event.target.checked)" />
-                            Reverse {{ f_s_axis_motor(n_idx).toUpperCase() }} manual direction
+                <fieldset class="micro-wiring" :disabled="b_hardware_busy" aria-label="Motor wiring">
+                    <div class="micro-pin-headings" aria-hidden="true"><span></span><span v-for="pin in [1, 2, 3, 4]">Pin {{ pin }}</span></div>
+                    <div class="micro-pin-row" v-for="(motor, index) in o_state.a_o_pin_config" :key="index">
+                        <span class="micro-row-label" :data-tooltip="'Motor ' + (index + 1)">M{{ index + 1 }}</span>
+                        <label class="micro-pin" v-for="pin in [1, 2, 3, 4]" :key="pin" :data-tooltip="'Motor ' + (index + 1) + ' · Pin ' + pin + ' · ESP32 GPIO'">
+                            <ui_icon s_name="gpio" />
+                            <input type="number" min="0" max="48" step="1" :aria-label="'Motor ' + (index + 1) + ' pin ' + pin"
+                                v-model.number="motor['n_pin' + pin]" @change="f_save_pin_config" />
                         </label>
-                        <p v-if="f_s_axis_motor(n_idx) !== 'none'" class="setup-hint">Applies to keyboard, mouse and gamepad. Saved automatically. The CW/CCW test buttons below use physical motor direction.</p>
-                        <div class="hardware-motor-readout">
-                            <span>Position <strong>{{ o_state.a_o_motor[n_idx].n_position }}</strong> steps</span>
-                            <span v-if="o_state.b_connected__esp && o_state.a_o_motor[n_idx].b_running">{{ o_state.a_o_motor[n_idx].n_rpm.toFixed(2) }} RPM</span>
-                            <span v-if="o_state.b_connected__esp && o_state.a_o_motor[n_idx].b_running && o_state.a_o_motor[n_idx].s_mode === 'steps'">{{ o_state.a_o_motor[n_idx].n_step__remaining }} steps remaining</span>
-                        </div>
-                        <div class="hardware-motor-actions">
-                            <button class="btn-small" @click="f_move_motor(n_idx, -1)" :disabled="!b_can_move" :aria-label="'Move motor ' + (n_idx + 1) + ' counterclockwise'">↶ Move</button>
-                            <button class="btn-small" @click="f_move_motor(n_idx, 1)" :disabled="!b_can_move" :aria-label="'Move motor ' + (n_idx + 1) + ' clockwise'">↷ Move</button>
-                            <button class="btn-small" @click="f_stop_motor(n_idx)" :disabled="!o_state.b_connected__esp" :aria-label="'Stop motor ' + (n_idx + 1)">■ Stop</button>
-                        </div>
-                        <o_component__backlash ref="a_calibration" :n_motor="n_idx" :b_busy="b_move_pending" />
-                        <details class="hardware-wiring">
-                            <summary>Wiring &amp; backlash</summary>
-                            <div class="hardware-pin-grid">
-                                <label v-for="n_pin in [1, 2, 3, 4]" :key="n_pin">Pin {{ n_pin }}
-                                    <input type="number" min="0" max="48" v-model.number="o_pin['n_pin' + n_pin]" @change="f_save_pin_config" :disabled="b_hardware_busy" />
-                                </label>
-                            </div>
-                            <label class="hardware-backlash">Backlash (steps)
-                                <input type="number" min="0" v-model.number="o_state.a_n_step__backlash[n_idx]" @change="f_save_backlash" :disabled="b_hardware_busy" />
-                            </label>
-                            <p class="setup-hint">Pin changes require flashing below. Backlash compensation applies immediately.</p>
-                        </details>
-                    </article>
-                    <div class="hardware-motor-actions">
-                        <label>Steps per click <input class="hardware-step-count" type="number" min="1" max="10000" v-model.number="n_step__manual" /></label>
-                        <button class="btn-small" @click="f_stop_all" :disabled="!o_state.b_connected__esp">■ Stop all</button>
-                        <button class="btn-small" @click="f_refresh_motors" :disabled="!o_state.b_connected__esp">Refresh</button>
                     </div>
-
-                    <p v-if="s_error__motor" class="focusstack-error">{{ s_error__motor }}</p>
+                </fieldset>
+                <section class="micro-axes" aria-label="Axis assignments and backlash">
+                    <div class="micro-axis-row" v-for="axis in ['x', 'y', 'z']" :key="axis" :data-axis="axis">
+                        <label class="micro-row-label" :for="'axis-motor-' + axis">{{ axis.toUpperCase() }}</label>
+                        <select :id="'axis-motor-' + axis" :aria-label="axis.toUpperCase() + ' motor'" :disabled="b_hardware_busy"
+                            :value="o_state.o_motor__axis[axis] === null ? 'none' : o_state.o_motor__axis[axis]"
+                            :data-tooltip="axis.toUpperCase() + ' motor · choosing an assigned motor swaps the axes'"
+                            @change="f_assign_axis(axis, $event.target.value === 'none' ? null : Number($event.target.value))">
+                            <option v-for="(motor, index) in o_state.a_o_pin_config" :key="index" :value="index">M{{ index + 1 }}</option>
+                            <option v-if="axis === 'z'" value="none">Manual</option>
+                        </select>
+                        <button class="micro-reverse" :class="{ active: f_b_direction_reversed(o_state.o_motor__axis[axis]) }"
+                            data-control-model="f_b_direction_reversed(o_state.o_motor__axis[axis])" data-control-reset="f_reverse_direction(o_state.o_motor__axis[axis], value)"
+                            :data-control-scope="o_state.o_motor__axis[axis]"
+                            :aria-pressed="f_b_direction_reversed(o_state.o_motor__axis[axis])" :aria-label="'Reverse ' + axis.toUpperCase() + ' direction'"
+                            :disabled="b_hardware_busy || o_state.o_motor__axis[axis] === null"
+                            :data-tooltip="'Reverse ' + axis.toUpperCase() + ' · keyboard, mouse and gamepad'"
+                            @click="f_reverse_direction(o_state.o_motor__axis[axis], !f_b_direction_reversed(o_state.o_motor__axis[axis]))">
+                            <ui_icon :s_name="f_b_direction_reversed(o_state.o_motor__axis[axis]) ? 'checked' : 'unchecked'" /><span>Reverse</span>
+                        </button>
+                        <label class="micro-backlash" :data-tooltip="axis.toUpperCase() + ' backlash compensation · motor steps'">
+                            <input type="number" min="0" step="1" :aria-label="axis.toUpperCase() + ' backlash steps'"
+                                :value="o_state.o_motor__axis[axis] === null ? '' : o_state.a_n_step__backlash[o_state.o_motor__axis[axis]]"
+                                :disabled="b_hardware_busy || o_state.o_motor__axis[axis] === null"
+                                @change="f_set_axis_backlash(axis, $event)" />
+                            <ui_icon s_name="backlash" />
+                        </label>
+                        <button class="micro-icon-button" :class="{ active: s_axis__calibrating === axis }"
+                            :aria-label="(s_axis__calibrating === axis ? 'Stop calibrating ' : 'Calibrate ') + axis.toUpperCase()"
+                            :data-tooltip="s_axis__calibrating === axis ? 'Stop calibration' : 'Auto-calibrate ' + axis.toUpperCase() + ' · use a textured sample' + (axis === 'z' ? ', start slightly out of focus' : ' and manual exposure')"
+                            :disabled="s_axis__calibrating !== axis && (!b_can_move || !o_state.b_streaming__webcam || o_state.o_motor__axis[axis] === null)"
+                            @click="f_calibrate_axis(axis)"><ui_icon :s_name="s_axis__calibrating === axis ? 'stop' : 'settings'" /></button>
+                    </div>
+                    <p v-if="s_status__axis" class="micro-status" role="status">{{ s_status__axis }}</p>
+                    <p v-if="s_error__motor" class="micro-error" role="alert">{{ s_error__motor }}</p>
                 </section>
-                <details class="hardware-calibration-checklist"><summary>Calibration checklist &amp; optical settings</summary><o_component__calibration /></details>
                 <o_component__hardware_led :b_busy="b_hardware_busy" />
-                <o_component__jog />
-                <details class="hardware-controller">
-                    <summary>Controller connection &amp; firmware</summary>
-                <!-- Connections -->
-                <section class="setup-section">
-                    <h2 class="setup-section-title">Controller connection</h2>
-                    <div class="setup-input-row inline">
-                        <button
-                            v-if="o_state.b_connected__esp || b_disconnecting__usb"
-                            class="btn-connect"
-                            @click="f_disconnect_usb"
-                            :disabled="b_hardware_busy || b_disconnecting__usb"
-                        >
-                            {{ b_disconnecting__usb ? 'Disconnecting...' : b_connected__serial ? 'Disconnect USB' : 'Disconnect WiFi' }}
-                        </button>
-                        <button
-                            v-else-if="o_state.b_available__serial"
-                            class="btn-connect"
-                            @click="f_connect_usb"
-                            :disabled="b_hardware_busy || o_state.b_connecting__esp_serial"
-                        >
-                            {{ o_state.b_connecting__esp_serial ? 'Waiting for firmware...' : 'Connect via USB (Web Serial)' }}
-                        </button>
-                    </div>
-                    <p v-if="o_state.s_error__esp_serial" class="setup-hint setup-hint--blocked">{{ o_state.s_error__esp_serial }}</p>
-                    <p v-if="o_state.b_available__serial" class="setup-hint">
-                        USB Serial is the default. Enter an ESP32 IP below only if you want to use the WebSocket fallback instead.
-                    </p>
-                    <p v-if="!o_state.b_available__serial" class="setup-hint">
-                        Web Serial is not available in this browser/context. Use the ESP32 IP below (WebSocket fallback).
-                    </p>
-                    <div class="setup-input-row inline">
-                        <input
-                            type="text"
-                            v-model="o_state.s_ip__esp"
-                            placeholder="ESP32 IP address (e.g. 192.168.1.100)"
-                        />
-                        <button class="btn-connect" @click="f_connect_wifi" :disabled="b_hardware_busy || !o_state.s_ip__esp">
-                            Connect via WiFi
-                        </button>
-                    </div>
-                </section>
-                <!-- WiFi -->
-                <section class="setup-section">
-                    <h2 class="setup-section-title">WiFi Credentials</h2>
-                    <div class="setup-input-row">
-                        <label>SSID</label>
-                        <input
-                            type="text"
-                            v-model="o_state.s_wifi_ssid"
-                            placeholder="Your WiFi network name"
-                            @change="f_save_wifi"
-                            :disabled="o_state.b_flashing"
-                        />
-                    </div>
-                    <div class="setup-input-row">
-                        <label>Password</label>
-                        <input
-                            type="password"
-                            v-model="o_state.s_wifi_password"
-                            placeholder="WiFi password"
-                            @change="f_save_wifi"
-                            :disabled="o_state.b_flashing"
-                        />
-                    </div>
-                </section>
 
-                <section class="setup-section">
-                    <h2 class="setup-section-title">Firmware</h2>
-                    <p class="setup-hint">Plug the ESP32-S3 into this computer. Select its USB port when you click Flash. The current USB control connection will pause automatically.</p>
-                    <p v-if="b_connected__serial" class="setup-hint">USB control is connected.</p>
-                </section>
-
-                <!-- Arduino CLI status -->
-                <section class="setup-section">
-                    <h2 class="setup-section-title">Prerequisites</h2>
-                    <div class="setup-status-row">
-                        <span class="dot" :class="{ connected: b_arduino_cli_installed }"></span>
-                        <span v-if="b_arduino_cli_installed">arduino-cli: {{ s_arduino_cli_version }}</span>
-                        <span v-else>arduino-cli not found (will be installed during flash)</span>
-                    </div>
-                </section>
-
-                <!-- Flash -->
-                <section class="setup-section">
-                    <button
-                        class="btn-flash"
-                        :disabled="!b_enabled__flash"
-                        @click="f_start_flash"
-                    >
-                        {{ o_state.b_flashing ? 'Flashing...' : 'Generate Firmware & Flash ESP32' }}
+                <div class="micro-connection" role="status"><span class="dot" :class="{ connected: o_state.b_connected__esp }"></span>{{ s_connection_status }}</div>
+                <div class="micro-actions">
+                    <button v-if="o_state.b_connected__esp || b_disconnecting__usb" class="micro-action"
+                        @click="f_disconnect_usb" :disabled="b_hardware_busy || b_disconnecting__usb" aria-label="Disconnect controller">
+                        <ui_icon s_name="usb" />{{ b_disconnecting__usb ? 'Disconnecting…' : 'Disconnect' }}
                     </button>
-                    <div v-if="s_hint__flash" class="setup-flash-blocker">
-                        <p class="setup-hint" :class="{ 'setup-hint--blocked': b_locked__serial }">{{ s_hint__flash }}</p>
-                    </div>
-                </section>
-
-                <!-- Flash Console -->
-                <section v-if="o_state.b_flashing || o_state.s_flash_output" class="setup-section">
-                    <h2 class="setup-section-title">Flash Progress</h2>
-                    <div class="flash-status-badge" :class="o_state.s_flash_status">
-                        {{ s_flash_status_label }}
-                    </div>
+                    <button v-else class="micro-action" @click="f_connect_usb" aria-label="Connect via USB"
+                        :disabled="b_hardware_busy || !o_state.b_available__serial || o_state.b_connecting__esp_serial" data-tooltip="Connect to ESP32 via USB · Web Serial">
+                        <ui_icon s_name="usb" />{{ o_state.b_connecting__esp_serial ? 'Connecting…' : 'Connect' }}
+                    </button>
+                    <button class="micro-action micro-action--flash" :disabled="!b_enabled__flash" @click="f_start_flash" aria-label="Flash ESP32" :data-tooltip="s_hint__flash">
+                        <ui_icon s_name="flash" />{{ o_state.b_flashing ? 'Flashing…' : 'Flash' }}
+                    </button>
+                </div>
+                <p class="micro-hint">Pin and startup changes apply after Flash.</p>
+                <p v-if="s_pin_error" class="micro-error" role="alert">{{ s_pin_error }}</p>
+                <p v-if="o_state.s_error__esp_serial" class="micro-error" role="alert">{{ o_state.s_error__esp_serial }}</p>
+                <p v-if="!o_state.b_available__serial" class="micro-hint">USB requires Chrome or Edge on HTTPS or localhost. Wi-Fi is available below.</p>
+                <section v-if="o_state.b_flashing || o_state.s_flash_output" class="micro-flash-progress" aria-label="Flash progress">
+                    <span class="flash-status-badge" :class="o_state.s_flash_status" role="status">{{ s_flash_status_label }}</span>
                     <pre class="flash-console" ref="el_pre__flash">{{ o_state.s_flash_output }}</pre>
                 </section>
 
+                <details class="micro-details hardware-controller">
+                    <summary><ui_icon s_name="wifi" /> Wi-Fi</summary>
+                    <div class="micro-wifi-row"><input type="text" v-model="o_state.s_ip__esp" aria-label="ESP32 IP address" placeholder="ESP32 IP address" :disabled="b_hardware_busy" />
+                        <button @click="f_connect_wifi" :disabled="b_hardware_busy || !o_state.s_ip__esp">Connect</button></div>
+                    <label class="micro-field">SSID<input type="text" v-model="o_state.s_wifi_ssid" @change="f_save_wifi" :disabled="b_hardware_busy" /></label>
+                    <label class="micro-field">Password<input type="password" v-model="o_state.s_wifi_password" @change="f_save_wifi" :disabled="b_hardware_busy" /></label>
+                    <p class="micro-hint">Wi-Fi credentials apply after Flash.</p>
                 </details>
-
+                <details class="micro-details micro-diagnostics">
+                    <summary><ui_icon s_name="settings" /> Motor tests &amp; calibration</summary>
+                    <div class="hardware-calibration-controls">
+                        <button v-if="!b_calibrating_all" @click="f_calibrate_all" :disabled="!b_can_move || !o_state.b_streaming__webcam">Calibrate all</button>
+                        <button v-else @click="f_stop_calibrating_all">Stop calibration</button>
+                        <span class="hardware-calibration-status" role="status">{{ s_status__calibrate_all }}</span>
+                    </div>
+                    <article class="hardware-motor" v-for="(motor, index) in o_state.a_o_pin_config" :key="index">
+                        <h3>M{{ index + 1 }} <span class="micro-hint">{{ f_s_axis_motor(index).toUpperCase() }}</span></h3>
+                        <div class="hardware-motor-readout"><span>{{ o_state.a_o_motor[index].n_position }} steps</span>
+                            <span>{{ o_state.b_connected__esp ? o_state.a_o_motor[index].b_running ? 'Moving' : 'Stopped' : 'Disconnected' }}</span></div>
+                        <div class="hardware-motor-actions">
+                            <button @click="f_move_motor(index, -1)" :disabled="!b_can_move" :aria-label="'Move motor ' + (index + 1) + ' counterclockwise'">↶</button>
+                            <button @click="f_move_motor(index, 1)" :disabled="!b_can_move" :aria-label="'Move motor ' + (index + 1) + ' clockwise'">↷</button>
+                            <button @click="f_stop_motor(index)" :disabled="!o_state.b_connected__esp" :aria-label="'Stop motor ' + (index + 1)"><ui_icon s_name="stop" /></button>
+                        </div>
+                        <o_component__backlash ref="a_calibration" :n_motor="index" :b_busy="b_move_pending" />
+                    </article>
+                    <div class="hardware-motor-actions">
+                        <label>Steps <input class="hardware-step-count" type="number" min="1" max="10000" v-model.number="n_step__manual" /></label>
+                        <button @click="f_stop_all" :disabled="!o_state.b_connected__esp">Stop all</button>
+                        <button @click="f_refresh_motors" :disabled="!o_state.b_connected__esp" aria-label="Refresh motor status"><ui_icon s_name="refresh" /></button>
+                    </div>
+                    <details class="hardware-calibration-checklist"><summary>Calibration checklist &amp; optical settings</summary><o_component__calibration /></details>
+                    <o_component__jog />
+                    <p class="micro-hint">{{ b_arduino_cli_installed ? 'Compiler ' + s_arduino_cli_version : 'Compiler will be installed during Flash.' }}</p>
+                </details>
             </div>
-        </div>
+        </section>
     `,
     data: function() {
         return {
@@ -203,17 +135,30 @@ let o_component__setup = {
             n_step__manual: 100,
             b_move_pending: false,
             s_error__motor: '',
+            s_axis__calibrating: '',
+            s_status__axis: '',
             b_calibrating_all: false,
             b_stop__calibrate_all: false,
             s_status__calibrate_all: '',
         };
     },
     computed: {
+        s_pin_error() {
+            const pins = o_state.a_o_pin_config.flatMap(motor => [1, 2, 3, 4].map(pin => motor['n_pin' + pin]));
+            if (pins.some(pin => !Number.isInteger(pin) || pin < 0 || pin > 48)) return 'Motor GPIOs must be whole numbers from 0 to 48.';
+            if (new Set(pins).size !== pins.length) return 'Each motor pin needs a different GPIO.';
+            return '';
+        },
+        s_connection_status() {
+            if (o_state.b_connecting__esp_serial) return 'Connecting…';
+            if (!o_state.b_connected__esp) return 'Disconnected';
+            return o_state.s_transport__esp === 'serial' ? 'USB connected' : 'Wi-Fi connected';
+        },
         b_can_move: function() {
             return o_state.b_connected__esp && !this.b_hardware_busy && !this.b_move_pending;
         },
         b_hardware_busy: function() {
-            return this.b_calibrating_all || this.b_move_pending || o_state.b_flashing || o_state.b_scanning || o_state.a_o_motor.some(o_motor => o_motor.b_running);
+            return !!this.s_axis__calibrating || this.b_calibrating_all || this.b_move_pending || o_state.b_flashing || o_state.b_scanning || o_state.a_o_motor.some(o_motor => o_motor.b_running);
         },
         s_flash_status_label: function() {
             let o_map = {
@@ -232,10 +177,12 @@ let o_component__setup = {
             return this.b_connected__serial || this.b_disconnecting__usb;
         },
         b_enabled__flash: function() {
+            if (this.s_pin_error) return false;
             if (f_s_hardware_led_config_error(o_state.o_config__hardware_led, o_state.a_o_pin_config)) return false;
             return !this.b_hardware_busy && !this.b_disconnecting__usb && !o_state.b_connecting__esp_serial && o_state.b_available__serial;
         },
         s_hint__flash: function() {
+            if (this.s_pin_error) return this.s_pin_error;
             let s_error = f_s_hardware_led_config_error(o_state.o_config__hardware_led, o_state.a_o_pin_config);
             if (s_error) return s_error;
             if (!o_state.b_available__serial) return 'USB flashing requires Chrome or Edge over HTTPS or localhost.';
@@ -243,6 +190,32 @@ let o_component__setup = {
         },
     },
     methods: {
+        async f_calibrate_axis(axis) {
+            const motor = o_state.o_motor__axis[axis];
+            const calibration = this.$refs.a_calibration?.find(item => item.n_motor === motor);
+            if (this.s_axis__calibrating === axis) { calibration?.f_stop(); return; }
+            if (!this.b_can_move || !o_state.b_streaming__webcam || motor === null || !calibration) return;
+            this.s_axis__calibrating = axis;
+            this.s_status__axis = 'Calibrating ' + axis.toUpperCase() + ' · M' + (motor + 1) + '…';
+            try {
+                await calibration.f_run({ b_quick: true });
+                this.s_status__axis = axis.toUpperCase() + ' · ' + calibration.s_status;
+            } catch (error) { this.s_status__axis = 'Calibration failed: ' + error.message; }
+            finally { this.s_axis__calibrating = ''; }
+        },
+        f_set_axis_backlash(axis, event) {
+            const motor = o_state.o_motor__axis[axis];
+            const steps = Number(event.target.value);
+            if (this.b_hardware_busy || motor === null) return;
+            if (event.target.value === '' || !Number.isSafeInteger(steps) || steps < 0) {
+                this.s_error__motor = 'Backlash must be a whole number of steps, zero or greater.';
+                event.target.value = o_state.a_n_step__backlash[motor];
+                return;
+            }
+            this.s_error__motor = '';
+            o_state.a_n_step__backlash[motor] = steps;
+            this.f_save_backlash();
+        },
         f_calibrate_all: async function() {
             if(!this.b_can_move || !o_state.b_streaming__webcam) return;
             this.b_calibrating_all = true;
@@ -280,6 +253,7 @@ let o_component__setup = {
             return Object.keys(o_state.o_motor__axis).find(s_axis => o_state.o_motor__axis[s_axis] === n_motor) || 'none';
         },
         f_b_direction_reversed: function(n_motor) {
+            if (!Number.isInteger(n_motor)) return false;
             let s_key = { x: 'd', y: 'w', z: 'e' }[this.f_s_axis_motor(n_motor)];
             return s_key ? o_state['o_mapping__' + s_key]?.s_dir === 'ccw' : false;
         },
@@ -446,6 +420,7 @@ let o_component__setup = {
             f_save_setting('s_wifi_password', o_state.s_wifi_password);
         },
         f_save_pin_config: function() {
+            if (this.b_hardware_busy || this.s_pin_error) return;
             f_save_setting('a_o_pin_config', o_state.a_o_pin_config);
         },
     },

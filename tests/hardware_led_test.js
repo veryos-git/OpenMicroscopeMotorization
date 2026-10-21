@@ -1,3 +1,4 @@
+import { o_component__icon } from '../webserved_dir/o_component__icon.js';
 import assert from 'node:assert/strict';
 import { f_o_hardware_led_config, f_s_hardware_led_config_error, f_s_hardware_led_output_error } from '../webserved_dir/hardware_led.module.js';
 import { f_generate_ino, f_compile_esp } from '../flash_functions.module.js';
@@ -79,7 +80,7 @@ Deno.test('browser flash submits saved LED config and reconnects to new firmware
     const state = { o_config__hardware_led: f_o_hardware_led_config({ b_enabled: true }), a_o_pin_config: pins };
     const calls = [];
     const port = {};
-    const bindings = {
+    const bindings = { o_component__icon,
         o_state: state, f_s_hardware_led_config_error,
         navigator: { serial: { requestPort: async () => port } },
         f_disconnect_esp: async () => calls.push('disconnect'),

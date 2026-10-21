@@ -38,25 +38,26 @@ Deno.test('LED UI saves hardware settings, mixes RGB/white, applies brightness a
             app.config.errorHandler = error => errors.push(error.message);
             const vm = app.mount('#app').$refs.led;
             const check = (ok, message) => { if (!ok) throw new Error(message); };
-            const field = label => [...document.querySelectorAll('label')].find(el => el.textContent.trim().startsWith(label))?.querySelector('input,select');
+            const field = label => document.querySelector('input[aria-label="' + label + '"],select[aria-label="' + label + '"]') || [...document.querySelectorAll('label')].find(el => el.textContent.trim().startsWith(label))?.querySelector('input,select');
             const edit = async (label, value) => {
                 const input = field(label); check(input, 'Missing ' + label);
                 if (input.type === 'checkbox') input.checked = value; else input.value = value;
                 input.dispatchEvent(new Event('input', { bubbles: true }));
                 input.dispatchEvent(new Event('change', { bubbles: true })); await nextTick();
             };
-            const click = async text => { const button = [...document.querySelectorAll('button')].find(el => el.textContent === text); check(button && !button.disabled, text + ' unavailable'); button.click(); await nextTick(); };
+            const click = async text => { const button = [...document.querySelectorAll('button')].find(el => (el.getAttribute('aria-label') || el.textContent.trim()) === text); check(button && !button.disabled, text + ' unavailable'); button.click(); await nextTick(); };
             try {
-                check(!field('Enable addressable LED').checked, 'Disabled by default');
-                check(!document.querySelector('input[type=color]'), 'No live controls before connection');
-                await edit('Enable addressable LED', true);
+                check(document.querySelector('[aria-label="Enable addressable LED"]').getAttribute('aria-pressed') === 'false', 'Disabled by default');
+                check(!field('RGB colour'), 'No live controls before connection');
+                await click('Enable addressable LED');
+                document.querySelector('.micro-led-details summary').click();
                 check(saved.o_config__hardware_led.b_enabled && saved.o_config__hardware_led.n_count === 1, 'Saved enabled single LED');
                 await edit('LED data GPIO', 18);
                 check(document.body.textContent.includes('assigned to a motor'), 'Conflict explained');
                 check(saved.o_config__hardware_led.n_pin === 21, 'Invalid setting not persisted');
                 await edit('LED data GPIO', 21);
                 await edit('LED count', 3);
-                await edit('Startup Brightness', 12);
+                await edit('Startup brightness', 12);
                 check(saved.o_config__hardware_led.o_startup.n_brightness === 12, 'Startup persisted');
                 check(sent.length === 0, 'Configuration changes do not send live output');
                 await click('Open LED settings');
@@ -95,11 +96,11 @@ Deno.test('LED UI saves hardware settings, mixes RGB/white, applies brightness a
                 check(!field('White channel'), 'RGB-only hides separate white');
                 await click('Apply light'); check(sent.at(-1).n_white === 0, 'RGB sends zero white');
                 o_state.b_flashing = true; await nextTick();
-                check(document.querySelector('input[type=color]').disabled || document.querySelector('input[type=color]').closest('fieldset').disabled, 'Live output blocked during flash');
+                check(field('RGB colour').disabled || field('RGB colour').closest('fieldset').disabled, 'Live output blocked during flash');
                 o_state.b_flashing = false; o_state.o_hardware_led.s_error = 'LED RMT transmission failed'; o_state.o_hardware_led.b_ready = false; await nextTick();
                 check(document.body.textContent.includes('LED RMT transmission failed'), 'Hardware failure shown');
                 o_state.b_connected__esp = false; o_state.o_hardware_led = null; await nextTick();
-                check(!document.querySelector('input[type=color]'), 'No stale controls on disconnect');
+                check(!field('RGB colour'), 'No stale controls on disconnect');
                 check(errors.length === 0, errors.join('; '));
                 document.body.dataset.result = 'PASS';
             } catch (error) { document.body.dataset.result = 'FAIL'; document.body.textContent = error.stack + '\\n' + errors.join('; '); }

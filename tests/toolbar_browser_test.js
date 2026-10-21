@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 const panels = ['motion_detection', 'setup', 'map', 'motion', 'gamepad', 'optics', 'slide_library', 'scan', 'camera_setting', 'led_setting', 'manual_stitch', 'macro', 'auto_move', 'autostitch', 'filter', 'flat', 'focus', 'focus_step', 'focus_stack', 'scale', 'stats', 'cellpose', 'zoom', 'record', 'recording_library', 'video', 'training'];
 const javascript = text => new Response(text, { headers: { 'content-type': 'text/javascript' } });
 
-for (const width of [1440, 800, 360]) Deno.test(`compact toolbar actions and layout at ${width}px`, async () => {
+for (const width of [1440, 800, 360, 320]) Deno.test(`compact toolbar actions and layout at ${width}px`, async () => {
     const dir = await Deno.makeTempDir();
     const server = Deno.serve({ hostname: '127.0.0.1', port: 0, onListen() {} }, async request => {
         const path = new URL(request.url).pathname;
@@ -51,7 +51,7 @@ for (const width of [1440, 800, 360]) Deno.test(`compact toolbar actions and lay
             import {f_install_overlay_windows} from './overlay_windows.module.js';
             import {o_state, calls} from './index.js';
             import {o_action_ui} from './o_actions.js';
-            import {f_install_control_catalog} from './control_catalog.module.js';
+            import {f_install_control_catalog, f_a_control_results, f_reveal_control} from './control_catalog.module.js';
             import {f_a_control_effects} from './control_effects.module.js';
             import {f_save_setting__debounced} from './index.js';
             const check = (ok, message) => { if (!ok) throw Error(message); };
@@ -76,88 +76,135 @@ for (const width of [1440, 800, 360]) Deno.test(`compact toolbar actions and lay
                 HTMLAnchorElement.prototype.click = function() { window.downloadName = this.download; };
                 let mounted = makeApp(); app = mounted.app;
                 await tick();
-                const panel = document.createElement('div');
-                panel.className = 'overlay-panel visible'; panel.dataset.panelMoved = '';
-                panel.style.cssText = 'width:240px;height:140px;--panel-x:10px;--panel-y:' + document.querySelector('.toolbar').offsetHeight + 'px';
-                panel.innerHTML = '<div class="panel-header">Moved window</div>';
-                document.body.append(panel);
                 const cleanupWindows = f_install_overlay_windows();
-                check(!visible(document.querySelector('#toolbar-details')), 'Details should start collapsed');
-                check(!document.querySelector('#toolbar-tools'), 'Tools should start collapsed');
-                const initialHeight = document.querySelector('.toolbar').offsetHeight;
-                check(innerWidth < 1100 || initialHeight <= 60, 'Desktop toolbar should fit one row: ' + initialHeight);
+                const context = async el => { el.dispatchEvent(new MouseEvent('contextmenu', {bubbles:true, cancelable:true})); await tick(); };
+                const tool = id => document.querySelector('#toolbar-tools .toolbar-tool[data-tool="' + id + '"]');
+                const shortcut = id => document.querySelector('.toolbar-shortcut[data-tool="' + id + '"]');
+                const openTools = async () => { if (!visible(document.querySelector('#toolbar-tools'))) await click('All tools'); };
+                const choose = async id => { await openTools(); tool(id).click(); await tick(); };
+                const bar = document.querySelector('.toolbar');
+                const initialHeight = bar.offsetHeight;
+                check(initialHeight <= 56, 'One row at every width: ' + initialHeight);
+                check(!visible(document.querySelector('#toolbar-details')), 'Quick settings start closed');
+                check(!visible(document.querySelector('#toolbar-tools')), 'Tools start closed');
                 for (const el of document.querySelectorAll('.toolbar-row--primary button')) {
                     check(el.title && el.getAttribute('aria-label'), 'Missing accessible name or tooltip');
-                    const rect = el.getBoundingClientRect();
-                    check(rect.x >= 0 && rect.right <= innerWidth && rect.bottom < innerHeight, 'Primary button outside viewport');
                 }
+<<<<<<< HEAD
                 check(document.querySelector('.toolbar').scrollWidth <= innerWidth, 'Toolbar overflow');
                 await click('LED settings');
                 check(o_state.o_panel_visibility.led_setting && !o_state.o_panel_visibility.setup && calls.settings.o_panel_visibility.led_setting, 'LED settings open directly and persist without Setup');
                 check(button('LED settings').getAttribute('aria-pressed') === 'true', 'LED toolbar button reflects panel visibility');
                 await click('LED settings');
                 check(!o_state.o_panel_visibility.led_setting, 'LED toolbar button closes panel');
+=======
+                for (const el of document.querySelectorAll('.toolbar-group--utilities button, .toolbar-select')) {
+                    const rect = el.getBoundingClientRect();
+                    check(rect.x >= 0 && rect.right <= innerWidth && rect.bottom <= initialHeight, 'Fixed control outside bar');
+                }
+                check(bar.scrollWidth <= innerWidth, 'Toolbar overflow');
+>>>>>>> 942bcdc04095cbb45a8e0cb9e7aff9776be3b37b
                 await click('Capture Image'); check(calls.capture === 1 && window.downloadName.startsWith('capture-'), 'Capture dispatch');
                 await click('Mouse movement'); check(o_state.b_enabled__mouse_jog && button('Mouse movement').getAttribute('aria-pressed') === 'true', 'Mouse movement dispatch');
+                await click('Reset Mouse movement'); check(!o_state.b_enabled__mouse_jog, 'Mouse movement can be reset directly');
                 for (const name of ['Scan', 'Focus', 'Zoom']) { await click(name); check(o_state.o_panel_visibility[name.toLowerCase()], 'Quick panel: ' + name); }
                 await click('Stop all motors'); check(calls.stop === 1, 'Stop dispatch');
                 await change('[aria-label="Movement speed preset"]', 'Fast');
-                check(o_state.n_rpm__jog === 10 && o_state.n_rpm__focus_jog === 1.5 && calls.settings.o_rpm__manual.z === 1.5, 'Compact speed preset');
-                await change('#quick-speed-z', '0.25'); check(o_state.n_rpm__jog === 10 && o_state.n_rpm__focus_jog === 0.25, 'Independent focus speed');
+                check(o_state.n_rpm__jog === 10 && o_state.n_rpm__focus_jog === 1.5 && calls.settings.o_rpm__manual.z === 1.5, 'Speed preset updates both axes');
+                check(!document.querySelector('#quick-speed-z'), 'No numeric speeds in the main bar');
+                await choose('quick_settings');
+                check(visible(document.querySelector('#toolbar-details')), 'Quick settings open as an overlay');
+                const detailsBody = document.querySelector('#toolbar-details .panel-body');
+                check(detailsBody.scrollWidth <= detailsBody.clientWidth, 'Quick settings fit without horizontal scrolling');
+                check(bar.offsetHeight === initialHeight, 'Opening settings does not grow the bar');
+                await change('#toolbar-speed-z', '0.25'); check(o_state.n_rpm__jog === 10 && o_state.n_rpm__focus_jog === 0.25, 'Independent focus speed');
                 check(document.querySelector('[aria-label="Movement speed preset"]').value === '', 'Custom speed label');
-                o_state.o_motor__axis.z = null; await tick(); check(document.querySelector('#quick-speed-z').disabled, 'Unassigned Z lock'); o_state.o_motor__axis.z = 2;
-                await click('Quick settings');
-                check(visible(document.querySelector('#toolbar-details')) && localStorage.getItem('omm.toolbar.details') === 'true', 'Expand and persist settings');
-                check(document.querySelector('#toolbar-speed-z').value === '0.25', 'Shared speed values');
-                check(parseInt(getComputedStyle(document.documentElement).getPropertyValue('--topbar-h')) === document.querySelector('.toolbar').offsetHeight, 'Overlay offset updated');
-                check(panel.getBoundingClientRect().top >= document.querySelector('.toolbar').offsetHeight, 'Moved window remains below expanded settings');
-                panel.remove(); cleanupWindows();
+                o_state.o_motor__axis.z = null; await tick(); check(document.querySelector('#toolbar-speed-z').disabled, 'Unassigned Z lock'); o_state.o_motor__axis.z = 2;
                 await change('#toolbar-project', '1'); await change('#toolbar-slide', '2');
                 check(o_state.n_id__project__current === 1 && o_state.n_id__slide__current === 2, 'Project and slide selection');
                 await change('.toolbar-cam-value', '25'); check(calls.camera[0]?.[1] === 25, 'Camera tuning');
-                await click('Quick settings');
-                for (const name of ['Search actions']) { await click(name); check(o_action_ui.open, 'Action search opens'); await click('Close'); }
-                const expectedPanels = ${JSON.stringify(panels.filter(key => !['scan', 'focus', 'zoom', 'setup'].includes(key)))};
-                await click('All tools');
-                check(visible(document.querySelector('#toolbar-tools')), 'Tools open');
+                await click('Close quick settings');
+                window.dispatchEvent(new Event('control-show-quick-settings')); await tick();
+                check(visible(document.querySelector('#toolbar-details')), 'Search can reveal quick settings');
+                await click('Close quick settings');
+                await click('Search actions'); check(o_action_ui.open, 'Action search opens');
+                check(document.querySelector('.action-dialog .panel-header'), 'Search has a draggable header'); await click('Close');
+                const searchTool = f_a_control_results().find(item => item.name === 'Video' && item.target?.el.closest('#toolbar-tools'));
+                check(searchTool, 'Hidden tool is searchable');
+                await f_reveal_control(searchTool); await tick();
+                check(visible(document.querySelector('#toolbar-tools')), 'Search reveals hidden tool window');
+                await click('Close tools');
+                await openTools();
+                const menu = document.querySelector('#toolbar-tools');
                 check(document.activeElement === button('Close tools'), 'Tools keyboard focus');
-                const menuRect = document.querySelector('#toolbar-tools').getBoundingClientRect();
+                const menuRect = menu.getBoundingClientRect();
                 check(menuRect.left >= 0 && menuRect.right <= innerWidth && menuRect.bottom <= innerHeight, 'Tools fit viewport');
+                check(!bar.contains(menu), 'Tools are outside the toolbar');
                 const tools = mounted.root.$refs.bar.a_o_tool_group.flatMap(group => group.a_o_tool);
-                check(expectedPanels.every(panel => tools.some(tool => tool.s_panel === panel)), 'Every existing panel is reachable');
-                for (const tool of tools) {
-                    if (!document.querySelector('#toolbar-tools')) await click('All tools');
-                    await click(tool.s_label);
-                    check(o_state.o_panel_visibility[tool.s_panel], 'Tool opens: ' + tool.s_panel);
-                    check(!document.querySelector('#toolbar-tools'), 'Tools close after choice');
+                check(${JSON.stringify(panels)}.every(panel => tools.some(tool => tool.s_panel === panel)), 'Every panel is available in Tools');
+                const previousCapture = calls.capture;
+                await context(tool('video'));
+                check(shortcut('video') && !o_state.o_panel_visibility.video && calls.capture === previousCapture, 'Right-click pins without running a tool');
+                check(JSON.parse(localStorage.getItem('omm.toolbar.pins')).includes('video'), 'Pin persisted');
+                await click('Unpin Video'); check(!shortcut('video'), 'Keyboard/touch pin button removes shortcut');
+                await click('Pin Video'); check(shortcut('video'), 'Keyboard/touch pin button adds shortcut');
+                await context(shortcut('video')); check(!shortcut('video'), 'Right-click on bar removes shortcut');
+                await context(tool('video'));
+                // Reopening keeps the same window element and position.
+                menu.style.setProperty('--panel-x', '10px'); menu.style.setProperty('--panel-y', '70px'); menu.dataset.panelMoved = '';
+                await click('Close tools'); await openTools();
+                check(menu === document.querySelector('#toolbar-tools') && menu.getBoundingClientRect().x === 10, 'Tools retain position');
+                document.body.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true})); await tick();
+                check(visible(menu), 'Overlay remains open when interacting with the workspace');
+                for (const item of tools.filter(item => item.s_panel in o_state.o_panel_visibility)) {
+                    o_state.o_panel_visibility[item.s_panel] = false;
+                    await choose(item.s_panel);
+                    check(o_state.o_panel_visibility[item.s_panel], 'Tool opens: ' + item.s_panel);
+                    check(!visible(menu), 'Tools close after choice');
                 }
-                await click('All tools');
+                await openTools();
                 document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape', bubbles:true}));
                 document.dispatchEvent(new KeyboardEvent('keyup', {key:'Escape', bubbles:true})); await tick();
-                check(!document.querySelector('#toolbar-tools') && document.activeElement === button('All tools'), 'Escape closes and restores focus');
+                check(!visible(menu) && document.activeElement === button('All tools'), 'Escape closes and restores focus');
                 check(calls.stop === 2, 'Escape still stops motors');
-                await click('All tools'); document.body.dispatchEvent(new PointerEvent('pointerdown', {bubbles:true})); await tick();
-                check(!document.querySelector('#toolbar-tools'), 'Outside click closes tools');
                 o_state.o_record.b_running = true; o_state.o_video.b_recording = true; o_state.o_motion_detection.b_enabled = true; o_state.o_flat_field.b_active = true; await tick();
-                check(button('Stop time-lapse recording') && button('Video recording') && button('Motion detection on') && button('Flat field on'), 'Active processes remain visible');
+                check(button('Stop time-lapse recording') && button('Video recording') && button('Motion detection on') && button('Flat field on'), 'Active processes remain accessible');
+                check(bar.offsetHeight === initialHeight, 'Activity never adds toolbar rows');
                 await click('Stop time-lapse recording'); check(!o_state.o_record.b_running, 'Recording stop');
                 o_state.o_camera.s_error__setting = 'Camera rejected setting'; await tick();
-                check(visible(document.querySelector('.toolbar-error')), 'Camera errors remain visible when settings hidden');
-                o_state.o_camera.s_error__setting = '';
+                check(visible(document.querySelector('.toolbar-error')), 'Camera errors remain visible in an overlay');
+                check(bar.offsetHeight === initialHeight, 'Errors do not grow the bar');
+                await click('Dismiss notice');
                 o_state.b_flashing = true; o_state.o_panel_visibility.setup = true; await click('Setup');
                 check(o_state.o_panel_visibility.setup, 'Setup stays open during flashing'); o_state.b_flashing = false;
-                await click('Quick settings'); app.unmount();
+                const camera = document.querySelector('.toolbar-camera-select').parentElement;
+                camera.dispatchEvent(new PointerEvent('pointerover', {bubbles:true}));
+                check(!document.querySelector('.ui-tooltip').hidden && document.querySelector('.ui-tooltip').textContent.includes('Microscope camera'), 'Camera tooltip appears immediately with full name');
+                document.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape'}));
+                check(document.querySelector('.ui-tooltip').hidden, 'Escape dismisses tooltip');
+                app.unmount();
+                check(!document.querySelector('.ui-tooltip'), 'Tooltip cleanup');
                 mounted = makeApp(false); app = mounted.app; await tick();
-                check(visible(document.querySelector('#toolbar-details')), 'Expanded preference restored');
-                await click('Quick settings');
+                check(shortcut('video'), 'Saved shortcuts survive remount');
+                check(!visible(document.querySelector('#toolbar-details')), 'Settings start closed on reload');
                 o_state.o_video.b_recording = false; o_state.o_motion_detection.b_enabled = false; o_state.o_flat_field.b_active = false;
                 await tick();
                 check(!o_action_ui.error, 'Action error: ' + o_action_ui.error);
                 Object.assign(o_state.o_filter, {n_brightness:0.2, n_contrast:1.4, n_gamma:1.3, n_saturation:0.6}); await tick();
                 check(document.querySelectorAll('.toolbar-setting-reset').length === 4, 'Changed setting icons visible');
                 check(document.querySelector('.toolbar').scrollWidth <= innerWidth, 'Active icons do not overflow toolbar');
-                check(parseInt(getComputedStyle(document.documentElement).getPropertyValue('--topbar-h')) === document.querySelector('.toolbar').offsetHeight, 'Active settings update panel offset');
+                check(document.querySelector('.toolbar').offsetHeight === initialHeight, 'Changed settings stay on one row');
                 await click('Reset Brightness'); check(o_state.o_filter.n_brightness === 0 && o_state.o_filter.n_contrast === 1.4, 'Toolbar reset is independent');
+                // Persisting an empty bar is intentional; unknown or duplicate IDs are ignored.
+                app.unmount(); localStorage.setItem('omm.toolbar.pins', '[]');
+                mounted = makeApp(false); app = mounted.app; await tick();
+                check(document.querySelectorAll('.toolbar-shortcut').length === 0, 'Empty shortcuts stay empty');
+                app.unmount(); localStorage.setItem('omm.toolbar.pins', '["video","unknown","video"]');
+                mounted = makeApp(false); app = mounted.app; await tick();
+                check(document.querySelectorAll('.toolbar-shortcut').length === 1 && shortcut('video'), 'Saved pins validated');
+                await openTools();
+                window.previewBar = mounted.root.$refs.bar;
+                cleanupWindows();
                 document.body.setAttribute('data-result', 'PASS');
             } catch(error) { document.body.setAttribute('data-result', 'FAIL: ' + error.stack); }
         `);
@@ -209,6 +256,12 @@ for (const width of [1440, 800, 360]) Deno.test(`compact toolbar actions and lay
         }
         const screenshot = await send('Page.captureScreenshot', {format: 'png'});
         await Deno.writeFile('/tmp/omm-toolbar-' + width + '.png', Uint8Array.from(atob(screenshot.data), c => c.charCodeAt(0)));
+        if (result === 'PASS') {
+            await send('Runtime.evaluate', {expression: 'previewBar.b_tools = false; previewBar.b_details = true'});
+            await new Promise(resolve => setTimeout(resolve, 100));
+            const details = await send('Page.captureScreenshot', {format: 'png'});
+            await Deno.writeFile('/tmp/omm-settings-' + width + '.png', Uint8Array.from(atob(details.data), c => c.charCodeAt(0)));
+        }
         await send('Browser.close');
         socket.close(); socket = null;
         await chrome.status; chrome = null;
