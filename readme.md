@@ -8,7 +8,7 @@ sample in **X and Y** and adjust focus along **Z**—all from the same applicati
 
 [Get started →](#installation)
 
-![Open Microscope Motorization showing a live microscope image with X/Y movement and Z focus controls](./cover.png)
+![Open Microscope Motorization showing a live microscope image with X/Y movement and Z focus controls](./docs/assets/cover.png)
 
 # installation 
 
@@ -92,7 +92,7 @@ selector in the main toolbar (also under **Tools → Image → LED**). It has a
 slider and a percent field for red, green, blue and the warm/cold white channel;
 every change is applied to the LED immediately. Live changes last until the controller restarts; hardware
 and startup changes require another flash. Up to 16 chained LEDs can share the
-same output. See the [LED setup and protocol notes](hgc_features/hgc_hardware_led/readme.md)
+same output. See the [LED setup and protocol notes](docs/features/hgc_hardware_led/readme.md)
 for wiring, supported formats and verification.
 
 ## tile scan -> mosaic
