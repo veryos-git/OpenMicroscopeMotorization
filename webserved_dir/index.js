@@ -34,8 +34,8 @@ import { o_component__macro } from './o_component__macro.js';
 import { o_component__auto_move } from './o_component__auto_move.js';
 import { o_component__autostitch } from './o_component__autostitch.js';
 import { o_component__filter, f_o_filter__default } from './o_component__filter.js';
-import { o_component__flat_field } from './o_component__flat_field.js';
 import { o_component__calibration } from './o_component__calibration.js';
+import { o_component__calibration_overlay } from './o_component__calibration_overlay.js';
 import { o_component__scale } from './o_component__scale.js';
 import { o_component__focus_step } from './o_component__focus_step.js';
 import { o_component__focus } from './o_component__focus.js';
@@ -254,7 +254,7 @@ let o_state = reactive({
 
     // UI
     o_motion_detection: f_o_motion_config(),
-    o_panel_visibility: { motion_detection: false, setup: false, map: false, motion: false, gamepad: false, optics: false, slide_library: false, scan: false, camera_setting: false, led_setting: false, manual_stitch: false, macro: false, auto_move: false, autostitch: false, filter: false, flat: false, focus: false, focus_step: false, focus_stack: false, scale: false, stats: false, cellpose: false, zoom: false, record: false, recording_library: false, video: false, training: false },
+    o_panel_visibility: { motion_detection: false, setup: false, map: false, motion: false, gamepad: false, optics: false, slide_library: false, scan: false, camera_setting: false, led_setting: false, manual_stitch: false, macro: false, auto_move: false, autostitch: false, filter: false, calibration: false, focus: false, focus_step: false, focus_stack: false, scale: false, stats: false, cellpose: false, zoom: false, record: false, recording_library: false, video: false, training: false },
     o_key_held: {},
 
     // scan
@@ -275,6 +275,7 @@ let o_state = reactive({
     // o_capability mirrors track.getCapabilities(), the rest mirror track.getSettings().
     o_camera: {
         s_label: '',
+        s_device_id: '',
         n_width: 0,
         n_height: 0,
         n_frame_rate: 0,
@@ -283,24 +284,14 @@ let o_state = reactive({
         s_error__setting: '',
         o_setting: {},
         o_requested: {},
-        o_requested_format: null,
         b_active: false,
-        b_loaded: false,            // saved setting already applied to the current stream
-        n_ts_ms__apply: 0,          // last local apply (pauses the value sync briefly)
+        b_loaded: false,
+        n_ts_ms__apply: 0,
         o_capability: {},
         s_mode__exposure: 'manual',
         s_mode__white_balance: 'continuous',
-        s_mode__focus: 'continuous',
         n_time__exposure: 0,
-        n_iso: 0,
-        n_compensation__exposure: 0,
         n_temperature__color: 4000,
-        n_distance__focus: 0,
-        n_brightness: 128,
-        n_contrast: 128,
-        n_saturation: 128,
-        n_sharpness: 128,
-        n_zoom: 1,
     },
     // capture feedback: bumped each time a frame is grabbed so the live
     // preview can show a short, subtle flash
@@ -483,7 +474,6 @@ let f_apply_setting_from_db = function(){
 
     let o_vis = f_get_json('o_panel_visibility', { map: false, motion: false, gamepad: false, optics: false, scan: false, camera_setting: false, stats: false });
     o_state.o_panel_visibility.setup = o_state.o_panel_visibility.setup || o_vis.setup || false;
-    o_state.o_panel_visibility.flat = o_vis.flat || false;
     o_state.o_panel_visibility.map = o_vis.map || false;
     o_state.o_panel_visibility.motion = o_vis.motion || false;
     o_state.o_panel_visibility.motion_detection = o_vis.motion_detection || false;
@@ -499,10 +489,11 @@ let f_apply_setting_from_db = function(){
     o_state.o_panel_visibility.auto_move = o_vis.auto_move || false;
     o_state.o_panel_visibility.autostitch = o_vis.autostitch || false;
     o_state.o_panel_visibility.filter = o_vis.filter || false;
+    o_state.o_panel_visibility.calibration = o_vis.calibration || false;
     o_state.o_panel_visibility.focus = o_vis.focus || false;
     o_state.o_panel_visibility.focus_step = o_vis.focus_step || false;
     o_state.o_panel_visibility.focus_stack = o_vis.focus_stack || false;
-    if(o_vis.backlash || o_vis.calibration) o_state.o_panel_visibility.setup = true;
+    if(o_vis.backlash) o_state.o_panel_visibility.setup = true;
     o_state.o_panel_visibility.scale = o_vis.scale || false;
     o_state.o_panel_visibility.stats = o_vis.stats || false;
     o_state.o_panel_visibility.cellpose = o_vis.cellpose || false;
@@ -1156,8 +1147,8 @@ o_app.component('o_component__macro', o_component__macro);
 o_app.component('o_component__auto_move', o_component__auto_move);
 o_app.component('o_component__autostitch', o_component__autostitch);
 o_app.component('o_component__filter', o_component__filter);
-o_app.component('o_component__flat_field', o_component__flat_field);
 o_app.component('o_component__calibration', o_component__calibration);
+o_app.component('o_component__calibration_overlay', o_component__calibration_overlay);
 o_app.component('o_component__scale', o_component__scale);
 o_app.component('o_component__focus_step', o_component__focus_step);
 o_app.component('o_component__focus', o_component__focus);

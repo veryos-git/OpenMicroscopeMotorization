@@ -23,10 +23,7 @@ export function f_a_control_effects(state, defaults, save, saveFlat) {
             save('o_filter', state.o_filter);
         },
     }));
-    effects.push({ id: 'flat.enabled', name: 'Flat field correction', icon: 'flat', before: false,
-        read: () => state.o_flat_field.b_active,
-        reset() { state.o_flat_field.b_active = false; saveFlat(); },
-    }, { id: 'motion.enabled', name: 'Motion detection', icon: 'detection', before: false,
+    effects.push({ id: 'motion.enabled', name: 'Motion detection', icon: 'detection', before: false,
         read: () => state.o_motion_detection.b_enabled,
         reset() { state.o_motion_detection.b_enabled = false; save('o_motion_detection', state.o_motion_detection); },
     });

@@ -2,7 +2,7 @@ import { f_install_tooltips } from './tooltips.module.js';
 import { o_component__icon } from './o_component__icon.js';
 import { o_actions } from './o_actions.js';
 import { o_state, f_save_setting__debounced, f_save_library_current, f_refresh_maps } from './index.js';
-import { f_s_key__iso, f_apply_camera_setting, f_set_camera_mode, f_apply_camera__saved } from './o_camera.module.js';
+import { f_apply_camera__saved } from './o_camera.module.js';
 import { f_recording_stop } from './o_recording.module.js';
 import { f_a_changed_controls, f_reset_control, f_reset_title, o_control_ui } from './control_catalog.module.js';
 
@@ -66,56 +66,11 @@ let o_component__toolbar = {
                 <button class="panel-close" @click="b_details = false" aria-label="Close quick settings">×</button></div>
             <div class="panel-body">
                 <div class="toolbar-row toolbar-row--speed"><o_component__manual_speed s_context="toolbar" /></div>
-                <!-- USB camera hardware quick bar (UVC settings, shown while streaming) -->
+                <!-- USB camera quick access (shown while streaming) -->
                 <div class="toolbar-row toolbar-row--camera" v-if="o_state.o_camera.b_active">
                     <button class="toolbar-toggle toolbar-icon" @click="f_toggle_panel('camera_setting')" aria-label="Camera settings"
-                        title="Camera settings — resolution, frame rate and all hardware controls"><ui_icon s_name="camera" /></button>
-                    <template v-for="o_control in a_o_cam_control" :key="o_control.s_kind + ':' + o_control.s_api">
-                        <div class="toolbar-cam-mode" v-if="o_control.s_kind === 'mode'">
-                            <span class="toolbar-cam-label">{{ o_control.s_label }}</span>
-                            <div class="mode-toggle mode-toggle--mini">
-                                <button
-                                    class="mode-btn"
-                                    :class="{ active: o_cam[o_control.s_local] === o_control.s_a_value[0] }"
-                                    data-control-model="o_cam[o_control.s_local]" :data-control-scope="o_state.s_id__webcam_device" data-control-reset="f_cam_mode(o_control.s_api, value)"
-                                    @click="f_cam_mode(o_control.s_api, o_control.s_a_value[0])"
-                                    :disabled="!o_cam.o_capability[o_control.s_api]?.includes(o_control.s_a_value[0])"
-                                    :title="o_control.s_a_title[0]" :aria-label="o_control.s_label + ': ' + o_control.s_a_title[0]" :aria-pressed="o_cam[o_control.s_local] === o_control.s_a_value[0]"
-                                >{{ o_control.s_a_short[0] }}</button>
-                                <button
-                                    class="mode-btn"
-                                    :class="{ active: o_cam[o_control.s_local] === o_control.s_a_value[1] }"
-                                    data-control-model="o_cam[o_control.s_local]" :data-control-scope="o_state.s_id__webcam_device" data-control-reset="f_cam_mode(o_control.s_api, value)"
-                                    @click="f_cam_mode(o_control.s_api, o_control.s_a_value[1])"
-                                    :disabled="!o_cam.o_capability[o_control.s_api]?.includes(o_control.s_a_value[1])"
-                                    :title="o_control.s_a_title[1]" :aria-label="o_control.s_label + ': ' + o_control.s_a_title[1]" :aria-pressed="o_cam[o_control.s_local] === o_control.s_a_value[1]"
-                                >{{ o_control.s_a_short[1] }}</button>
-                            </div>
-                        </div>
-                        <label class="toolbar-cam-item" v-else :title="o_control.s_title">
-                            <span class="toolbar-cam-label">{{ o_control.s_label }}</span>
-                            <input
-                                type="range"
-                                class="toolbar-cam-range" :aria-label="o_control.s_title + ' slider'"
-                                :min="o_control.o_range.min"
-                                :max="o_control.o_range.max"
-                                :step="o_control.o_range.step ?? 'any'"
-                                v-model.number="o_cam[o_control.s_local]" :data-control-scope="o_state.s_id__webcam_device"
-                                @input="f_cam_set(o_control.s_api, o_cam[o_control.s_local])"
-                            >
-                            <input
-                                type="number"
-                                class="toolbar-cam-value" :aria-label="o_control.s_title"
-                                :min="o_control.o_range.min"
-                                :max="o_control.o_range.max"
-                                :step="o_control.o_range.step ?? 'any'"
-                                v-model.number="o_cam[o_control.s_local]" :data-control-scope="o_state.s_id__webcam_device"
-                                @change="f_cam_set(o_control.s_api, o_cam[o_control.s_local])"
-                            >
-                            <span class="toolbar-cam-unit" v-if="o_control.s_unit">{{ o_control.s_unit }}</span>
-                        </label>
-                    </template>
-                    <span class="toolbar-camera-hint" v-if="!a_o_cam_control.length">no controllable settings reported by this camera</span>
+                        title="Camera settings — FPS, resolution, exposure and white balance"><ui_icon s_name="camera" /></button>
+                    <span class="toolbar-camera-hint">{{ o_cam.n_width }}×{{ o_cam.n_height }} · {{ Math.round(o_cam.n_frame_rate) }} fps</span>
                 </div>
 
                 <div class="toolbar-row toolbar-row--context">
@@ -211,7 +166,7 @@ let o_component__toolbar = {
                     { s_panel: 'camera_setting', s_icon: 'camera', s_label: 'Camera', s_title: 'Camera resolution, frame rate, exposure and white balance' },
                     { s_panel: 'led_setting', s_icon: 'led', s_label: 'LED', s_title: 'LED · red, green, blue and warm/cold white' },
                     { s_panel: 'filter', s_icon: 'filter', s_label: 'Filters', s_title: 'Adjust live image processing' },
-                    { s_panel: 'flat', s_icon: 'flat', s_label: 'Flat field', s_title: 'Calibrate and correct uneven illumination' },
+                    { s_panel: 'calibration', s_icon: 'calibration', s_label: 'Calibration', s_title: 'Scale (µm/px) and flat-field correction' },
                     { s_panel: 'scale', s_icon: 'scale', s_label: 'Scale', s_title: 'Show a calibrated scale on the image' },
                     { s_panel: 'optics', s_icon: 'focus', s_label: 'Optics', s_title: 'Open the imaging controls overview' },
                 ] },
@@ -265,7 +220,6 @@ let o_component__toolbar = {
                 { b_active: o_state.o_video.b_recording, s_panel: 'video', s_icon: 'video', s_label: 'Video recording' },
                 { b_active: o_state.o_motion_detection.b_enabled, s_panel: 'motion_detection', s_icon: 'detection', s_label: 'Motion detection on' },
                 { b_active: o_state.b_running__locate, s_panel: 'map', s_icon: 'map', s_label: 'Locating' },
-                { b_active: o_state.o_flat_field.b_active, s_panel: 'flat', s_icon: 'flat', s_label: 'Flat field on' },
             ].filter(item => item.b_active);
         },
         a_o_hardware: function() {
@@ -292,77 +246,6 @@ let o_component__toolbar = {
         },
         o_cam: function() {
             return o_state.o_camera;
-        },
-        s_key__iso: function() {
-            return f_s_key__iso(o_state.o_camera.o_capability);
-        },
-        // flat, ordered list of the camera quick controls: mode toggles and
-        // numeric sliders, filtered by what the camera reports and by the mode
-        // (exposure time only in manual exposure, compensation only in auto...)
-        a_o_cam_control: function() {
-            let o_cam = o_state.o_camera;
-            let o_cap = o_cam.o_capability;
-            let s_key__iso = this.s_key__iso;
-            let a_o_control = [];
-
-            let f_push_mode = function(o_mode) {
-                a_o_control.push(Object.assign({ s_kind: 'mode' }, o_mode));
-            };
-            let f_push_value = function(s_label, s_api, s_local, o_range, s_unit, s_title) {
-                a_o_control.push({ s_kind: 'value', s_label: s_label, s_api: s_api, s_local: s_local, o_range: o_range, s_unit: s_unit, s_title: s_title });
-            };
-
-            let b_manual__exposure = !o_cap.exposureMode || o_cam.s_mode__exposure === 'manual';
-            if (o_cap.exposureMode) {
-                f_push_mode({
-                    s_label: 'EXP', s_api: 'exposureMode', s_local: 's_mode__exposure',
-                    s_a_value: ['manual', 'continuous'], s_a_short: ['M', 'A'],
-                    s_a_title: ['manual exposure (locks the exposure)', 'auto exposure'],
-                });
-            }
-            if (b_manual__exposure) {
-                if (o_cap.exposureTime) f_push_value('exp', 'exposureTime', 'n_time__exposure', o_cap.exposureTime, '', 'exposure time (100 \u00b5s units)');
-                if (s_key__iso) f_push_value(s_key__iso.toUpperCase(), s_key__iso, 'n_iso', o_cap[s_key__iso], '', 'sensor sensitivity (' + s_key__iso + ')');
-            } else if (o_cap.exposureCompensation) {
-                f_push_value('comp', 'exposureCompensation', 'n_compensation__exposure', o_cap.exposureCompensation, '', 'exposure compensation');
-            }
-
-            if (o_cap.whiteBalanceMode) {
-                f_push_mode({
-                    s_label: 'WB', s_api: 'whiteBalanceMode', s_local: 's_mode__white_balance',
-                    s_a_value: ['manual', 'continuous'], s_a_short: ['M', 'A'],
-                    s_a_title: ['manual white balance', 'auto white balance'],
-                });
-                if (o_cam.s_mode__white_balance === 'manual' && o_cap.colorTemperature) {
-                    f_push_value('wb', 'colorTemperature', 'n_temperature__color', o_cap.colorTemperature, 'K', 'color temperature');
-                }
-            }
-
-            if (o_cap.focusMode) {
-                f_push_mode({
-                    s_label: 'FOCUS', s_api: 'focusMode', s_local: 's_mode__focus',
-                    s_a_value: ['manual', 'continuous'], s_a_short: ['M', 'A'],
-                    s_a_title: ['manual focus', 'auto focus'],
-                });
-                if (o_cam.s_mode__focus === 'manual' && o_cap.focusDistance) {
-                    f_push_value('focus', 'focusDistance', 'n_distance__focus', o_cap.focusDistance, '', 'focus distance');
-                }
-            }
-
-            let a_o_always = [
-                { s_label: 'BRI', s_api: 'brightness', s_local: 'n_brightness', s_unit: '', s_title: 'brightness' },
-                { s_label: 'CON', s_api: 'contrast', s_local: 'n_contrast', s_unit: '', s_title: 'contrast' },
-                { s_label: 'SAT', s_api: 'saturation', s_local: 'n_saturation', s_unit: '', s_title: 'saturation' },
-                { s_label: 'SHA', s_api: 'sharpness', s_local: 'n_sharpness', s_unit: '', s_title: 'sharpness' },
-                { s_label: 'ZOOM', s_api: 'zoom', s_local: 'n_zoom', s_unit: 'x', s_title: 'zoom' },
-            ];
-            for (let n_idx = 0; n_idx < a_o_always.length; n_idx++) {
-                let o_item = a_o_always[n_idx];
-                if (!o_cap[o_item.s_api]) continue;
-                if (o_item.s_api === 'zoom' && o_cap.zoom.max <= o_cap.zoom.min) continue;
-                f_push_value(o_item.s_label, o_item.s_api, o_item.s_local, o_cap[o_item.s_api], o_item.s_unit, o_item.s_title);
-            }
-            return a_o_control;
         },
         s_connection_label: function() {
             if (!o_state.b_connected__esp) return 'disconnected';
@@ -476,17 +359,6 @@ let o_component__toolbar = {
                 if (document.fullscreenElement) await document.exitFullscreen();
                 else await document.documentElement.requestFullscreen();
             } catch (_) { this.s_error = 'Fullscreen is unavailable. Use your browser’s fullscreen command.'; }
-        },
-        f_cam_set: function(s_api, v_value) {
-            let o_control = this.a_o_cam_control.find(function(o) {
-                return o.s_kind === 'value' && o.s_api === s_api;
-            });
-            let n_value = parseFloat(v_value);
-            if (!isFinite(n_value)) return;
-            return f_apply_camera_setting(s_api, n_value);
-        },
-        f_cam_mode: function(s_api, s_value) {
-            return f_set_camera_mode(s_api, s_value);
         },
         f_update_topbar_height: function() {
             let el_toolbar = this.$refs.el_toolbar;

@@ -1,111 +1,99 @@
-import { o_component__hardware_crop } from './o_component__hardware_crop.js';
 import { o_state, f_save_setting__debounced } from './index.js';
-import { f_apply_camera_resolution, f_b_camera_resolution_locked, f_s_key__iso, f_read_camera, f_apply_camera_setting, f_set_camera_mode } from './o_camera.module.js';
+import { f_apply_camera_resolution, f_apply_camera_setting, f_set_camera_mode, f_read_camera } from './o_camera.module.js';
+import { o_component__icon } from './o_component__icon.js';
+
+let a_o_exposure_time = [
+    { s_label: '1/1000', n_val: 10 },
+    { s_label: '1/500',  n_val: 20 },
+    { s_label: '1/250',  n_val: 40 },
+    { s_label: '1/125',  n_val: 80 },
+    { s_label: '1/60',   n_val: 167 },
+    { s_label: '1/30',   n_val: 333 },
+    { s_label: '1/15',   n_val: 667 },
+    { s_label: '1/8',    n_val: 1250 },
+    { s_label: '1/4',    n_val: 2500 },
+    { s_label: '1/2',    n_val: 5000 },
+    { s_label: '1s',     n_val: 10000 },
+];
+
+let a_n_fps = [5, 10, 15, 20, 25, 30, 60, 120];
+
+let a_o_resolution = [
+    { s_label: '640 × 480',   n_w: 640,  n_h: 480  },
+    { s_label: '1280 × 720',  n_w: 1280, n_h: 720  },
+    { s_label: '1920 × 1080', n_w: 1920, n_h: 1080 },
+    { s_label: '2560 × 1440', n_w: 2560, n_h: 1440 },
+    { s_label: '3840 × 2160', n_w: 3840, n_h: 2160 },
+];
 
 let o_component__camera_setting = {
     name: 'component-camera-setting',
-    components: { o_component__hardware_crop },
-    controlSearch() {
-        return this.a_o_control.map(control => ({
-            id: 'camera-setting-' + control.s_api, name: control.s_label,
-            panel: 'camera_setting', keywords: ['camera', control.s_api],
-            selector: '[data-camera-control="' + control.s_api + '"]',
-        }));
-    },
+    components: { ui_icon: o_component__icon },
     template: `
         <div class="overlay-panel panel-camera-setting" :class="{ visible: o_state.o_panel_visibility.camera_setting }">
             <div class="panel-header">
-                <h2>Camera Settings</h2>
+                <h2><ui_icon s_name="camera" /> USB Camera</h2>
                 <button class="panel-close" @click="f_close">&times;</button>
             </div>
             <div class="panel-body">
-                <div v-if="!o_cam.b_active" class="camera-setting-placeholder">
-                    No camera stream active
-                </div>
+                <div v-if="!o_cam.b_active" class="camera-setting-placeholder">No camera stream active</div>
                 <div v-else class="camera-setting-stack">
 
-                    <div class="camera-setting-group">
-                        <strong>{{ o_cam.s_label }}</strong>
-                        <p>Active: {{ o_cam.n_width }} × {{ o_cam.n_height }} px
-                            <span v-if="o_cam.n_frame_rate"> · {{ o_cam.n_frame_rate }} fps</span>
-                        </p>
-                        <form @submit.prevent="f_apply_resolution">
-                            <fieldset :disabled="o_cam.b_applying_resolution || b_resolution_locked">
-                                <legend>Requested capture format</legend>
-                                <label>Size to test
-                                    <select @change="f_choose_resolution($event.target.value)">
-                                        <option value="">Choose size…</option>
-                                        <option value="640x480">640 × 480</option>
-                                        <option value="1280x720">1280 × 720</option>
-                                        <option value="1920x1080">1920 × 1080</option>
-                                        <option value="2560x1440">2560 × 1440</option>
-                                        <option value="3840x2160">3840 × 2160 (4K)</option>
-                                    </select>
-                                </label>
-                                <div class="camera-setting-row">
-                                    <label>Width <input type="number" :min="o_cap.width?.min ?? 1" :max="o_cap.width?.max" :step="o_cap.width?.step ?? 1" required v-model.number="n_width" style="width: 6em" /></label>
-                                    <span>×</span>
-                                    <label>Height <input type="number" :min="o_cap.height?.min ?? 1" :max="o_cap.height?.max" :step="o_cap.height?.step ?? 1" required v-model.number="n_height" style="width: 6em" /></label>
-                                </div>
-                                <label>FPS (blank keeps current constraint)
-                                    <input type="number" :disabled="!o_cap.frameRate" :min="o_cap.frameRate?.min"
-                                        :max="o_cap.frameRate?.max" :step="o_cap.frameRate?.step ?? 'any'"
-                                        v-model.number="n_frame_rate" style="width: 6em" />
-                                </label>
-                                <p v-if="!o_cap.frameRate">Frame-rate control unavailable on this device/browser.</p>
-                                <button type="submit">{{ o_cam.b_applying_resolution ? 'Applying…' : 'Test and apply format' }}</button>
-                                <button type="button" v-if="o_cap.width && o_cap.height" @click="f_maximum_resolution">Prefer largest size</button>
-                                <button type="button" @click="f_monitor_resolution">Use monitor size</button>
-                            </fieldset>
-                        </form>
-                        <p v-if="o_cap.width && o_cap.height">Reported range: {{ o_cap.width.min }}–{{ o_cap.width.max }} px wide,
-                            {{ o_cap.height.min }}–{{ o_cap.height.max }} px high.</p>
-                        <p v-if="o_cap.frameRate">FPS range: {{ o_cap.frameRate.min }}–{{ o_cap.frameRate.max }} · Step: {{ o_cap.frameRate.step ?? 'Unreported' }}</p>
-                        <p v-if="o_cam.o_requested_format">Last request: {{ o_cam.o_requested_format.n_width }} × {{ o_cam.o_requested_format.n_height }} px,
-                            {{ o_cam.o_requested_format.n_frame_rate ?? 'unchanged' }} fps
-                            ({{ o_cam.o_requested_format.b_maximum ? 'preferred size' : 'exact size' }}).</p>
-                        <p>Ranges and example sizes do not guarantee valid resolution/FPS combinations. Test a request to see the active result above.</p>
-                        <p>The preview adapts to the window; captures use the hardware crop below at native pixel resolution. Monitor size uses physical screen pixels as a preference.</p>
-                        <p v-if="b_resolution_locked">Stop scanning or recording to change resolution.</p>
-                        <p v-if="o_cam.s_error__resolution" role="alert">{{ o_cam.s_error__resolution }}</p>
+                    <div class="cam-setting-row">
+                        <span class="cam-setting-icon--text">FPS</span>
+                        <select class="cam-setting-select" :value="n_fps__selected" @change="f_apply_fps($event.target.value)">
+                            <option v-for="n in a_n_fps" :key="n" :value="n">{{ n }}</option>
+                        </select>
                     </div>
 
-                    <o_component__hardware_crop />
-
-                    <p>Hardware controls reported by the camera/driver. Unavailable controls are not emulated.</p>
-                    <p v-if="o_cam.s_error__setting" role="alert">{{ o_cam.s_error__setting }}</p>
-                    <div class="camera-setting-group" v-for="o_control in a_o_control" :key="o_control.s_api">
-                        <strong>{{ o_control.s_label }}</strong>
-                        <template v-if="o_cap[o_control.s_api]">
-                            <p>Active: {{ o_cam.o_setting?.[o_control.s_api] ?? 'Unreported' }}
-                                · Requested: {{ o_cam.o_requested?.[o_control.s_api] ?? '—' }}</p>
-                            <select v-if="o_control.b_mode" :data-camera-control="o_control.s_api" :data-control-scope="o_state.s_id__webcam_device" :aria-label="o_control.s_label" :value="o_cam.o_setting?.[o_control.s_api]"
-                                @change="f_set_mode(o_control.s_api, $event.target.value)">
-                                <option v-for="s_mode in o_cap[o_control.s_api]" :value="s_mode">{{ s_mode }}</option>
-                            </select>
-                            <template v-else>
-                                <p>Range: {{ o_cap[o_control.s_api].min }}–{{ o_cap[o_control.s_api].max }}
-                                    · Step: {{ o_cap[o_control.s_api].step ?? 'Unreported' }}</p>
-                                <label>Request
-                                    <input v-if="Number.isFinite(o_cap[o_control.s_api].min) && Number.isFinite(o_cap[o_control.s_api].max)"
-                                        type="range" :data-control-scope="o_state.s_id__webcam_device" :aria-label="o_control.s_label + ' slider'"
-                                        :min="o_cap[o_control.s_api].min" :max="o_cap[o_control.s_api].max" :step="o_cap[o_control.s_api].step ?? 'any'"
-                                        :value="o_cam.o_requested?.[o_control.s_api] ?? o_cam.o_setting?.[o_control.s_api]"
-                                        :disabled="o_control.s_mode && o_cap[o_control.s_mode] && o_cam.o_setting?.[o_control.s_mode] !== 'manual'"
-                                        @change="f_apply_setting(o_control.s_api, Number($event.target.value))" />
-                                    <input type="number" :min="o_cap[o_control.s_api].min" :max="o_cap[o_control.s_api].max"
-                                        :data-camera-control="o_control.s_api" :data-control-scope="o_state.s_id__webcam_device"
-                                        :aria-label="o_control.s_label"
-                                        :step="o_cap[o_control.s_api].step ?? 'any'"
-                                        :value="o_cam.o_requested?.[o_control.s_api] ?? o_cam.o_setting?.[o_control.s_api]"
-                                        :disabled="o_control.s_mode && o_cap[o_control.s_mode] && o_cam.o_setting?.[o_control.s_mode] !== 'manual'"
-                                        @change="f_apply_setting(o_control.s_api, Number($event.target.value))" />
-                                </label>
-                                <p v-if="o_control.s_mode && o_cap[o_control.s_mode] && o_cam.o_setting?.[o_control.s_mode] !== 'manual'">Select manual mode to control this value.</p>
-                            </template>
-                        </template>
-                        <p v-else>Unavailable on this device/browser</p>
+                    <div class="cam-setting-row">
+                        <ui_icon class="cam-setting-icon" s_name="scan" />
+                        <select class="cam-setting-select" :value="s_resolution__selected" @change="f_apply_res($event.target.value)">
+                            <option v-for="o in a_o_resolution" :key="o.s_label" :value="o.s_label">{{ o.s_label }}</option>
+                        </select>
                     </div>
+
+                    <div class="cam-setting-row" v-if="o_cap.exposureMode">
+                        <ui_icon class="cam-setting-icon" s_name="brightness" />
+                        <div class="mode-toggle">
+                            <button class="mode-btn" :class="{ active: o_cam.s_mode__exposure === 'manual' }"
+                                @click="f_set_exposure_mode('manual')">M</button>
+                            <button class="mode-btn" :class="{ active: o_cam.s_mode__exposure !== 'manual' }"
+                                @click="f_set_exposure_mode('continuous')">auto</button>
+                        </div>
+                    </div>
+
+                    <div class="cam-setting-row" v-if="o_cap.exposureTime && o_cam.s_mode__exposure === 'manual'">
+                        <ui_icon class="cam-setting-icon" s_name="record" />
+                        <select class="cam-setting-select" :value="n_exposure_time__selected" @change="f_apply_exposure_time($event.target.value)">
+                            <option v-for="o in a_o_exposure_time" :key="o.n_val" :value="o.n_val">{{ o.s_label }}</option>
+                        </select>
+                    </div>
+
+                    <div class="cam-setting-row" v-if="o_cap.whiteBalanceMode">
+                        <span class="cam-setting-icon--text">WB</span>
+                        <div class="mode-toggle">
+                            <button class="mode-btn" :class="{ active: o_cam.s_mode__white_balance === 'manual' }"
+                                @click="f_set_wb_mode('manual')">M</button>
+                            <button class="mode-btn" :class="{ active: o_cam.s_mode__white_balance !== 'manual' }"
+                                @click="f_set_wb_mode('continuous')">auto</button>
+                        </div>
+                    </div>
+
+                    <div class="cam-setting-row" v-if="o_cap.colorTemperature && o_cam.s_mode__white_balance === 'manual'">
+                        <span class="cam-setting-icon--text">WB</span>
+                        <input type="range"
+                            :min="o_cap.colorTemperature.min" :max="o_cap.colorTemperature.max"
+                            :step="o_cap.colorTemperature.step ?? 'any'"
+                            :value="o_cam.n_temperature__color"
+                            class="cam-setting-range"
+                            @change="f_apply_color_temp(Number($event.target.value))" />
+                        <span class="cam-setting-value">{{ o_cam.n_temperature__color }}</span>
+                    </div>
+
+                    <p v-if="o_cam.s_error__setting || o_cam.s_error__resolution" role="alert" class="cam-setting-error">
+                        {{ o_cam.s_error__setting || o_cam.s_error__resolution }}
+                    </p>
 
                 </div>
             </div>
@@ -114,72 +102,57 @@ let o_component__camera_setting = {
     data: function() {
         return {
             o_state: o_state,
-            n_width: 3840,
-            n_height: 2160,
-            n_frame_rate: '',
-            a_o_control: [
-                { s_api: 'exposureMode', s_label: 'Exposure mode', b_mode: true },
-                { s_api: 'exposureTime', s_label: 'Exposure time (100 µs units)', s_mode: 'exposureMode' },
-                { s_api: 'iso', s_label: 'ISO', s_mode: 'exposureMode' },
-                { s_api: 'gain', s_label: 'Gain (driver units)', s_mode: 'exposureMode' },
-                { s_api: 'exposureCompensation', s_label: 'Exposure compensation' },
-                { s_api: 'whiteBalanceMode', s_label: 'White balance mode', b_mode: true },
-                { s_api: 'colorTemperature', s_label: 'Color temperature (K)', s_mode: 'whiteBalanceMode' },
-                { s_api: 'focusMode', s_label: 'Focus mode', b_mode: true },
-                { s_api: 'focusDistance', s_label: 'Focus distance', s_mode: 'focusMode' },
-                { s_api: 'brightness', s_label: 'Brightness (device control)' },
-                { s_api: 'contrast', s_label: 'Contrast (device control)' },
-                { s_api: 'saturation', s_label: 'Saturation (device control)' },
-                { s_api: 'sharpness', s_label: 'Sharpness (device control)' },
-                { s_api: 'zoom', s_label: 'Hardware zoom' },
-            ],
+            a_o_exposure_time: a_o_exposure_time,
+            a_n_fps: a_n_fps,
+            a_o_resolution: a_o_resolution,
         };
     },
     computed: {
-        b_resolution_locked: f_b_camera_resolution_locked,
-        o_cam: function() {
-            return o_state.o_camera;
+        o_cam: function() { return o_state.o_camera; },
+        o_cap: function() { return o_state.o_camera.o_capability; },
+        n_fps__selected: function() {
+            let n = Math.round(this.o_cam.n_frame_rate);
+            return a_n_fps.includes(n) ? n : a_n_fps[4];
         },
-        o_cap: function() {
-            return o_state.o_camera.o_capability;
+        s_resolution__selected: function() {
+            let n_w = this.o_cam.n_width;
+            let n_h = this.o_cam.n_height;
+            let o_match = a_o_resolution.find(function(o) { return o.n_w === n_w && o.n_h === n_h; });
+            return o_match ? o_match.s_label : a_o_resolution[2].s_label;
         },
-        s_key__iso: function() {
-            return f_s_key__iso(o_state.o_camera.o_capability);
+        n_exposure_time__selected: function() {
+            let n = this.o_cam.n_time__exposure;
+            return a_o_exposure_time.reduce(function(o_best, o) {
+                return Math.abs(o.n_val - n) < Math.abs(o_best.n_val - n) ? o : o_best;
+            }, a_o_exposure_time[0]).n_val;
         },
     },
     watch: {
         'o_state.o_panel_visibility.camera_setting': function(b_visible) {
-            if (b_visible && o_state.b_streaming__webcam) {
-                f_read_camera();
-                this.f_reset_resolution();
-            }
+            if (b_visible && o_state.b_streaming__webcam) f_read_camera();
         },
     },
     methods: {
-        f_reset_resolution: function() {
-            this.n_width = this.o_cam.n_width || 3840;
-            this.n_height = this.o_cam.n_height || 2160;
+        f_apply_fps: async function(v) {
+            let n = Number(v);
+            await f_apply_camera_resolution(this.o_cam.n_width, this.o_cam.n_height, n);
         },
-        f_choose_resolution: function(s_size) {
-            if (!s_size) return;
-            [this.n_width, this.n_height] = s_size.split('x').map(Number);
+        f_apply_res: async function(s_label) {
+            let o = a_o_resolution.find(function(o) { return o.s_label === s_label; });
+            if (!o) return;
+            await f_apply_camera_resolution(o.n_w, o.n_h, this.o_cam.n_frame_rate || null);
         },
-        f_apply_resolution: async function() {
-            await f_apply_camera_resolution(this.n_width, this.n_height, false, true, this.n_frame_rate === '' ? null : this.n_frame_rate);
+        f_apply_exposure_time: async function(v) {
+            await f_apply_camera_setting('exposureTime', Number(v));
         },
-        f_maximum_resolution: async function() {
-            await f_apply_camera_resolution(this.o_cap.width.max, this.o_cap.height.max, true, true, this.n_frame_rate === '' ? null : this.n_frame_rate);
+        f_set_exposure_mode: async function(s_mode) {
+            await f_set_camera_mode('exposureMode', s_mode);
         },
-        f_monitor_resolution: async function() {
-            await f_apply_camera_resolution(Math.round(screen.width * devicePixelRatio),
-                Math.round(screen.height * devicePixelRatio), true, true,
-                this.n_frame_rate === '' ? null : this.n_frame_rate);
+        f_set_wb_mode: async function(s_mode) {
+            await f_set_camera_mode('whiteBalanceMode', s_mode);
         },
-        f_set_mode: function(s_api_name, s_value) {
-            return f_set_camera_mode(s_api_name, s_value);
-        },
-        f_apply_setting: function(s_api_name, v_value) {
-            return f_apply_camera_setting(s_api_name, v_value);
+        f_apply_color_temp: async function(n) {
+            await f_apply_camera_setting('colorTemperature', n);
         },
         f_close: function() {
             o_state.o_panel_visibility.camera_setting = false;
@@ -187,10 +160,7 @@ let o_component__camera_setting = {
         },
     },
     mounted: function() {
-        if (o_state.b_streaming__webcam) {
-            f_read_camera();
-            this.f_reset_resolution();
-        }
+        if (o_state.b_streaming__webcam) f_read_camera();
     },
 };
 

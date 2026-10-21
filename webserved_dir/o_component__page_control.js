@@ -6,7 +6,7 @@ let o_component__page_control = {
     template: `
         <o_component__webcam />
         <o_component__filter />
-        <o_component__flat_field />
+        <o_component__calibration_overlay />
         <o_component__scale />
         <o_component__focus_step />
         <o_component__toolbar />

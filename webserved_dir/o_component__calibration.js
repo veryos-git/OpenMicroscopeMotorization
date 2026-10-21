@@ -72,19 +72,8 @@ let o_component__calibration = {
                     b_disabled: false,
                 },
                 {
-                    s_key: 'flat',
-                    n_idx: 3,
-                    s_title: 'Flat field / dust',
-                    s_desc: 'illumination profile + sensor dust, divided out of every capture.',
-                    s_status: o_self.s_status__flat,
-                    s_detail: o_self.s_detail__flat,
-                    s_action: 'open Flat field',
-                    f_action: function(){ o_self.f_open('flat'); },
-                    b_disabled: false,
-                },
-                {
                     s_key: 'focus',
-                    n_idx: 4,
+                    n_idx: 3,
                     s_title: 'Focus step / depth-of-field',
                     s_desc: 'optimal Z step for focus stacking and autofocus.',
                     s_status: o_self.s_status__focus_step,
@@ -95,7 +84,7 @@ let o_component__calibration = {
                 },
                 {
                     s_key: 'scale',
-                    n_idx: 5,
+                    n_idx: 4,
                     s_title: 'Scale (µm / pixel)',
                     s_desc: 'physical pixel size from a stage micrometer or known grid.',
                     s_status: o_self.s_status__scale,
@@ -140,14 +129,6 @@ let o_component__calibration = {
                 a_s_axis.push('Motor ' + (n_idx + 1) + ' ' + s_ok);
             }
             return a_s_axis.join('  ');
-        },
-        s_status__flat: function() {
-            if(!o_state.o_flat_field.s_path_flat) return 'missing';
-            return this.f_b_camera__matches(o_state.o_flat_field.o_camera__flat) ? 'ready' : 'stale';
-        },
-        s_detail__flat: function() {
-            if(!o_state.o_flat_field.s_path_flat) return 'no flat image yet';
-            return 'taken ' + this.f_s_age(o_state.o_calibration.n_ts_ms__flat);
         },
         s_status__focus_step: function() {
             return o_state.o_calibration.n_step__focus ? 'ready' : 'missing';

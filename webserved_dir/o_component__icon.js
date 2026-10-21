@@ -48,6 +48,7 @@ const o_path = {
     auto: 'M8 3v4h8v4 M12 7l4 4 4-4 M16 21v-4H8v-4 M4 17l4-4 4 4',
     stats: 'M3 3v18h18 M7 17v-4 M12 17V8 M17 17V4',
     refresh: 'M20 10a8 8 0 0 0-14-4L3 9 M3 3v6h6 M4 14a8 8 0 0 0 14 4l3-3 M15 15h6v6',
+    calibration: 'M3 3h18v18H3z M8 8h3v8H8z M13 12h3v4h-3z M8 3v18 M3 8h5 M3 16h5',
 };
 // Solid parts drawn on top of the outline, e.g. the dark half of 'darkness'.
 const o_path__fill = {
