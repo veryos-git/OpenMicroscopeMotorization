@@ -118,7 +118,7 @@ let f_o_action_system = function(f_error = console.error) {
 // existing ownership of either shortcut intact.
 let f_o_keymap__migrated = o_keymap => {
     let o = structuredClone(o_keymap);
-    if(o?.version === 1 && o.actions) { delete o.actions['panel.backlash']; delete o.actions['panel.calibration']; }
+    if(o?.version === 1 && o.actions) { for(let s_id of ['panel.backlash', 'panel.calibration', 'stitch.capture', 'stitch.run']) delete o.actions[s_id]; }
     let a_binding = o?.actions?.['actions.search']?.bindings;
     if(o?.version !== 1 || !Array.isArray(a_binding) || a_binding.length !== 2) return o;
     let f_b_key = (b, a_key) => b.source === 'keyboard' && JSON.stringify(f_o_binding(b).keys) === JSON.stringify(a_key);

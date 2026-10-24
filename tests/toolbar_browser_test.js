@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 
 // Real Vue, toolbar, speed controls and action registry; no camera or motors used.
-const panels = ['motion_detection', 'setup', 'map', 'motion', 'gamepad', 'optics', 'slide_library', 'scan', 'camera_setting', 'led_setting', 'manual_stitch', 'macro', 'auto_move', 'autostitch', 'filter', 'flat', 'focus', 'focus_step', 'focus_stack', 'scale', 'stats', 'cellpose', 'zoom', 'record', 'recording_library', 'video', 'training'];
+const panels = ['motion_detection', 'setup', 'map', 'motion', 'gamepad', 'optics', 'slide_library', 'scan', 'camera_setting', 'led_setting', 'macro', 'auto_move', 'autostitch', 'filter', 'flat', 'focus', 'focus_step', 'focus_stack', 'scale', 'stats', 'cellpose', 'zoom', 'record', 'recording_library', 'video', 'training'];
 const javascript = text => new Response(text, { headers: { 'content-type': 'text/javascript' } });
 
 for (const width of [1440, 800, 360, 320]) Deno.test(`compact toolbar actions and layout at ${width}px`, async () => {

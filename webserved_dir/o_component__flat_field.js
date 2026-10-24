@@ -252,7 +252,6 @@ let o_component__flat_field = {
             let o_target = o_evt.target;
             if(o_target && (o_target.tagName === 'INPUT' || o_target.tagName === 'TEXTAREA' || o_target.tagName === 'SELECT')) return;
             if(o_state.b_scanning) return;
-            if(o_state.o_panel_visibility.manual_stitch) return; // 'f' is used there
             o_evt.preventDefault();
             o_state.o_panel_visibility.flat = true;
             f_save_setting__debounced('o_panel_visibility', o_state.o_panel_visibility);

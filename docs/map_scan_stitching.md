@@ -67,7 +67,7 @@ Map → Scan uses a custom Python **translation-only image stitcher** in `stitch
 
 Alignment runs on images at most **512 pixels wide by default**. The Scan panel offers 1024, 512, 256, and 128 pixels, remembered with the scan configuration and used for both live and final alignment. Final compositing reads the original saved images. There is no later full-resolution registration pass in this workflow, so preserving original image detail does not imply original-pixel alignment accuracy.
 
-The separate Map → Stitch and Map → AStitch tools are different workflows. `autostitch.py`, the manual stitch implementation, archived live stitching, and `stitch.py`'s incremental `add`/`watch`/`locate` modes are not called by Map → Scan.
+The separate Map → AStitch tool is a different workflow. `autostitch.py`, archived live stitching, and `stitch.py`'s incremental `add`/`watch`/`locate` modes are not called by Map → Scan.
 
 ```mermaid
 flowchart TD

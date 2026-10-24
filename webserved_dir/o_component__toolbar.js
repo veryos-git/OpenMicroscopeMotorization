@@ -158,7 +158,6 @@ let o_component__toolbar = {
                     { s_panel: 'record', s_icon: 'record', s_label: 'Time-lapse', s_title: 'Record images at intervals, at one or more positions' },
                     { s_panel: 'video', s_icon: 'video', s_label: 'Video', s_title: 'Record real-time video, bursts or pre-roll' },
                     { s_panel: 'focus_stack', s_icon: 'stack', s_label: 'Focus stack', s_title: 'Combine images at different focus depths' },
-                    { s_panel: 'manual_stitch', s_icon: 'scan', s_label: 'Manual stitch', s_title: 'Capture tiles manually and stitch them' },
                     { s_panel: 'autostitch', s_icon: 'scan', s_label: 'Auto stitch', s_title: 'Stitch images with feature matching' },
                 ] },
                 { s_label: 'Image', a_o_tool: [

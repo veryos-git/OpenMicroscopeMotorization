@@ -102,6 +102,11 @@ Deno.test('search default migration preserves customized and conflicting shortcu
     assert.deepEqual(f_o_keymap__migrated(old), old);
 });
 
+Deno.test('migration drops removed manual stitch actions from saved profiles', () => {
+    const profile = { version: 1, actions: { 'stitch.capture': { bindings: [] }, 'stitch.run': { bindings: [{ source: 'keyboard', keys: ['R'] }] } } };
+    assert.deepEqual(f_o_keymap__migrated(profile).actions, {});
+});
+
 Deno.test('Ctrl+F profiles gain Ctrl+Shift+P unless another action owns it', () => {
     const profile = { version: 1, actions: { 'actions.search': { bindings: [{ source: 'keyboard', keys: ['Ctrl', 'F'] }, { source: 'keyboard', keys: ['F3'] }] } } };
     assert.equal(f_o_keymap__migrated(profile).actions['actions.search'].bindings.length, 3);

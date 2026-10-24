@@ -124,7 +124,6 @@ let o_component__map = {
                 <!-- build / annotate shortcuts -->
                 <div class="map-actions">
                     <button class="btn-small" @click="f_open('scan')">Scan</button>
-                    <button class="btn-small" @click="f_open('manual_stitch')">Stitch</button>
                     <button class="btn-small" @click="f_open('autostitch')">AStitch</button>
                 </div>
 

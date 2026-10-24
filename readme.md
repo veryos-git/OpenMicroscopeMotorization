@@ -27,7 +27,7 @@ this installs every missing dependency and then starts the web server on http://
 
 installed on first run (skipped afterwards, so `deno task start` stays fast):
 - `arduino-cli` into `~/.local/bin` + the `esp32:esp32` board package + the `ArduinoJson` library — these compile the ESP32 firmware on the server
-- `./venv` with `numpy` + `opencv-python` — used by `stitch.py` (the tile scan mosaic) and `stich_image_in_folder.py`
+- `./venv` with `numpy` + `opencv-python` — used by `stitch.py` (the tile scan mosaic)
 - `torch` (cpu build) + `lightglue` + `kornia` — used by `autostitch.py` and by `stitch.py --matcher loftr`
 - `./venv_cellpose` with `torch` + `cellpose` — used by `cellpose_worker.py` for the `Cell pose` panel
 
@@ -570,8 +570,7 @@ The corner-frame icon enters or exits fullscreen.
 Open **Search actions** (magnifying glass) in the toolbar, or press **Ctrl+F** / **F3**. Search by
 name, category, description, or keyword; use arrow keys and Enter to invoke a
 result. **Capture Image** downloads the current camera frame (Ctrl+Shift+I or
-gamepad button 0 by default). Manual stitch capture uses Ctrl+Shift+F; R runs
-stitching. F opens/closes Flat. Escape stops motors and cancels zoom selection.
+gamepad button 0 by default). F opens/closes Flat. Escape stops motors and cancels zoom selection.
 
 Enable **Edit bindings** to select an action and add keyboard chords or gamepad
 buttons/axes (indices are zero-based; D-pad buttons are 12–15 on standard pads,

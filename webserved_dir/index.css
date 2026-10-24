@@ -1809,56 +1809,6 @@ body.calib-measuring button { cursor: pointer; }
   color: var(--dim); line-height: 1.5; white-space: pre-wrap; word-break: break-word;
 }
 
-/* ─── Manual stitch panel ─── */
-.panel-manual-stitch {
-  bottom: 16px; left: 50%; transform: translateX(-50%);
-  width: 220px;
-}
-
-.manual-stitch-count {
-  font-family: 'JetBrains Mono', monospace; font-size: 2.4rem; font-weight: 700;
-  color: var(--text); text-align: center; line-height: 1;
-}
-
-.manual-stitch-label {
-  font-family: 'JetBrains Mono', monospace; font-size: 0.75rem;
-  color: var(--dim); text-align: center; margin-bottom: 12px;
-}
-
-.manual-stitch-hint {
-  font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
-  color: var(--dim); text-align: center; margin-bottom: 4px;
-}
-
-.manual-stitch-key {
-  display: inline-block; padding: 2px 8px;
-  background: rgba(10,10,12,0.6); border: 1px solid var(--border); border-radius: 4px;
-  color: var(--yellow); font-weight: 700;
-}
-
-.manual-stitch-status {
-  font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
-  color: var(--accent-0); text-align: center; margin-top: 8px;
-}
-
-.manual-stitch-result {
-  margin-bottom: 12px;
-}
-
-.manual-stitch-preview {
-  width: 100%; border-radius: 6px;
-  border: 1px solid var(--border);
-}
-
-.btn-manual-stitch-reset {
-  width: 100%; padding: 8px 16px;
-  background: transparent; color: var(--text); border: 1px solid var(--border);
-  border-radius: 6px; font-family: 'JetBrains Mono', monospace;
-  font-size: 0.75rem; font-weight: 700; cursor: pointer;
-  transition: all 0.15s;
-}
-.btn-manual-stitch-reset:hover { border-color: var(--text); }
-
 /* ─── Auto stitch panel ─── */
 .panel-autostitch {
   bottom: 16px; right: 340px;

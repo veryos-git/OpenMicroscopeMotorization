@@ -3,7 +3,7 @@
 //
 // installs everything the software needs to run:
 //   arduino-cli + esp32 core + arduino libraries  ->  detecting / flashing the ESP32
-//   ./venv with numpy + opencv                    ->  stitch.py, stich_image_in_folder.py
+//   ./venv with numpy + opencv                    ->  stitch.py
 //   torch (cpu) + lightglue + kornia              ->  autostitch.py feature matching,
 //                                                     stitch.py --matcher loftr
 //
