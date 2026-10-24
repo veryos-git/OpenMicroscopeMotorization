@@ -12,7 +12,7 @@ for (const width of [1440, 800, 360, 320]) Deno.test(`microcontroller drawing la
             export const calls = { saved: {}, sent: [], calibration: [], usb: 0, flash: 0, stop: 0 };
             export const o_state = reactive({
                 o_panel_visibility: { setup: true },
-                o_motor__axis: { x: 0, y: 1, z: 2 }, a_n_step__backlash: [112, 75, 32],
+                o_motor__axis: { x: 0, y: 1, z: 2 }, a_n_step__backlash: [112, 75, 32], a_n_step__per_px: [0.0449, 17.21, 0],
                 a_o_pin_config: [0, 1, 2].map(i => Object.fromEntries([1, 2, 3, 4].map(pin => ['n_pin' + pin, 4 + i * 4 + pin]))),
                 a_o_motor: [0, 1, 2].map(() => ({ b_running: false, n_position: 0, n_rpm: 0, s_direction: 'cw' })),
                 o_config__hardware_led: f_o_hardware_led_config(), o_hardware_led: null, s_error__hardware_led: '',
@@ -63,7 +63,6 @@ for (const width of [1440, 800, 360, 320]) Deno.test(`microcontroller drawing la
             const components = {o_component__setup, o_component__hardware_led, o_component__backlash};
             for (const [name, component] of Object.entries(components)) app.component(name, component);
             app.component('o_component__jog', {template:'<div></div>'});
-            app.component('o_component__calibration', {template:'<div></div>'});
             f_install_control_catalog(app, {components, openPanel() {o_state.o_panel_visibility.setup = true;}});
             app.config.warnHandler = message => errors.push(message);
             app.config.errorHandler = error => errors.push(error.stack);
@@ -81,7 +80,7 @@ for (const width of [1440, 800, 360, 320]) Deno.test(`microcontroller drawing la
                 check(document.querySelectorAll('.micro-pin-row').length === 3 && document.querySelectorAll('.micro-pin-row input').length === 12, 'Three motor pin rows');
                 check(document.querySelectorAll('.micro-axis-row').length === 3, 'Three logical axis rows');
                 check(field('Calibrate X').disabled && field('Calibrate Z').disabled, 'Offline calibration blocked');
-                check(!document.querySelector('.micro-diagnostics').open, 'Details start closed');
+                check(!document.querySelector('.micro-diagnostics, .hardware-motor') && !panel.textContent.includes('Calibrate all'), 'No motor test section');
                 check(!document.querySelector('[aria-label="ESP32 IP address"]') && !document.querySelector('input[type="password"]'), 'No Wi-Fi controls');
                 await edit('Motor 1 pin 1', '18');
                 check(calls.saved.a_o_pin_config[0].n_pin1 === 18, 'Motor pin saved');
@@ -100,6 +99,11 @@ for (const width of [1440, 800, 360, 320]) Deno.test(`microcontroller drawing la
                 check(calls.sent.some(c => c.command === 'backlash' && c.motor === 2 && c.steps === 87), 'Backlash applied');
                 await edit('X backlash steps', '-1');
                 check(o_state.a_n_step__backlash[2] === 87 && field('X backlash steps').value === '87', 'Invalid backlash rejected');
+                check(field('Y steps per pixel').value === '17.21' && field('X steps per pixel').value === '' && !field('Z steps per pixel'), 'Steps per pixel follows physical motor');
+                await edit('X steps per pixel', '0.045');
+                check(o_state.a_n_step__per_px[2] === 0.045 && calls.saved.a_n_step__per_px[2] === 0.045, 'Steps per pixel saved for assigned motor');
+                await edit('X steps per pixel', '0');
+                check(o_state.a_n_step__per_px[2] === 0.045 && field('X steps per pixel').value === '0.045', 'Invalid steps per pixel rejected');
                 await edit('X backlash steps', '87');
                 await edit('Z motor', 'none');
                 check(field('Reverse Z direction').disabled && field('Z backlash steps').disabled && field('Calibrate Z').disabled, 'Manual Z disables motor controls');
@@ -135,6 +139,8 @@ for (const width of [1440, 800, 360, 320]) Deno.test(`microcontroller drawing la
                 calibration.f_stop = () => {calls.stoppedCalibration = true; finish(false);};
                 await click('Calibrate X');
                 check(field('X motor').disabled && field('Flash ESP32').disabled, 'Calibration locks hardware changes');
+                calibration.s_status = 'measuring — 40 steps'; await tick();
+                check(panel.textContent.includes('X · measuring — 40 steps'), 'Calibration progress shows in the axis status');
                 await click('Stop calibrating X'); check(calls.stoppedCalibration && vm.s_axis__calibrating === '', 'Per-axis calibration can stop');
                 const nested = f_a_control_results().find(item => item.name === 'LED count');
                 check(nested, 'LED count is searchable'); await f_reveal_control(nested); await tick();

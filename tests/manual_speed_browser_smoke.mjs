@@ -33,11 +33,6 @@ try {
     await page.waitForFunction(() => JSON.parse(o_state.a_o_setting.find(s => s.s_key === 'o_rpm__manual')?.s_value || '{}').xy === 7.5);
     assert.equal(await bar.locator('#toolbar-speed-z').inputValue(), '0.25');
     await page.evaluate(() => { o_state.o_panel_visibility.setup = false; o_state.o_panel_visibility.gamepad = false; });
-    await page.getByRole('button', { name: 'Setup', exact: true }).click();
-    await page.locator('.micro-diagnostics > summary').click();
-    assert.equal(await page.locator('#setup-speed-z').inputValue(), '0.25');
-    assert.equal(await page.locator('#setup-speed-xy').inputValue(), '7.5');
-    await page.getByRole('button', { name: 'Close Setup', exact: true }).click();
     await page.getByRole('button', { name: 'All tools', exact: true }).click();
     await page.getByRole('button', { name: 'Gamepad', exact: true }).click();
     assert.equal(await page.locator('#gamepad-speed-z').inputValue(), '0.25');

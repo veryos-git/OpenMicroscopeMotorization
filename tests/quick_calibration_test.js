@@ -35,33 +35,6 @@ Deno.test('quick calibration halves rounds, coarsens probes and preserves saved 
     assert.equal(rounds[0][1].n_step__probe, 5);
 });
 
-for(const outcome of ['success', 'failure', 'stop']) {
-    Deno.test('quick batch runs sequentially and handles ' + outcome, async () => {
-        const state = { b_connected__esp: true, b_streaming__webcam: true, n_cnt__stop_all: 0 };
-        const c = await component('setup', { o_state: state });
-        const calls = [];
-        let active = 0;
-        const ctx = Object.assign(c.data(), c.methods, { b_can_move: true });
-        ctx.$refs = { a_calibration: [2, 0, 1].map(n_motor => ({
-            n_motor, s_status: 'test result',
-            async f_run(options) {
-                assert.equal(active++, 0);
-                assert.equal(ctx.b_calibrating_all, true);
-                assert.deepEqual(options, { b_quick: true });
-                calls.push(n_motor);
-                await Promise.resolve();
-                active--;
-                if(outcome === 'stop') ctx.f_stop_calibrating_all();
-                return outcome !== 'failure';
-            },
-        })) };
-        await ctx.f_calibrate_all();
-        assert.deepEqual(calls, outcome === 'success' ? [0, 1, 2] : [0]);
-        assert.equal(ctx.b_calibrating_all, false);
-        assert.match(ctx.s_status__calibrate_all, outcome === 'success' ? /complete/ : /Stopped/);
-    });
-}
-
 async function focusFixture(scores) {
     const state = { b_connected__esp: true, b_streaming__webcam: true, a_n_step__backlash: [0, 37, 0], o_motor__axis: { x: 0, y: 2, z: 1 } };
     const commands = [], saved = [];

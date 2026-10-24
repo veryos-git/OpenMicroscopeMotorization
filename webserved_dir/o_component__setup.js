@@ -1,6 +1,5 @@
 import { o_component__icon } from './o_component__icon.js';
-import { f_n_rpm__manual } from './manual_speed.module.js';
-import { o_state, f_send_esp, f_send_esp_move_step, f_send_esp_stop, f_send_esp_stop_all, f_send_esp_set_backlash, f_save_setting__debounced, f_send_wsmsg_with_response, f_register_handler, f_save_setting, f_connect_esp_serial, f_disconnect_esp } from './index.js';
+import { o_state, f_send_esp_stop_all, f_send_esp_set_backlash, f_save_setting__debounced, f_send_wsmsg_with_response, f_register_handler, f_save_setting, f_connect_esp_serial, f_disconnect_esp } from './index.js';
 import { f_flash_browser } from './flash_browser.module.js';
 import { f_o_wsmsg } from './constructors.module.js';
 import { f_s_hardware_led_config_error } from './hardware_led.module.js';
@@ -53,9 +52,17 @@ let o_component__setup = {
                                 @change="f_set_axis_backlash(axis, $event)" />
                             <ui_icon s_name="backlash" />
                         </label>
+                        <label v-if="axis !== 'z'" class="micro-scale" :data-tooltip="axis.toUpperCase() + ' motor steps per camera pixel · used to space scan images'">
+                            <input type="number" min="0" step="any" :aria-label="axis.toUpperCase() + ' steps per pixel'"
+                                :value="f_s_step__per_px(axis)"
+                                :disabled="b_hardware_busy || o_state.o_motor__axis[axis] === null"
+                                @change="f_set_axis_step__per_px(axis, $event)" />
+                            <span class="micro-unit">st/px</span>
+                        </label>
+                        <span v-else class="micro-scale" aria-hidden="true"></span>
                         <button class="micro-icon-button" :class="{ active: s_axis__calibrating === axis }"
                             :aria-label="(s_axis__calibrating === axis ? 'Stop calibrating ' : 'Calibrate ') + axis.toUpperCase()"
-                            :data-tooltip="s_axis__calibrating === axis ? 'Stop calibration' : 'Auto-calibrate ' + axis.toUpperCase() + ' · use a textured sample' + (axis === 'z' ? ', start slightly out of focus' : ' and manual exposure')"
+                            :data-tooltip="s_axis__calibrating === axis ? 'Stop calibration' : 'Auto-calibrate ' + axis.toUpperCase() + ' · use a textured sample' + (axis === 'z' ? ', start slightly out of focus' : '')"
                             :disabled="s_axis__calibrating !== axis && (!b_can_move || !o_state.b_streaming__webcam || o_state.o_motor__axis[axis] === null)"
                             @click="f_calibrate_axis(axis)"><ui_icon :s_name="s_axis__calibrating === axis ? 'stop' : 'settings'" /></button>
                     </div>
@@ -86,34 +93,9 @@ let o_component__setup = {
                     <span class="flash-status-badge" :class="o_state.s_flash_status" role="status">{{ s_flash_status_label }}</span>
                     <pre class="flash-console" ref="el_pre__flash">{{ o_state.s_flash_output }}</pre>
                 </section>
-
-                <details class="micro-details micro-diagnostics">
-                    <summary><ui_icon s_name="settings" /> Motor tests &amp; calibration</summary>
-                    <div class="hardware-calibration-controls">
-                        <button v-if="!b_calibrating_all" @click="f_calibrate_all" :disabled="!b_can_move || !o_state.b_streaming__webcam">Calibrate all</button>
-                        <button v-else @click="f_stop_calibrating_all">Stop calibration</button>
-                        <span class="hardware-calibration-status" role="status">{{ s_status__calibrate_all }}</span>
-                    </div>
-                    <article class="hardware-motor" v-for="(motor, index) in o_state.a_o_pin_config" :key="index">
-                        <h3>M{{ index + 1 }} <span class="micro-hint">{{ f_s_axis_motor(index).toUpperCase() }}</span></h3>
-                        <div class="hardware-motor-readout"><span>{{ o_state.a_o_motor[index].n_position }} steps</span>
-                            <span>{{ o_state.b_connected__esp ? o_state.a_o_motor[index].b_running ? 'Moving' : 'Stopped' : 'Disconnected' }}</span></div>
-                        <div class="hardware-motor-actions">
-                            <button @click="f_move_motor(index, -1)" :disabled="!b_can_move" :aria-label="'Move motor ' + (index + 1) + ' counterclockwise'">↶</button>
-                            <button @click="f_move_motor(index, 1)" :disabled="!b_can_move" :aria-label="'Move motor ' + (index + 1) + ' clockwise'">↷</button>
-                            <button @click="f_stop_motor(index)" :disabled="!o_state.b_connected__esp" :aria-label="'Stop motor ' + (index + 1)"><ui_icon s_name="stop" /></button>
-                        </div>
-                        <o_component__backlash ref="a_calibration" :n_motor="index" :b_busy="b_move_pending" />
-                    </article>
-                    <div class="hardware-motor-actions">
-                        <label>Steps <input class="hardware-step-count" type="number" min="1" max="10000" v-model.number="n_step__manual" /></label>
-                        <button @click="f_stop_all" :disabled="!o_state.b_connected__esp">Stop all</button>
-                        <button @click="f_refresh_motors" :disabled="!o_state.b_connected__esp" aria-label="Refresh motor status"><ui_icon s_name="refresh" /></button>
-                    </div>
-                    <details class="hardware-calibration-checklist"><summary>Calibration checklist &amp; optical settings</summary><o_component__calibration /></details>
-                    <o_component__jog />
-                    <p class="micro-hint">{{ b_arduino_cli_installed ? 'Compiler ' + s_arduino_cli_version : 'Compiler will be installed during Flash.' }}</p>
-                </details>
+                <!-- per-motor calibration and keyboard / mouse / gamepad movement: no UI of their own -->
+                <o_component__backlash v-for="(motor, index) in o_state.a_o_pin_config" :key="index" ref="a_calibration" :n_motor="index" />
+                <o_component__jog />
             </div>
         </section>
     `,
@@ -122,16 +104,10 @@ let o_component__setup = {
             o_state: o_state,
             b_arduino_cli_installed: false,
             s_arduino_cli_version: '',
-            a_s_color_accent: ['#ff6b35', '#00d4aa', '#5b8def'],
             b_disconnecting__usb: false,
-            n_step__manual: 100,
-            b_move_pending: false,
             s_error__motor: '',
             s_axis__calibrating: '',
             s_status__axis: '',
-            b_calibrating_all: false,
-            b_stop__calibrate_all: false,
-            s_status__calibrate_all: '',
         };
     },
     computed: {
@@ -147,10 +123,10 @@ let o_component__setup = {
             return 'USB connected';
         },
         b_can_move: function() {
-            return o_state.b_connected__esp && !this.b_hardware_busy && !this.b_move_pending;
+            return o_state.b_connected__esp && !this.b_hardware_busy;
         },
         b_hardware_busy: function() {
-            return !!this.s_axis__calibrating || this.b_calibrating_all || this.b_move_pending || o_state.b_flashing || o_state.b_scanning || o_state.a_o_motor.some(o_motor => o_motor.b_running);
+            return !!this.s_axis__calibrating || o_state.b_flashing || o_state.b_scanning || o_state.a_o_motor.some(o_motor => o_motor.b_running);
         },
         s_flash_status_label: function() {
             let o_map = {
@@ -178,7 +154,9 @@ let o_component__setup = {
             let s_error = f_s_hardware_led_config_error(o_state.o_config__hardware_led, o_state.a_o_pin_config);
             if (s_error) return s_error;
             if (!o_state.b_available__serial) return 'USB flashing requires Chrome or Edge over HTTPS or localhost.';
-            return 'Firmware is compiled on the server and flashed over USB from this browser.';
+            return 'Firmware is compiled on the server ('
+                + (this.b_arduino_cli_installed ? 'compiler ' + this.s_arduino_cli_version : 'the compiler is installed on the first Flash')
+                + ') and flashed over USB from this browser.';
         },
     },
     methods: {
@@ -189,11 +167,13 @@ let o_component__setup = {
             if (!this.b_can_move || !o_state.b_streaming__webcam || motor === null || !calibration) return;
             this.s_axis__calibrating = axis;
             this.s_status__axis = 'Calibrating ' + axis.toUpperCase() + ' · M' + (motor + 1) + '…';
+            // the calibration has no UI of its own: its progress shows here
+            const f_unwatch = this.$watch(() => calibration.s_status, s_status => { this.s_status__axis = axis.toUpperCase() + ' · ' + s_status; });
             try {
                 await calibration.f_run({ b_quick: true });
                 this.s_status__axis = axis.toUpperCase() + ' · ' + calibration.s_status;
             } catch (error) { this.s_status__axis = 'Calibration failed: ' + error.message; }
-            finally { this.s_axis__calibrating = ''; }
+            finally { f_unwatch(); this.s_axis__calibrating = ''; }
         },
         f_set_axis_backlash(axis, event) {
             const motor = o_state.o_motor__axis[axis];
@@ -208,38 +188,23 @@ let o_component__setup = {
             o_state.a_n_step__backlash[motor] = steps;
             this.f_save_backlash();
         },
-        f_calibrate_all: async function() {
-            if(!this.b_can_move || !o_state.b_streaming__webcam) return;
-            this.b_calibrating_all = true;
-            this.b_stop__calibrate_all = false;
-            let n_stop = o_state.n_cnt__stop_all;
-            try {
-                let a_calibration = [...(this.$refs.a_calibration || [])].sort((a, b) => a.n_motor - b.n_motor);
-                if(!a_calibration.length) throw new Error('No motors available');
-                for(let o_calibration of a_calibration) {
-                    if(this.b_stop__calibrate_all || n_stop !== o_state.n_cnt__stop_all || !o_state.b_connected__esp || !o_state.b_streaming__webcam) {
-                        this.s_status__calibrate_all = 'Quick calibration stopped';
-                        return;
-                    }
-                    this.s_status__calibrate_all = `Quick calibration: motor ${o_calibration.n_motor + 1} of ${a_calibration.length}`;
-                    let b_success = await o_calibration.f_run({ b_quick: true });
-                    if(!b_success || this.b_stop__calibrate_all) {
-                        this.s_status__calibrate_all = `Stopped at motor ${o_calibration.n_motor + 1}: ${o_calibration.s_status}`;
-                        return;
-                    }
-                }
-                this.s_status__calibrate_all = 'Quick calibration complete — all motors applied';
-            } catch(o_error) {
-                this.s_status__calibrate_all = 'Quick calibration failed: ' + o_error.message;
-            } finally {
-                this.b_calibrating_all = false;
-            }
+        f_s_step__per_px(axis) {
+            const motor = o_state.o_motor__axis[axis];
+            const n_step__per_px = motor === null ? 0 : o_state.a_n_step__per_px[motor];
+            return Number.isFinite(n_step__per_px) && n_step__per_px > 0 ? String(Number(n_step__per_px.toPrecision(4))) : '';
         },
-        f_stop_calibrating_all: function() {
-            this.b_stop__calibrate_all = true;
-            for(let o_calibration of this.$refs.a_calibration || []) {
-                if(o_calibration.b_running) o_calibration.f_stop();
+        f_set_axis_step__per_px(axis, event) {
+            const motor = o_state.o_motor__axis[axis];
+            const n_step__per_px = Number(event.target.value);
+            if (this.b_hardware_busy || motor === null) return;
+            if (event.target.value === '' || !Number.isFinite(n_step__per_px) || n_step__per_px <= 0) {
+                this.s_error__motor = 'Steps per pixel must be a number greater than zero.';
+                event.target.value = this.f_s_step__per_px(axis);
+                return;
             }
+            this.s_error__motor = '';
+            o_state.a_n_step__per_px[motor] = n_step__per_px;
+            f_save_setting__debounced('a_n_step__per_px', o_state.a_n_step__per_px);
         },
         f_s_axis_motor: function(n_motor) {
             return Object.keys(o_state.o_motor__axis).find(s_axis => o_state.o_motor__axis[s_axis] === n_motor) || 'none';
@@ -270,42 +235,6 @@ let o_component__setup = {
                 f_save_setting('o_mapping__' + s_key, o_mapping);
             }
         },
-        f_assign_motor: function(n_motor, s_axis) {
-            if(this.b_hardware_busy) return;
-            if(s_axis === 'none') {
-                if(this.f_s_axis_motor(n_motor) === 'z') this.f_assign_axis('z', null);
-                return;
-            }
-            if(['x', 'y', 'z'].includes(s_axis)) this.f_assign_axis(s_axis, n_motor);
-        },
-        f_move_motor: async function(n_motor, n_sign) {
-            if(!this.b_can_move) return;
-            let n_step = Math.round(Number(this.n_step__manual));
-            let n_rpm = f_n_rpm__manual(o_state, o_state.o_motor__axis?.z === n_motor ? 'z' : 'xy');
-            if(!Number.isFinite(n_step) || n_step < 1 || n_step > 10000 || !Number.isFinite(n_rpm) || n_rpm < 0.05 || n_rpm > 15) {
-                this.s_error__motor = 'Choose 1–10000 steps and a speed between 0.05 and 15 RPM.';
-                return;
-            }
-            this.s_error__motor = '';
-            this.b_move_pending = true;
-            try {
-                await f_send_esp_move_step(n_motor, n_step * n_sign, n_rpm);
-            } catch(o_error) {
-                this.s_error__motor = o_error.message;
-            } finally {
-                this.b_move_pending = false;
-            }
-        },
-        f_stop_motor: function(n_motor) {
-            let o_calibration = this.$refs.a_calibration?.find(o => o.n_motor === n_motor);
-            if(o_calibration?.b_running) o_calibration.f_stop();
-            else f_send_esp_stop(n_motor);
-        },
-        f_stop_all: function() {
-            this.f_stop_calibrating_all();
-            f_send_esp_stop_all();
-        },
-        f_refresh_motors: function() { f_send_esp({ command: 'status' }); },
         f_assign_axis: function(s_axis, n_motor) {
             if(this.b_hardware_busy) return;
             f_send_esp_stop_all();

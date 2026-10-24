@@ -21,8 +21,8 @@ const f_value = el => el.type === 'checkbox' ? el.checked : el.value;
 const f_label = (el, fallback) => {
     const siblingLabel = el.previousElementSibling?.tagName === 'LABEL' ? el.previousElementSibling.textContent : '';
     const label = el.getAttribute('aria-label') || [...(el.labels || [])].map(l => l.textContent).join(' ') || siblingLabel || el.getAttribute('title') || (el.tagName === 'BUTTON' ? el.textContent : '');
-    // Include repeated row headings (motor number, camera property, etc.).
-    const group = el.closest('.camera-setting-group, .hardware-motor');
+    // Include repeated row headings (camera property, etc.).
+    const group = el.closest('.camera-setting-group');
     const heading = group?.querySelector('strong, h3')?.textContent?.trim();
     const name = f_text(label) || fallback;
     return [heading === name ? '' : heading, name].filter(Boolean).join(' · ').slice(0, 160);

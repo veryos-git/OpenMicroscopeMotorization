@@ -108,6 +108,19 @@ let f_o_shift = function(o_profile__ref, o_profile__new, n_shift__max) {
     };
 };
 
+// the same with a search window that is a fraction of each profile's length.
+// a stage that sticks and then jumps can move the image by half the frame
+// between two looks, which a fixed small window would alias into a wrong peak
+let f_o_shift__wide = function(o_profile__ref, o_profile__new, n_frac__window) {
+    let o_x = f_o_shift__profile(o_profile__ref.a_n_x, o_profile__new.a_n_x, Math.floor(o_profile__ref.a_n_x.length * n_frac__window));
+    let o_y = f_o_shift__profile(o_profile__ref.a_n_y, o_profile__new.a_n_y, Math.floor(o_profile__ref.a_n_y.length * n_frac__window));
+    return {
+        n_px_x: o_x.n_px,
+        n_px_y: o_y.n_px,
+        n_ncc: Math.min(o_x.n_ncc, o_y.n_ncc),
+    };
+};
+
 // ─── Turning a probe run into a backlash value ──────────────────────
 //
 // While the gears are still in their slack the image does not move at all, once
@@ -266,6 +279,7 @@ let f_o_stat = function(a_n) {
 export {
     f_o_profile,
     f_o_shift,
+    f_o_shift__wide,
     f_o_shift__profile,
     f_n_ncc,
     f_o_fit__backlash,

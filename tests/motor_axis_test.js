@@ -80,7 +80,7 @@ Deno.test('old firmware blocks remapped circles before starting motion', async (
 });
 
 Deno.test('all focus tools use the shared Z assignment and ignore legacy selectors', async () => {
-    for (const name of ['focus', 'focus_step', 'focus_stack', 'flat_field', 'scan']) {
+    for (const name of ['focus', 'focus_step', 'focus_stack', 'scan']) {
         let motor = 0;
         const moves = [];
         const state = { b_connected__esp: true, b_streaming__webcam: true, b_scanning: false,
@@ -119,28 +119,6 @@ Deno.test('Z can be unassigned and reassigned without removing an XY motor', asy
     assert.equal(state.o_mapping__q.s_motor, 'none');
     jog.methods.f_assign_axis.call(ctx, 'z', 0);
     assert.deepEqual(state.o_motor__axis, { x: 2, y: 1, z: 0 });
-});
-
-Deno.test('Flat tool toggles its overlay without changing correction activation', async () => {
-    for (const active of [true, false]) {
-        const state = { o_panel_visibility: { flat: false }, o_flat_field: { s_path_flat: 'flat.png', b_active: active } };
-        const toolbar = await component('toolbar', { o_state: state, o_actions: {
-            f_invoke(id) {
-                assert.equal(id, 'panel.flat');
-                state.o_panel_visibility.flat = !state.o_panel_visibility.flat;
-            },
-        } });
-        const ctx = { ...toolbar.methods, f_close_tools() {} };
-        ctx.f_choose_tool('flat');
-        assert.equal(state.o_panel_visibility.flat, true);
-        assert.equal(state.o_flat_field.b_active, active);
-        ctx.f_choose_tool('flat');
-        assert.equal(state.o_panel_visibility.flat, false);
-        assert.equal(state.o_flat_field.b_active, active);
-        const flat = await component('flat_field', { o_state: state, f_save_setting__debounced() {}, f_save_flat_field() {} });
-        flat.methods.f_toggle_active.call({});
-        assert.equal(state.o_flat_field.b_active, !active);
-    }
 });
 
 Deno.test('Setup blocks axis changes during hardware activity', async () => {
@@ -183,35 +161,6 @@ Deno.test('Setup opens and closes as an overlay without routing', async () => {
     assert.equal(state.o_panel_visibility.setup, true);
     setup.methods.f_close();
     assert.equal(state.o_panel_visibility.setup, true);
-});
-
-Deno.test('motor card assignment swaps axes and can disable focus', async () => {
-    const state = { o_motor__axis: { x: 0, y: 1, z: 2 } };
-    for (const key of ['a', 'd', 'w', 's', 'q', 'e', 'mouse_right']) state['o_mapping__' + key] = {};
-    const setup = await component('setup', { o_state: state, f_save_setting() {}, f_send_esp_stop_all() {} });
-    const ctx = { ...setup.methods, b_hardware_busy: false };
-    ctx.f_assign_motor(0, 'z');
-    assert.deepEqual(state.o_motor__axis, { x: 2, y: 1, z: 0 });
-    ctx.f_assign_motor(0, 'none');
-    assert.deepEqual(state.o_motor__axis, { x: 2, y: 1, z: null });
-    ctx.f_assign_motor(2, 'none');
-    assert.equal(state.o_motor__axis.x, 2);
-});
-
-Deno.test('motor card moves use the physical motor and reject invalid step counts', async () => {
-    const moves = [];
-    const setup = await component('setup', {
-        o_state: { n_rpm__jog: 5 },
-        f_send_esp_move_step: async (...args) => moves.push(args),
-    });
-    const ctx = { b_can_move: true, n_step__manual: 100 };
-    await setup.methods.f_move_motor.call(ctx, 1, -1);
-    assert.deepEqual(moves, [[1, -100, 5]]);
-    assert.equal(ctx.b_move_pending, false);
-    ctx.n_step__manual = NaN;
-    await setup.methods.f_move_motor.call(ctx, 1, 1);
-    assert.equal(moves.length, 1);
-    assert.match(ctx.s_error__motor, /Choose/);
 });
 
 Deno.test('typing in hardware settings does not jog motors', async () => {
@@ -389,7 +338,7 @@ Deno.test('reversed directions reach keyboard, mouse and gamepad motor commands'
     }
 });
 
-Deno.test('manual XY and Z speeds follow assignments for keyboard, mouse and motor tests', async () => {
+Deno.test('manual XY and Z speeds follow assignments for keyboard and mouse', async () => {
     const state = { o_motor__axis: { x: 2, y: 0, z: 1 }, n_rpm__jog: 8, n_rpm__focus_jog: 0.4, b_connected__esp: true, o_key_held: {} };
     for(const key of ['a', 'd', 'w', 's', 'q', 'e', 'mouse_right']) state['o_mapping__' + key] = { s_dir: 'cw' };
     const moves = [];
@@ -415,16 +364,7 @@ Deno.test('manual XY and Z speeds follow assignments for keyboard, mouse and mot
     jog.f_drive_mouse_axis('z', 0.5);
     assert.deepEqual(moves.at(-1), [1, 0.425]);
     state.n_rpm__focus_jog = 0.8;
-    const setup = await component('setup', {
-        o_state: state, f_send_esp_move_step: async (motor, steps, rpm) => moves.push([motor, rpm]),
-    });
-    const ctx = { b_can_move: true, n_step__manual: 100 };
-    moves.length = 0;
-    await setup.methods.f_move_motor.call(ctx, 1, 1);
     state.o_motor__axis = { x: 1, y: 0, z: 2 };
-    await setup.methods.f_move_motor.call(ctx, 1, 1);
-    await setup.methods.f_move_motor.call(ctx, 2, 1);
-    assert.deepEqual(moves, [[1, 0.8], [1, 6], [2, 0.8]]);
     assert.equal(jog.f_get_mapping('e').rpm, 0.8);
     assert.equal(jog.f_get_mapping('e').motor, 2);
 });

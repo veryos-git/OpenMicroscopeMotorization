@@ -128,10 +128,10 @@ stitched PNG/JPEG color variants remain available through the scan jobs list.
 ## manual movement speeds (WF-004 / WF-005)
 
 The toolbar always shows separate **XY** and **Z focus** RPM controls, with a
-slider and precise numeric entry (0.05–15 RPM). The same values appear in Setup
-and Gamepad. Keyboard uses the selected speed; mouse and gamepad scale it with
-input displacement. Changes take effect while jogging. Motor-card test buttons
-use the speed of their assigned axis; saved-position moves also use XY/Z speeds.
+slider and precise numeric entry (0.05–15 RPM). The same values appear in
+Gamepad. Keyboard uses the selected speed; mouse and gamepad scale it with
+input displacement. Changes take effect while jogging. Saved-position moves also
+use XY/Z speeds.
 
 **Slow** sets XY/Z to 0.5/0.15 RPM, **Normal** to 5/0.5 RPM, and **Fast** to
 10/1.5 RPM. Presets set both values; either can then be adjusted independently.
@@ -143,38 +143,37 @@ movement settings. No firmware flash is required.
 
 ## reversing manual motor direction
 
-In **Setup**, each assigned motor card has a **Reverse X/Y/Z manual direction**
-checkbox directly below its axis selector. Use it when the correct axis moves
-backward. It saves automatically and reverses the paired keyboard controls,
-mouse movement, and gamepad controls together. Stop movement before changing it.
-No firmware flash is needed.
+In **Setup**, each axis row (X, Y, Z) has a **Reverse** button next to its motor
+selector. Use it when the correct axis moves backward. It saves automatically
+and reverses the paired keyboard controls, mouse movement, and gamepad controls
+together. Stop movement before changing it. No firmware flash is needed.
 
-This setting changes manual input directions. The motor card's CW/CCW test
-buttons and automated movement retain their physical motor/coordinate meaning.
-The checkbox stays with the axis if you later change its motor assignment.
-Individual CW/CCW input settings remain available under **Input directions &
-gamepad**; toggling the checkbox sets the whole axis back to a consistent pair.
+This setting changes manual input directions. Automated movement retains its
+physical motor/coordinate meaning. The setting stays with the axis if you later
+change its motor assignment.
 
 ## backlash calibration
-**Quick calibrate all** in Hardware Setup runs every motor sequentially, using
-one pass in each direction and probes of at least 10 steps (the default is two
-passes and 5-step probes). This reduces measurement time at the cost of precision;
-motor speed, settling time, travel limits, and saved advanced settings are preserved.
-Stop calibration or Stop all cancels the batch. An unsuccessful motor stops the
-batch and keeps its previous compensation. Focus requires starting clearly off
-focus on one side of the sharpness peak.
-
-In **Hardware Setup**, each motor card has a **Calibrate** button that measures
-that physical motor’s backlash from the live image. Progress and **Stop calibration**
-stay on the card. Expand **Advanced calibration settings & results** for probe
-steps, limits, settling, repeats, compensation mode, plots, and results. Settings
-are saved independently for each motor. Focus motors default to the sharpness
-signal; stage motors use image shift. The calibration checklist and optical
-settings are also available inside Hardware Setup. The calibration drives
+In **Setup**, each axis row has an auto-calibrate button. One click measures that
+axis's backlash from the live image, for X and Y also its steps per pixel, and
+applies them, using one pass in each direction. Progress and the result show in
+the status line below the axis rows; pressing the button again stops the run. An
+unsuccessful run keeps the previous values. Focus (Z) uses the sharpness signal
+and requires starting clearly off focus on one side of the sharpness peak; X and
+Y use image shift. Steps per pixel can also be typed into the **st/px** field of
+the X and Y rows. The calibration drives
 well past the slack in one direction (preload), takes a reference frame, then
 steps back in small probes and measures how far the image moved against that
 reference. while the gears are loose the image stands still; once they engage it
 moves proportionally to the steps.
+
+stage motors (X / Y) keep stepping until the image has travelled more than a
+third of the frame width. a friction drive sticks and then jumps, sometimes only after the
+motor has stopped, so every look waits until the image stands still, and the
+shift is measured against a key frame with a window of most of the frame, so a
+jump is caught whole. over that distance the jumps average out. nothing is
+saved, and the previous values stay in effect, when the image did not move,
+when the view has too little detail to follow, or when the two directions give
+scales more than 1.5× apart; the card then says which of these happened.
 
 instead of calling the first frame that "looks different" the backlash, the whole
 curve is fitted as `y(s) = c + k * max(0, s - b)` and `b` is the answer. that uses
@@ -194,16 +193,15 @@ where the stage creeps, then one-to-one tracking. the fitted knee is the
 back-extrapolation of the straight part and therefore lands at
 `dead zone + half the take-up`, which can be twice the dead zone. compensating
 that much drives the stage during the compensation burst — that is the jump you
-see on a reversal. so the panel reports **both**:
+see on a reversal. so both are measured:
 
 | value | meaning | use it for |
 | --- | --- | --- |
-| onset | where the image first moves detectably | no jump on reversals (default) |
+| onset | where the image first moves detectably | no jump on reversals (applied) |
 | full take-up | where the stage tracks the steps one to one | best position after a reversal |
 
-both directions are measured, repeated, and reported with their spread. the mean
-of the selected column is written into the motor's backlash setting automatically
-as soon as the run ends (a `re-apply` button repeats it by hand). while a run is going, any backlash
+both directions are measured and the mean onset is written into the motor's
+backlash setting automatically as soon as the run ends. while a run is going, any backlash
 already configured for that motor is switched off on the ESP32 — the firmware
 would otherwise compensate exactly the slack the run is trying to see — and it is
 restored if nothing usable comes out.
@@ -215,11 +213,11 @@ turn the motor but not the stage, so they are no longer counted into the reporte
 position. **these live in `stepper_serial.ino`, so they need a re-flash**
 (`deno task flash`).
 
-for the focus motor pick the sharpness signal instead of image shift, and park the
-stage clearly off focus — there sharpness still changes monotonically with the
+the focus motor uses the sharpness signal instead of image shift; park the stage
+clearly off focus — there sharpness still changes monotonically with the
 movement, which image shift never does for a z axis.
 
-Normal and quick focus calibration first check for a sharpness response using
+Focus calibration first checks for a sharpness response using
 500 motor steps, then command 500 steps back before measuring backlash. This
 larger movement helps detect a working focus drive when 100 steps produce too
 little visible change. The return is a commanded displacement; mechanical play
@@ -501,25 +499,6 @@ The two marked positions are valid only for the current controller connection
 and Z motor assignment; disconnecting or changing the assignment clears them.
 Stop cancels capture without starting more motion or stacking partial frames.
 Interrupted or timed-out moves abort acquisition before another image is saved.
-
-### Hardware crop for the optical image
-
-Open **Camera Settings → Hardware crop**. Draw a rectangle inside the visible
-tube edges on the full sensor preview, or enter Left, Top, Width and Height in
-pixels, then press **Apply hardware crop**. **Reset to full sensor** removes it.
-The setting is remembered separately for each camera and capture resolution.
-
-This rectangle becomes the camera image for the live view, captures, stitching,
-map matching, training, autofocus, calibration and recordings, including raw
-video. Pixels are not resized. Digital zoom and training crops use coordinates
-inside this image. Camera exposure, resolution and other USB controls still
-operate on the original camera track.
-
-Choose the hardware crop before calibrating or collecting images. Changing it
-clears live selections and bypasses flat-field correction until its calibration
-matches the new crop, including its position. Recalculate a manual scan grid
-after changing the crop; free-scan coverage updates automatically. Crop changes
-are locked during capture, scanning, calibration and recording.
 
 ### Exposure histogram and pixel warnings
 
