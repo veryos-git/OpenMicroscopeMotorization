@@ -844,6 +844,12 @@ void handleCommand(const uint8_t *data, size_t len) {
 // ─── Setup ──────────────────────────────────────────────────────────
 
 void setup() {
+    // without a transmit buffer println() blocks until the reply is sent
+    // (a status reply takes ~70 ms at 115200 baud); loop() could not step
+    // the motors meanwhile, so every once-per-second status poll made a
+    // running motor stop for a moment. Must be set before begin().
+    Serial0.setTxBufferSize(4096);
+    MotorUSBSerial.setTxBufferSize(4096);
     Serial0.begin(115200);
     MotorUSBSerial.begin(115200);
     delay(500);

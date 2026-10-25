@@ -21,3 +21,16 @@ Possible fixes, simplest first:
 - Drive stepping from a hardware timer instead of loop(). This is the robust fix, so nothing like serial or WiFi can pause the motors again, but it's a bigger change.
 
 I'd start with the transmit buffer. Should I add it?
+
+## Fixed 2026-10-25
+
+Applied the transmit buffer: `Serial0.setTxBufferSize(4096)` and
+`MotorUSBSerial.setTxBufferSize(4096)` before `begin()` in `setup()` of
+`stepper_serial.ino`. println() now returns at once and the reply goes out in
+the background, so the status poll no longer pauses stepping. Takes effect
+after Setup → Flash.
+
+Not changed: the TX/RX LED still flashes once per second (it is the
+USB-to-serial chip's activity light, the poll is still running). Mouse jog can
+still send replies faster than 115200 baud carries; if it stutters, shrink the
+status reply or poll only while a motor runs.

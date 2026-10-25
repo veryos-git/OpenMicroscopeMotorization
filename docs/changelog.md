@@ -12,6 +12,7 @@ from commit messages; commits titled only "updates" are not listed (see `git log
 - Setup X/Y rows show steps per pixel (**st/px**) and accept a typed value.
 
 **Fixed**
+- Motors no longer stop briefly once per second during long moves. The status reply blocked the firmware loop for ~70 ms; both serial ports now have a transmit buffer. Needs a re-flash. Details: `docs/features/hgc_usb_connection/usb_connection.md`.
 - Free outline scan planned a single row: a bad saved Y calibration (17.21 st/px instead of ~0.03) squashed the outline. The new calibration refuses such values. Details: `docs/features/hgc_image_stitching/24-10-2026_freeoutline_problem/summary_mgc.md`.
 
 **Removed** (moved to `archive/`)
