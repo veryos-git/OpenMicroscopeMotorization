@@ -260,3 +260,12 @@ for example 'a_o_person__filtered' is a legit variable. do not try to make up ne
 
 
 ---
+
+
+content in the /archive folder(s) can be ignored and is only there for historical documentation.
+
+
+---
+# no redundant information
+every piece of information is written down exactly once, in its source of truth.
+other places point to it instead of repeating it.
