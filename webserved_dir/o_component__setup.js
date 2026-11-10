@@ -81,11 +81,10 @@ let o_component__setup = {
                         :disabled="b_hardware_busy || !o_state.b_available__serial || o_state.b_connecting__esp_serial" data-tooltip="Connect to ESP32 via USB · Web Serial">
                         <ui_icon s_name="usb" />{{ o_state.b_connecting__esp_serial ? 'Connecting…' : 'Connect' }}
                     </button>
-                    <button class="micro-action micro-action--flash" :disabled="!b_enabled__flash" @click="f_start_flash" aria-label="Flash ESP32" :data-tooltip="s_hint__flash">
+                    <button class="micro-action micro-action--flash" :disabled="!b_enabled__flash" @click="f_start_flash" aria-label="Flash ESP32" :data-tooltip="s_hint__flash + ' Pin and startup changes apply after Flash.'">
                         <ui_icon s_name="flash" />{{ o_state.b_flashing ? 'Flashing…' : 'Flash' }}
                     </button>
                 </div>
-                <p class="micro-hint">Pin and startup changes apply after Flash.</p>
                 <p v-if="s_pin_error" class="micro-error" role="alert">{{ s_pin_error }}</p>
                 <p v-if="o_state.s_error__esp_serial" class="micro-error" role="alert">{{ o_state.s_error__esp_serial }}</p>
                 <p v-if="!o_state.b_available__serial" class="micro-hint">USB requires Chrome or Edge on HTTPS or localhost.</p>

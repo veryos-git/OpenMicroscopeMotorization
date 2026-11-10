@@ -16,7 +16,7 @@ function fixture(move, timer = setTimeout) {
         f_o_capture__frame:async()=>({o_blob:new Blob()}),
         f_save_image:async()=>captured.push(state.a_o_motor[1].n_position),
         f_save_setting__debounced(){}, setInterval:()=>0,
-        setTimeout: timer,
+        setTimeout: timer, o_component__icon: {},
     };
     const component = new Function(...Object.keys(bindings),source+'\nreturn o_component__focus_stack;')(...Object.values(bindings));
     const vm = {...component.data(),...component.methods};

@@ -27,5 +27,12 @@ export function f_a_control_effects(state, defaults, save, saveFlat) {
         read: () => state.o_motion_detection.b_enabled,
         reset() { state.o_motion_detection.b_enabled = false; save('o_motion_detection', state.o_motion_detection); },
     });
+    // Size references stay on the live image while the Size window is closed.
+    for (const [key, name, icon, before] of [
+        ['b_grid', 'Size grid', 'grid', false], ['b_ruler', 'Size ruler', 'scale', false], ['s_object', 'Size reference object', 'image', ''],
+    ]) effects.push({ id: 'size.' + key, name, icon, before,
+        read: () => state.o_size?.[key] ?? before,
+        reset() { state.o_size[key] = before; save('o_size', state.o_size); },
+    });
     return effects;
 }

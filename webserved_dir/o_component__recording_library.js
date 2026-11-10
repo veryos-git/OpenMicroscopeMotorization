@@ -6,6 +6,7 @@ import {
     f_recording_export_tiff,
     f_recording_resume,
 } from './o_recording.module.js';
+import { o_component__icon } from './o_component__icon.js';
 
 // sessions library: every recording folder the server knows about, with
 // playback, mp4 export and delete.  mirrors the slide-library table style.
@@ -29,52 +30,54 @@ let f_s_date = function(n_ts_ms) {
 
 let o_component__recording_library = {
     name: 'component-recording-library',
+    components: { ui_icon: o_component__icon },
     template: `
         <div class="overlay-panel panel-record-library" :class="{ visible: o_state.o_panel_visibility.recording_library }">
             <div class="panel-header">
-                <h2>Recordings</h2>
+                <h2><ui_icon s_name="folder" /> Recordings</h2>
+                <span class="panel-state">{{ o_state.o_record.a_o_recording.length }} session(s)</span>
+                <button class="cockpit-icon-button" @click="f_refresh" aria-label="Refresh recordings" data-tooltip="Refresh the session list"><ui_icon s_name="refresh" /></button>
                 <button class="panel-close" @click="f_close">&times;</button>
             </div>
             <div class="panel-body">
-                <div class="filter-row">
-                    <button class="btn-small" @click="f_refresh">refresh</button>
-                    <span class="record-dim">{{ o_state.o_record.a_o_recording.length }} session(s)</span>
-                </div>
-
-                <div class="record-session" v-for="o_item in o_state.o_record.a_o_recording" :key="o_item.s_path_folder">
-                    <div class="record-session-head">
-                        <img class="record-session-thumb" v-if="o_item.s_path_thumb"
-                            :src="'/api/file?path=' + encodeURIComponent(o_item.s_path_thumb)">
-                        <div class="record-session-title">
-                            <b>{{ f_s_name(o_item) }}</b>
-                            <span class="record-dim">{{ f_s_date(o_item.n_ts_ms) }} &middot; {{ f_s_sz(o_item.n_sz__byte) }}</span>
-                            <span class="record-dim">
-                                {{ f_n_frame(o_item) }} frames
-                                <span v-if="f_s_status(o_item)"> &middot; {{ f_s_status(o_item) }}</span>
-                            </span>
-                        </div>
-                    </div>
-
-                    <video
-                        class="record-session-video"
-                        v-if="f_s_media(o_item)"
-                        :src="'/api/file?path=' + encodeURIComponent(f_s_media(o_item))"
-                        controls preload="metadata"
-                    ></video>
-
-                    <div class="filter-row" style="margin-top:6px;">
-                        <button class="btn-small" @click="f_encode(o_item)"
-                            :disabled="o_state.o_record.b_encoding">export mp4</button>
-                        <button class="btn-small" @click="f_tiff(o_item)"
-                            :disabled="o_state.o_record.b_encoding || f_b_video(o_item)">export TIFF</button>
-                        <button class="btn-small" v-if="f_b_resumable(o_item)" @click="f_resume(o_item)">resume</button>
-                        <button class="btn-small record-danger" @click="f_delete(o_item)">delete</button>
-                    </div>
-                    <div class="record-dim record-path">{{ o_item.s_path_folder }}</div>
-                </div>
-
-                <div class="record-dim" v-if="o_state.o_record.a_o_recording.length === 0">no recordings yet</div>
                 <div class="record-error" v-if="s_error">{{ s_error }}</div>
+                <div class="record-dim" v-if="o_state.o_record.a_o_recording.length === 0">no recordings yet</div>
+
+                <!-- one line per session; the selected session opens its player -->
+                <div class="record-session-list cockpit-list">
+                    <div class="record-session" v-for="o_item in o_state.o_record.a_o_recording" :key="o_item.s_path_folder"
+                        :class="{ active: s_path_folder__open === o_item.s_path_folder }">
+                        <div class="record-session-head">
+                            <button class="record-session-open" :disabled="!f_s_media(o_item)"
+                                :aria-label="'Play ' + f_s_name(o_item)" :aria-expanded="s_path_folder__open === o_item.s_path_folder"
+                                :data-tooltip="f_s_media(o_item) ? 'Play / hide the video' : 'No video yet — export an mp4 first'"
+                                @click="s_path_folder__open = s_path_folder__open === o_item.s_path_folder ? '' : o_item.s_path_folder">
+                                <img class="record-session-thumb" v-if="o_item.s_path_thumb"
+                                    :src="'/api/file?path=' + encodeURIComponent(o_item.s_path_thumb)">
+                                <span class="record-session-thumb" v-else></span>
+                                <ui_icon v-if="f_s_media(o_item)" :s_name="s_path_folder__open === o_item.s_path_folder ? 'close' : 'play'" />
+                            </button>
+                            <div class="record-session-title" :data-tooltip="o_item.s_path_folder">
+                                <b>{{ f_s_name(o_item) }}</b>
+                                <span class="record-dim">
+                                    {{ f_s_date(o_item.n_ts_ms) }} &middot; {{ f_s_sz(o_item.n_sz__byte) }} &middot; {{ f_n_frame(o_item) }} frames<span v-if="f_s_status(o_item)"> &middot; {{ f_s_status(o_item) }}</span>
+                                </span>
+                            </div>
+                            <button class="btn-small" @click="f_encode(o_item)" data-tooltip="Export mp4&#10;Encode the frames of this session into a video."
+                                :disabled="o_state.o_record.b_encoding">mp4</button>
+                            <button class="btn-small" @click="f_tiff(o_item)" data-tooltip="Export TIFF&#10;Write the frame sequence as a TIFF stack (time-lapse sessions only)."
+                                :disabled="o_state.o_record.b_encoding || f_b_video(o_item)">TIFF</button>
+                            <button class="btn-small" v-if="f_b_resumable(o_item)" @click="f_resume(o_item)" data-tooltip="Resume this interrupted recording">resume</button>
+                            <button class="cockpit-icon-button danger" @click="f_delete(o_item)" :aria-label="'Delete ' + f_s_name(o_item)" data-tooltip="Delete this session and its files"><ui_icon s_name="trash" /></button>
+                        </div>
+                        <video
+                            class="record-session-video"
+                            v-if="s_path_folder__open === o_item.s_path_folder && f_s_media(o_item)"
+                            :src="'/api/file?path=' + encodeURIComponent(f_s_media(o_item))"
+                            controls preload="metadata"
+                        ></video>
+                    </div>
+                </div>
             </div>
         </div>
     `,
@@ -82,6 +85,8 @@ let o_component__recording_library = {
         return {
             o_state: o_state,
             s_error: '',
+            // folder of the session whose player is open ('' = none)
+            s_path_folder__open: '',
         };
     },
     watch: {

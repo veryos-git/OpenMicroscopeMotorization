@@ -3,6 +3,7 @@ import { f_o_wsmsg } from './constructors.module.js';
 import { f_n_score__video, f_o_focus__fast } from './focus_search.module.js';
 import { f_o_capture__frame, f_save_image } from './o_capture.module.js';
 import { f_a_stack_plane } from './focus_stack_plan.module.js';
+import { o_component__icon } from './o_component__icon.js';
 
 // a stack moves gently and settles between depths; capture the frame first,
 // then advance so every depth is approached from the same side
@@ -13,100 +14,92 @@ let N_MS__STACK_SILENCE = 600000;
 
 let o_component__focus_stack = {
     name: 'component-focus-stack',
+    components: { ui_icon: o_component__icon },
     template: `
         <div class="overlay-panel panel-focus_stack" :class="{ visible: o_state.o_panel_visibility.focus_stack }">
             <div class="panel-header">
-                <h2>Focus Stack</h2>
+                <h2><ui_icon s_name="stack" /> Focus Stack</h2>
+                <span class="panel-state" :class="{ running: b_running }" v-if="s_status !== 'idle'">{{ s_status }}</span>
                 <button class="panel-close" @click="f_close" :disabled="b_running">&times;</button>
             </div>
             <div class="panel-body">
 
                 <!-- ── Config / run (idle) ─────────────────────── -->
                 <template v-if="s_status === 'idle'">
-                    <div class="focus-field">
-                        <label for="focus-stack-mode">Mode</label>
-                        <select id="focus-stack-mode" v-model="o_config.s_mode" @change="f_save_config">
-                            <option value="easy">Easy</option><option value="expert">Expert</option>
-                        </select>
-                    </div>
-                    <div class="focus-note" v-if="o_config.s_mode === 'easy'">
-                        Adjust focus with the Z controls and save each end of the range.
-                        Choose the number of images, then start to combine them into one all-in-focus image.
-                    </div>
-                    <div class="focus-note" v-else>
-                        finds focus first, then sweeps the focus motor around it and
-                        saves one frame per depth before blending them into a single
-                        all-in-focus image. the stack is centered on the found focus.
-                    </div>
-
+                    <div class="cockpit-status">{{ s_motor__focus_label }}</div>
                     <div class="focus-config">
-                        <template v-if="o_config.s_mode === 'easy'">
-                            <div class="focus-field" v-for="n_point in [1,2]" :key="n_point">
-                                <button class="btn-small" @click="f_set_focus(n_point)" :disabled="!b_hardware_ready">Set focus position {{ n_point }} here</button>
-                                <span>{{ a_n_focus[n_point-1] === null ? 'Not set' : 'Z ' + a_n_focus[n_point-1] + ' steps' }}</span>
-                            </div>
-                        </template>
-                        <div class="focus-field">
-                            <label>Focus motor</label>
-                            <span>{{ s_motor__focus_label }}</span>
+                        <div class="focus-field" data-tooltip="Mode&#10;Easy: adjust focus with the Z controls and save each end of the range. Choose the number of images, then start to combine them into one all-in-focus image.&#10;Expert: finds focus first, then sweeps the focus motor around it and saves one frame per depth before blending them. The stack is centered on the found focus.">
+                            <label for="focus-stack-mode">Mode</label>
+                            <select id="focus-stack-mode" v-model="o_config.s_mode" @change="f_save_config">
+                                <option value="easy">Easy</option><option value="expert">Expert</option>
+                            </select>
                         </div>
-                        <div class="focus-field" v-if="o_config.s_mode === 'expert'">
-                            <label>Step size</label>
-                            <input type="number" min="1" v-model.number="o_config.n_step" @change="f_save_config">
-                        </div>
-                        <div class="focus-field">
+                        <div class="focus-field" data-tooltip="Images&#10;Number of focus depths that are captured and combined.">
                             <label>Images</label>
                             <input type="number" min="2" max="200" v-model.number="o_config.n_its" @change="f_save_config">
                         </div>
-                        <div class="focus-field" v-if="o_config.s_mode === 'expert'">
+                        <template v-if="o_config.s_mode === 'easy'">
+                            <div class="focus-field focus-field--point" v-for="n_point in [1,2]" :key="n_point">
+                                <button class="btn-small" @click="f_set_focus(n_point)" :disabled="!b_hardware_ready"
+                                    data-tooltip="Save the current Z position as this end of the focus range">Set focus position {{ n_point }} here</button>
+                                <span>{{ a_n_focus[n_point-1] === null ? 'Not set' : 'Z ' + a_n_focus[n_point-1] + ' steps' }}</span>
+                            </div>
+                        </template>
+                        <div class="focus-field" v-if="o_config.s_mode === 'expert'" data-tooltip="Focus motor steps between two images (see Focus Step for a measured value).">
+                            <label>Step size</label>
+                            <input type="number" min="1" v-model.number="o_config.n_step" @change="f_save_config">
+                        </div>
+                        <div class="focus-field" v-if="o_config.s_mode === 'expert'" data-tooltip="Wait after each focus move before capturing.">
                             <label>Settle (ms)</label>
                             <input type="number" min="0" step="50" v-model.number="o_config.n_ms__settle" @change="f_save_config">
                         </div>
-                        <div class="focus-field" v-if="o_config.s_mode === 'expert'">
+                        <div class="focus-field" v-if="o_config.s_mode === 'expert'" data-tooltip="Longest side of the stacked image in pixels. 0 keeps the full resolution.">
                             <label>Max. output (px, 0 = full)</label>
                             <input type="number" min="0" step="500" v-model.number="o_config.n_dim__max" @change="f_save_config">
                         </div>
-                        <div class="focus-field" v-if="o_config.s_mode === 'expert'">
+                        <div class="focus-field focus-field--check" v-if="o_config.s_mode === 'expert'" data-tooltip="Register the frames to each other before blending.">
                             <label>Align frames</label>
                             <input type="checkbox" v-model="o_config.b_align" @change="f_save_config">
                         </div>
-                        <div class="focus-field" v-if="o_config.s_mode === 'expert'">
+                        <div class="focus-field focus-field--check" v-if="o_config.s_mode === 'expert'" data-tooltip="Find focus before the stack is captured.">
                             <label>Autofocus first</label>
                             <input type="checkbox" v-model="o_config.b_autofocus" @change="f_save_config">
                         </div>
-                        <div class="focus-field" v-if="o_config.s_mode === 'expert' && o_config.b_autofocus">
+                        <div class="focus-field" v-if="o_config.s_mode === 'expert' && o_config.b_autofocus" data-tooltip="Search step of the autofocus that runs first.">
                             <label>Focus search step</label>
                             <input type="number" min="1" v-model.number="o_config.n_step__focus" @change="f_save_config">
                         </div>
-                        <div class="focus-field" v-if="o_config.s_mode === 'expert' && o_config.b_autofocus">
+                        <div class="focus-field" v-if="o_config.s_mode === 'expert' && o_config.b_autofocus" data-tooltip="Largest distance the autofocus may travel.">
                             <label>Focus max travel</label>
                             <input type="number" min="10" step="10" v-model.number="o_config.n_step__focus_max" @change="f_save_config">
                         </div>
                     </div>
 
-                    <button
-                        class="btn-scan-start"
-                        @click="f_run"
-                        :disabled="!b_ready"
-                    >Start</button>
-
-                    <div class="focus-note" v-if="!o_state.b_connected__esp">connect the ESP32 first</div>
-                    <div class="focus-note" v-else-if="!o_state.b_streaming__webcam">start a camera first</div>
-                    <div class="focus-note" v-else>
-                        <template v-if="s_validation">{{ s_validation }}</template>
-                        <template v-else>{{ o_config.n_its }} images over {{ o_config.s_mode === 'easy' ? Math.abs(a_n_focus[1]-a_n_focus[0]) : (o_config.n_its - 1) * o_config.n_step }} steps.</template>
-                        switch the camera to manual exposure in the Cam panel so the
-                        brightness does not drift across the stack.
+                    <div class="cockpit-footer">
+                        <div class="focus-note" v-if="!o_state.b_connected__esp">connect the ESP32 first</div>
+                        <div class="focus-note" v-else-if="!o_state.b_streaming__webcam">start a camera first</div>
+                        <div class="focus-note" v-else>
+                            <template v-if="s_validation">{{ s_validation }}</template>
+                            <template v-else>{{ o_config.n_its }} images over {{ o_config.s_mode === 'easy' ? Math.abs(a_n_focus[1]-a_n_focus[0]) : (o_config.n_its - 1) * o_config.n_step }} steps.</template>
+                        </div>
+                        <button
+                            class="btn-scan-start"
+                            @click="f_run"
+                            :disabled="!b_ready"
+                            data-tooltip="Start&#10;Switch the camera to manual exposure in the Camera window so the brightness does not drift across the stack."
+                        >Start</button>
                     </div>
                 </template>
 
                 <!-- ── Capturing / stacking ─────────────────────── -->
                 <template v-if="s_status === 'capturing' || s_status === 'stacking'">
                     <div class="focus-status running">{{ s_status === 'capturing' ? s_status__detail : 'stacking...' }}</div>
-                    <div class="focusstack-progress-count">
-                        {{ s_status === 'capturing' ? ('captured ' + n_cnt__captured + ' / ' + o_config.n_its) : a_s_line__stack.length + ' log line' }}
+                    <div class="cockpit-row">
+                        <div class="focusstack-progress-count cockpit-grow">
+                            {{ s_status === 'capturing' ? ('captured ' + n_cnt__captured + ' / ' + o_config.n_its) : a_s_line__stack.length + ' log line' }}
+                        </div>
+                        <div class="scan-elapsed">Elapsed: {{ s_elapsed }}</div>
                     </div>
-                    <div class="scan-elapsed">Elapsed: {{ s_elapsed }}</div>
                     <div class="focusstack-progress-track">
                         <div class="focusstack-progress-fill" :style="{ width: n_pct__progress + '%' }"></div>
                     </div>
@@ -116,20 +109,18 @@ let o_component__focus_stack = {
                 <!-- ── Result ───────────────────────────────────── -->
                 <template v-if="s_status === 'complete'">
                     <div v-if="s_path__preview__shown" class="focusstack-result">
-                        <a :href="'/api/file?path=' + encodeURIComponent(s_path__stacked_image)" target="_blank">
+                        <a :href="'/api/file?path=' + encodeURIComponent(s_path__stacked_image)" target="_blank" data-tooltip="Click the image to open the full stack">
                             <img :src="'/api/file?path=' + encodeURIComponent(s_path__preview__shown)" class="focusstack-preview" />
                         </a>
-                        <div class="focus-note">click the image to open the full stack</div>
                     </div>
                     <div v-if="s_error" class="focusstack-error">{{ s_error }}</div>
-                    <div class="focusstack-summary">
+                    <div class="focusstack-summary" :data-tooltip="'folder: ' + s_path_folder">
                         <div class="focus-result">
                             <div><span>captured</span><b>{{ n_cnt__captured }}</b></div>
                             <div><span>stacked</span><b>{{ n_cnt__stacked }}</b></div>
                             <div><span>duration</span><b>{{ s_elapsed }}</b></div>
                         </div>
                     </div>
-                    <div class="focus-note scan-summary-path">folder: {{ s_path_folder }}</div>
                     <div v-if="a_s_line__stack.length" class="focusstack-log-wrap">
                         <button class="btn-small" @click="b_visible__log = !b_visible__log">
                             {{ b_visible__log ? 'hide' : 'show' }} stack log
@@ -138,7 +129,9 @@ let o_component__focus_stack = {
                             <div v-for="(s_line, n_idx) in a_s_line__stack" :key="n_idx">{{ s_line }}</div>
                         </div>
                     </div>
-                    <button class="btn-scan-start" @click="f_reset">New Stack</button>
+                    <div class="cockpit-footer">
+                        <button class="btn-scan-start" @click="f_reset">New Stack</button>
+                    </div>
                 </template>
 
             </div>

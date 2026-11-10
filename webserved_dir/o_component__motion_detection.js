@@ -1,46 +1,44 @@
 import { f_o_camera_geometry, f_el_camera_frame } from './camera_frame.module.js';
 import { o_state, f_save_setting, f_save_setting__debounced } from './index.js';
 import { f_o_motion_config, f_o_motion_detector, f_o_motion_view } from './motion_detection.module.js';
+import { o_component__icon } from './o_component__icon.js';
 
 let o_component__motion_detection = {
     name: 'component-motion-detection',
+    components: { ui_icon: o_component__icon },
     template: `
         <canvas ref="el_overlay" class="motion-detection-overlay" aria-hidden="true"></canvas>
         <div class="overlay-panel panel-motion-detection" :class="{ visible: o_state.o_panel_visibility.motion_detection }">
             <div class="panel-header">
-                <h2>Motion detection</h2>
-                <button class="panel-close" aria-label="Close motion detection" @click="f_close">&times;</button>
-            </div>
-            <div class="panel-body">
-                <label class="motion-detection-switch">
+                <h2><ui_icon s_name="detection" /> Motion detection <span class="ui-info" tabindex="0" role="note" data-tooltip="Motion detection&#10;Boxes mark changing regions, not identified organisms. Analyzes up to 10 samples/s at reduced resolution. Tiny or fast-moving objects may be missed. Stage movement pauses detection. Closing this panel leaves detection on."></span></h2>
+                <label class="motion-detection-switch" data-tooltip="Switch motion detection on or off">
                     <input type="checkbox" aria-label="Motion detection enabled" data-control-effect="motion.enabled" v-model="o_config.b_enabled" @change="f_change" />
                     {{ o_config.b_enabled ? 'On' : 'Off' }}
                 </label>
+                <button class="panel-close" aria-label="Close motion detection" @click="f_close">&times;</button>
+            </div>
+            <div class="panel-body">
                 <form @submit.prevent="f_change" class="motion-detection-config">
-                    <label>Sensitivity
+                    <label class="cockpit-span" data-tooltip="Sensitivity&#10;Low: ignore small brightness changes.&#10;High: include subtle changes.">Sensitivity
                         <select v-model="o_config.s_sensitivity" @change="f_change">
                             <option value="low">Low — ignore small brightness changes</option>
                             <option value="high">High — include subtle changes</option>
                         </select>
                     </label>
-                    <label>Minimum object size (camera px²)
+                    <label data-tooltip="Minimum object size (camera px²)&#10;Smaller changing regions are ignored. Size is the approximate box area.">Min. object size (px²)
                         <input type="number" min="1" max="1000000000" step="1" required
                             v-model.number="o_config.n_area__min" @change="f_change" />
                     </label>
-                    <label>Maximum object size (camera px²)
+                    <label data-tooltip="Maximum object size (camera px²)&#10;Larger changing regions are ignored. Size is the approximate box area.">Max. object size (px²)
                         <input type="number" :min="o_config.n_area__min" max="1000000000" step="1" required
                             v-model.number="o_config.n_area__max" @change="f_change" />
                     </label>
-                    <label>Minimum movement (camera px / sample)
+                    <label class="cockpit-span" data-tooltip="Minimum movement (camera px / sample)&#10;Compares region centers between samples; 0 includes newly appearing regions.">Minimum movement (camera px / sample)
                         <input type="number" min="0" max="100000" step="any" required
                             v-model.number="o_config.n_movement__min" @change="f_change" />
                     </label>
                 </form>
                 <p class="motion-detection-status" role="status">{{ s_status }}<span v-if="n_region"> · {{ n_region }} moving region{{ n_region === 1 ? '' : 's' }}</span></p>
-                <p class="filter-note">Boxes mark changing regions, not identified organisms. Size is the approximate box area.
-                    Minimum movement compares region centers between samples; 0 includes newly appearing regions.</p>
-                <p class="filter-note">Analyzes up to 10 samples/s at reduced resolution. Tiny or fast-moving objects may be missed.
-                    Stage movement pauses detection. Closing this panel leaves detection on.</p>
             </div>
         </div>
     `,

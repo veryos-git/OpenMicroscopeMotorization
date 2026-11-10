@@ -1,5 +1,6 @@
 import { f_n_motor__axis, o_state, f_send_esp_move_step, f_send_esp_stop, f_save_setting__debounced } from './index.js';
 import { f_n_score__video, f_o_focus__fast } from './focus_search.module.js';
+import { o_component__icon } from './o_component__icon.js';
 
 // a focus sweep is slow anyway, so move gently
 let N_RPM__FOCUS = 6.0;
@@ -13,29 +14,30 @@ let N_ITS__FINE = 9;
 
 let o_component__focus = {
     name: 'component-focus',
+    components: { ui_icon: o_component__icon },
     template: `
         <div class="overlay-panel panel-focus" :class="{ visible: o_state.o_panel_visibility.focus }">
             <div class="panel-header">
-                <h2>Auto Focus</h2>
+                <h2><ui_icon s_name="focus" /> Auto Focus</h2>
                 <button class="panel-close" @click="f_close" :disabled="b_running">&times;</button>
             </div>
             <div class="panel-body">
 
-                <div class="focus-meter">
+                <div class="focus-meter" data-tooltip="Sharpness meter&#10;Live sharpness of the image centre. The bar is relative to the best value seen since the last reset.">
                     <div class="focus-meter-label">
                         <span>sharpness</span>
+                        <span class="focus-meter-hint">
+                            best seen {{ n_score__meter_max.toFixed(1) }}
+                            <button class="cockpit-icon-button" @click="n_score__meter_max = 0" aria-label="Reset best sharpness" data-tooltip="Reset the best value seen"><ui_icon s_name="undo" /></button>
+                        </span>
                         <b>{{ n_score__now.toFixed(1) }}</b>
                     </div>
                     <div class="focus-meter-bar">
                         <div class="focus-meter-fill" :style="{ width: n_pct__meter + '%' }"></div>
                     </div>
-                    <div class="focus-meter-hint">
-                        best seen {{ n_score__meter_max.toFixed(1) }}
-                        <button class="btn-small" @click="n_score__meter_max = 0">reset</button>
-                    </div>
                 </div>
 
-                <div class="focus-plot" v-if="a_o_sample.length">
+                <div class="focus-plot" v-if="a_o_sample.length" :data-tooltip="'Sharpness over focus position — ' + a_o_sample.length + ' samples. The dot marks the best position.'">
                     <svg viewBox="0 0 100 46" preserveAspectRatio="none">
                         <polyline :points="s_points__plot"></polyline>
                         <circle
@@ -44,12 +46,7 @@ let o_component__focus = {
                             r="1.6" class="plot-best"
                         ></circle>
                     </svg>
-                    <div class="focus-plot-caption">
-                        sharpness over focus position &mdash; {{ a_o_sample.length }} samples
-                    </div>
                 </div>
-
-                <div class="focus-status" :class="{ running: b_running }">{{ s_status }}</div>
 
                 <div class="focus-result" v-if="o_result">
                     <div><span>start</span><b>{{ o_result.n_score__start.toFixed(1) }}</b></div>
@@ -62,61 +59,51 @@ let o_component__focus = {
                     class="btn-scan-start"
                     @click="f_run"
                     :disabled="!b_ready"
+                    data-tooltip="Find Focus&#10;Switch the camera to manual exposure first — an auto exposure that reacts to the defocus distorts the measurement."
                 >Find Focus</button>
                 <button v-else class="btn-scan-stop" @click="f_stop">Stop</button>
 
-                <div class="focus-note" v-if="!o_state.b_connected__esp">connect the ESP32 first</div>
-                <div class="focus-note" v-else-if="!o_state.b_streaming__webcam">start a camera first</div>
-                <div class="focus-note" v-else>
-                    switch the camera to manual exposure in the Cam panel — an auto
-                    exposure that reacts to the defocus distorts the measurement.
-                </div>
+                <div class="focus-status" :class="{ running: b_running }" role="status">{{ !o_state.b_connected__esp ? 'connect the ESP32 first' : !o_state.b_streaming__webcam ? 'start a camera first' : s_status }}</div>
 
-                <div class="focus-config">
-                    <div class="focus-field">
-                        <label>Focus motor</label>
-                        <span>{{ s_motor__focus_label }}</span>
+                <div class="cockpit-section">
+                    <div class="cockpit-section-head">
+                        <span class="cockpit-label">Search</span>
+                        <span class="ui-info" tabindex="0" role="note" :data-tooltip="'Focus search\\nProbes both sides of where you are, then walks uphill for up to ' + (o_config.n_its__coarse * o_config.n_step__coarse) + ' steps until the peak is bracketed — a defocused stage is followed back to focus instead of searching a fixed window around the start.'"></span>
+                        <span class="cockpit-readout dim">{{ s_motor__focus_label }}</span>
                     </div>
-                    <div class="focus-field">
-                        <label>Search step</label>
-                        <input type="number" min="1" v-model.number="o_config.n_step__coarse" @change="f_save_config">
+                    <div class="focus-config">
+                        <div class="focus-field" data-tooltip="Search step&#10;Focus motor steps between two measurements.">
+                            <label>Search step</label>
+                            <input type="number" min="1" v-model.number="o_config.n_step__coarse" @change="f_save_config">
+                        </div>
+                        <div class="focus-field" data-tooltip="Max search steps&#10;Number of measurements the uphill walk may take.">
+                            <label>Max steps</label>
+                            <input type="number" min="3" max="120" v-model.number="o_config.n_its__coarse" @change="f_save_config">
+                        </div>
+                        <div class="focus-field" data-tooltip="Settle (ms)&#10;Wait after each move before measuring.">
+                            <label>Settle (ms)</label>
+                            <input type="number" min="0" step="50" v-model.number="o_config.n_ms__settle" @change="f_save_config">
+                        </div>
+                        <div class="focus-field" data-tooltip="Metric&#10;tenengrad still reacts far away from focus, which is what the search needs. laplacian variance peaks harder but goes flat once the image is properly blurred, so it only helps if you are already close.">
+                            <label>Metric</label>
+                            <select v-model="o_config.s_metric" @change="f_save_config">
+                                <option value="tenengrad">tenengrad</option>
+                                <option value="laplacian">laplacian variance</option>
+                            </select>
+                        </div>
+                        <div class="focus-field" data-tooltip="Center area (%)&#10;Part of the image, around its centre, that is measured.">
+                            <label>Center area (%)</label>
+                            <input type="number" min="10" max="100" step="5" v-model.number="o_config.n_pct__roi" @change="f_save_config">
+                        </div>
+                        <div class="focus-field" data-tooltip="Frames / position&#10;Frames averaged per measurement; more is steadier and slower.">
+                            <label>Frames / pos.</label>
+                            <input type="number" min="1" max="8" v-model.number="o_config.n_cnt__sample" @change="f_save_config">
+                        </div>
+                        <div class="focus-field focus-field--check" data-tooltip="Fine pass&#10;Repeat the search with a smaller step around the peak.">
+                            <label>Fine pass</label>
+                            <input type="checkbox" v-model="o_config.b_fine" @change="f_save_config">
+                        </div>
                     </div>
-                    <div class="focus-field">
-                        <label>Max search steps</label>
-                        <input type="number" min="3" max="120" v-model.number="o_config.n_its__coarse" @change="f_save_config">
-                    </div>
-                    <div class="focus-field">
-                        <label>Settle (ms)</label>
-                        <input type="number" min="0" step="50" v-model.number="o_config.n_ms__settle" @change="f_save_config">
-                    </div>
-                    <div class="focus-field">
-                        <label>Metric</label>
-                        <select v-model="o_config.s_metric" @change="f_save_config">
-                            <option value="tenengrad">tenengrad</option>
-                            <option value="laplacian">laplacian variance</option>
-                        </select>
-                    </div>
-                    <div class="focus-field">
-                        <label>Center area (%)</label>
-                        <input type="number" min="10" max="100" step="5" v-model.number="o_config.n_pct__roi" @change="f_save_config">
-                    </div>
-                    <div class="focus-field">
-                        <label>Frames / position</label>
-                        <input type="number" min="1" max="8" v-model.number="o_config.n_cnt__sample" @change="f_save_config">
-                    </div>
-                    <div class="focus-field">
-                        <label>Fine pass</label>
-                        <input type="checkbox" v-model="o_config.b_fine" @change="f_save_config">
-                    </div>
-                </div>
-                <div class="focus-note">
-                    probes both sides of where you are, then walks uphill for up to
-                    {{ o_config.n_its__coarse * o_config.n_step__coarse }} steps until the peak is
-                    bracketed — a defocused stage is followed back to focus instead of
-                    searching a fixed window around the start. tenengrad still reacts far
-                    away from focus, which is what the search needs; laplacian variance
-                    peaks harder but goes flat once the image is properly blurred, so it
-                    only helps if you are already close.
                 </div>
             </div>
         </div>

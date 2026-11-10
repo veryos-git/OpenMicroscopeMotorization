@@ -1,6 +1,7 @@
 import { o_state, f_send_wsmsg_with_response, f_save_setting__debounced } from './index.js';
 import { f_o_wsmsg } from './constructors.module.js';
 import { f_o_capture__frame } from './o_capture.module.js';
+import { o_component__icon } from './o_component__icon.js';
 
 // "Cell pose" panel — runs the Cellpose segmentation on the live camera feed.
 //
@@ -20,17 +21,18 @@ import { f_o_capture__frame } from './o_capture.module.js';
 // panel stays a control surface.
 let o_component__cellpose = {
     name: 'component-cellpose',
+    components: { ui_icon: o_component__icon },
     template: `
         <div class="overlay-panel panel-cellpose" :class="{ visible: o_state.o_panel_visibility.cellpose }">
             <div class="panel-header">
-                <h2>Cell pose</h2>
+                <h2><ui_icon s_name="cell" /> Cell pose</h2>
                 <button class="panel-close" @click="f_close" :disabled="b_running">&times;</button>
             </div>
             <div class="panel-body">
 
                 <!-- setup -->
                 <template v-if="!b_running">
-                    <div class="cellpose-field">
+                    <div class="cellpose-field" data-tooltip="Mode&#10;Single image: segment one captured frame.&#10;Loop: segment the camera feed over and over.">
                         <label>Mode</label>
                         <div class="mode-toggle mode-toggle--mini">
                             <button
@@ -50,7 +52,7 @@ let o_component__cellpose = {
                         </div>
                     </div>
 
-                    <div class="cellpose-field">
+                    <div class="cellpose-field" data-tooltip="Model&#10;cpsam: Cellpose-SAM, generalist, slow on CPU.&#10;cyto3: Cellpose 3 cytoplasm, faster.&#10;The first frame also downloads the model weights into weights/cellpose. Runs on the GPU when the server has a CUDA build of torch, otherwise on the CPU.">
                         <label>Model</label>
                         <select v-model="s_model" @change="f_save_config">
                             <option value="cpsam">cpsam — Cellpose-SAM (generalist, slow on CPU)</option>
@@ -58,21 +60,14 @@ let o_component__cellpose = {
                         </select>
                     </div>
 
-                    <div class="cellpose-field">
+                    <div class="cellpose-field" data-tooltip="Inference size (long side, px)&#10;The frame is scaled to this size before segmentation. Larger finds smaller cells and takes longer.">
                         <label>Inference size (long side, px)</label>
                         <input type="number" v-model.number="n_dim" min="128" max="2048" step="64" @change="f_save_config" />
                     </div>
 
-                    <div class="cellpose-field" v-if="s_mode === 'loop'">
+                    <div class="cellpose-field" v-if="s_mode === 'loop'" data-tooltip="Pause between frames (second)&#10;Wait between two segmented frames in loop mode.">
                         <label>Pause between frames (second)</label>
                         <input type="number" v-model.number="n_sec__delay" min="0" max="600" step="1" @change="f_save_config" />
-                    </div>
-
-                    <div class="cellpose-hint">
-                        the first frame also downloads the model weights into
-                        <span class="cellpose-mono">weights/cellpose</span>.
-                        runs on the GPU when the server has a CUDA build of torch,
-                        otherwise on the CPU.
                     </div>
 
                     <!-- a frame captured while the stage moves is smeared, and the
@@ -113,9 +108,6 @@ let o_component__cellpose = {
 
                     <div class="cellpose-hint" v-if="!b_has_mask">
                         {{ b_busy ? 'Segmenting the frame — the mask appears on the image…' : 'waiting for the first frame' }}
-                    </div>
-                    <div class="cellpose-hint" v-else>
-                        the mask is drawn over the live image.
                     </div>
 
                     <div class="cellpose-field" v-if="b_has_mask">

@@ -39,21 +39,21 @@ let o_component__camera_setting = {
                 <div v-if="!o_cam.b_active" class="camera-setting-placeholder">No camera stream active</div>
                 <div v-else class="camera-setting-stack">
 
-                    <div class="cam-setting-row">
+                    <div class="cam-setting-row" data-tooltip="Frame rate&#10;Frames per second delivered by the camera.">
                         <span class="cam-setting-icon--text">FPS</span>
                         <select class="cam-setting-select" :value="n_fps__selected" @change="f_apply_fps($event.target.value)">
                             <option v-for="n in a_n_fps" :key="n" :value="n">{{ n }}</option>
                         </select>
                     </div>
 
-                    <div class="cam-setting-row">
+                    <div class="cam-setting-row" data-tooltip="Resolution&#10;Capture size of the camera in pixels.">
                         <ui_icon class="cam-setting-icon" s_name="scan" />
                         <select class="cam-setting-select" :value="s_resolution__selected" @change="f_apply_res($event.target.value)">
                             <option v-for="o in a_o_resolution" :key="o.s_label" :value="o.s_label">{{ o.s_label }}</option>
                         </select>
                     </div>
 
-                    <div class="cam-setting-row" v-if="o_cap.exposureMode">
+                    <div class="cam-setting-row" v-if="o_cap.exposureMode" data-tooltip="Exposure mode&#10;M: manual exposure time. auto: the camera adapts to the brightness. Use manual for focus, scans and stacks.">
                         <ui_icon class="cam-setting-icon" s_name="brightness" />
                         <div class="mode-toggle">
                             <button class="mode-btn" :class="{ active: o_cam.s_mode__exposure === 'manual' }"
@@ -63,14 +63,14 @@ let o_component__camera_setting = {
                         </div>
                     </div>
 
-                    <div class="cam-setting-row" v-if="o_cap.exposureTime && o_cam.s_mode__exposure === 'manual'">
+                    <div class="cam-setting-row" v-if="o_cap.exposureTime && o_cam.s_mode__exposure === 'manual'" data-tooltip="Exposure time&#10;How long the sensor collects light per frame.">
                         <ui_icon class="cam-setting-icon" s_name="record" />
                         <select class="cam-setting-select" :value="n_exposure_time__selected" @change="f_apply_exposure_time($event.target.value)">
                             <option v-for="o in a_o_exposure_time" :key="o.n_val" :value="o.n_val">{{ o.s_label }}</option>
                         </select>
                     </div>
 
-                    <div class="cam-setting-row" v-if="o_cap.whiteBalanceMode">
+                    <div class="cam-setting-row" v-if="o_cap.whiteBalanceMode" data-tooltip="White balance mode&#10;M: fixed colour temperature. auto: the camera adapts the colours.">
                         <span class="cam-setting-icon--text">WB</span>
                         <div class="mode-toggle">
                             <button class="mode-btn" :class="{ active: o_cam.s_mode__white_balance === 'manual' }"
@@ -80,7 +80,7 @@ let o_component__camera_setting = {
                         </div>
                     </div>
 
-                    <div class="cam-setting-row" v-if="o_cap.colorTemperature && o_cam.s_mode__white_balance === 'manual'">
+                    <div class="cam-setting-row" v-if="o_cap.colorTemperature && o_cam.s_mode__white_balance === 'manual'" data-tooltip="Colour temperature (K)&#10;Lower is warmer, higher is cooler.">
                         <span class="cam-setting-icon--text">WB</span>
                         <input type="range"
                             :min="o_cap.colorTemperature.min" :max="o_cap.colorTemperature.max"

@@ -1,13 +1,15 @@
 import { f_n_motor__axis, o_state, f_send_esp_move_step, f_send_esp_stop, f_send_esp_stop_all, f_send_esp_circle_start, f_save_setting__debounced } from './index.js';
+import { o_component__icon } from './o_component__icon.js';
 
 let N_MS__MOVE_TIMEOUT = 30000;
 
 let o_component__auto_move = {
     name: 'component-auto-move',
+    components: { ui_icon: o_component__icon },
     template: `
         <div class="overlay-panel panel-auto-move" :class="{ visible: o_state.o_panel_visibility.auto_move }">
             <div class="panel-header">
-                <h2>Auto Move</h2>
+                <h2><ui_icon s_name="auto" /> Auto Move</h2>
                 <button class="panel-close" @click="f_close" :disabled="b_running">&times;</button>
             </div>
             <div class="panel-body">
@@ -19,25 +21,21 @@ let o_component__auto_move = {
                         :class="{ active: s_mode === 'rectangle' }"
                         :disabled="b_running"
                         data-control-model="s_mode" data-control-reset="s_mode = value" @click="s_mode = 'rectangle'"
-                    >Rectangle</button>
+                        data-tooltip="Rectangle&#10;The stage traces a rectangle: +X → +Y → −X → −Y back to the origin."
+                    ><ui_icon s_name="rectangle" />Rectangle</button>
                     <button
                         class="mode-btn"
                         :class="{ active: s_mode === 'circle' }"
                         :disabled="b_running"
                         data-control-model="s_mode" data-control-reset="s_mode = value" @click="s_mode = 'circle'"
-                    >Circle</button>
+                        data-tooltip="Circle&#10;Computed on the ESP32. Both motors run continuously with speed modulated by sin/cos."
+                    ><ui_icon s_name="circle" />Circle</button>
                 </div>
 
+                <div class="auto-move-config">
                 <!-- rectangle config -->
                 <template v-if="s_mode === 'rectangle'">
-                    <div class="scan-section">
-                        <div class="scan-label">Rectangle Size (steps)</div>
-                        <div class="scan-hint">
-                            The stage will trace a rectangle:
-                            +X &rarr; +Y &rarr; &minus;X &rarr; &minus;Y back to origin.
-                        </div>
-
-                        <div class="scan-field">
+                        <div class="scan-field" data-tooltip="X distance&#10;Width of the rectangle in motor steps.">
                             <label>X distance</label>
                             <input
                                 type="number"
@@ -48,7 +46,7 @@ let o_component__auto_move = {
                             >
                         </div>
 
-                        <div class="scan-field">
+                        <div class="scan-field" data-tooltip="Y distance&#10;Height of the rectangle in motor steps.">
                             <label>Y distance</label>
                             <input
                                 type="number"
@@ -58,19 +56,11 @@ let o_component__auto_move = {
                                 @change="f_save_config"
                             >
                         </div>
-                    </div>
                 </template>
 
                 <!-- circle config -->
                 <template v-if="s_mode === 'circle'">
-                    <div class="scan-section">
-                        <div class="scan-label">Circle (steps)</div>
-                        <div class="scan-hint">
-                            Circle is computed on the ESP32. Both motors run
-                            continuously with speed modulated by sin/cos.
-                        </div>
-
-                        <div class="scan-field">
+                        <div class="scan-field" data-tooltip="Radius&#10;Radius of the circle in motor steps.">
                             <label>Radius</label>
                             <input
                                 type="number"
@@ -80,12 +70,10 @@ let o_component__auto_move = {
                                 @change="f_save_config"
                             >
                         </div>
-                    </div>
                 </template>
 
                 <!-- RPM -->
-                <div class="scan-section">
-                    <div class="scan-field">
+                    <div class="scan-field" data-tooltip="RPM&#10;Motor speed of the automatic movement.">
                         <label>RPM</label>
                         <input
                             type="number"
@@ -108,12 +96,12 @@ let o_component__auto_move = {
                         class="btn-scan-start auto-move-btn-once"
                         @click="f_run(false)"
                         :disabled="!o_state.b_connected__esp || !f_b_config_valid()"
-                    >Once</button>
+                     data-tooltip="Run the path once and stop"><ui_icon s_name="play" />Once</button>
                     <button
                         class="btn-scan-start auto-move-btn-loop"
                         @click="f_run(true)"
                         :disabled="!o_state.b_connected__esp || !f_b_config_valid()"
-                    >Loop</button>
+                     data-tooltip="Repeat the path until Stop"><ui_icon s_name="loop" />Loop</button>
                 </div>
 
                 <button

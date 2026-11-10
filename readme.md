@@ -133,8 +133,8 @@ Gamepad. Keyboard uses the selected speed; mouse and gamepad scale it with
 input displacement. Changes take effect while jogging. Saved-position moves also
 use XY/Z speeds.
 
-**Slow** sets XY/Z to 0.5/0.15 RPM, **Normal** to 5/0.5 RPM, and **Fast** to
-10/1.5 RPM. Presets set both values; either can then be adjusted independently.
+**Slow** sets XY/Z to 0.5/1 RPM, **Normal** to 5/3 RPM, and **Fast** to
+10/9 RPM. Presets set both values; either can then be adjusted independently.
 Values save when a slider is released, a numeric edit is committed, or a preset
 is selected. Existing saved jog speed becomes XY speed; Z defaults to 0.5 RPM.
 Speeds follow the axis when motors are reassigned. Z controls are disabled when

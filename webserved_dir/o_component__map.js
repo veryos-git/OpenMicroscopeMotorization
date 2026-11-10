@@ -7,6 +7,7 @@ import { f_n_motor__axis,
 } from './index.js';
 import { f_o_wsmsg } from './constructors.module.js';
 import { f_o_capture__frame } from './o_capture.module.js';
+import { o_component__icon } from './o_component__icon.js';
 
 // how often a low-res frame is sent to the server for localization
 let N_MS__CAPTURE = 1500;
@@ -22,10 +23,11 @@ let N_DIM__FRAME__UPLOAD = 160;
 
 let o_component__map = {
     name: 'component-map',
+    components: { ui_icon: o_component__icon },
     template: `
         <div class="overlay-panel panel-map" :class="{ visible: o_state.o_panel_visibility.map }">
             <div class="panel-header">
-                <h2>Map</h2>
+                <h2><ui_icon s_name="map" /> Map</h2>
                 <button class="panel-close" @click="f_close" :disabled="b_running">&times;</button>
             </div>
             <div class="panel-body">
@@ -39,13 +41,9 @@ let o_component__map = {
                     <div class="live-note">
                         no map for this slide yet. build one:
                     </div>
-                    <button class="btn-scan-start" @click="f_open('scan')">
+                    <button class="btn-scan-start" @click="f_open('scan')" data-tooltip="Scan&#10;Drive the stage over a grid and stitch a full-slide mosaic — best for capturing a whole slide in one go.">
                         Scan
                     </button>
-                    <div class="scan-hint">
-                        drive the stage over a grid and stitch a full-slide mosaic —
-                        best for capturing a whole slide in one go.
-                    </div>
                 </template>
 
                 <!-- map selector -->
@@ -63,7 +61,13 @@ let o_component__map = {
                             </span>
                             <span class="map-caret">{{ b_open__map_list ? '▲' : '▼' }}</span>
                         </button>
-                        <button class="toolbar-toggle" @click="f_list_maps" :disabled="b_running">refresh</button>
+                        <button class="cockpit-icon-button" @click="f_list_maps" :disabled="b_running" aria-label="Refresh maps" data-tooltip="Refresh the map list"><ui_icon s_name="refresh" /></button>
+                        <button
+                            class="toolbar-toggle" :class="{ active: b_running }"
+                            :disabled="!o_state.b_streaming__webcam || !s_path_map"
+                            @click="b_running ? f_stop() : f_start()"
+                            data-tooltip="Locate&#10;Find the current camera view on the selected map and mark it."
+                        ><ui_icon s_name="target" />{{ b_running ? 'stop locate' : 'locate me' }}</button>
                     </div>
 
                     <div class="map-select-list" v-if="b_open__map_list">
@@ -78,14 +82,6 @@ let o_component__map = {
                             <span class="map-select-label">{{ o_map.s_label }}</span>
                             <span class="map-select-time">{{ f_s_time(o_map.n_ts_ms) }}</span>
                         </div>
-                    </div>
-
-                    <div class="live-row">
-                        <button
-                            class="toolbar-toggle"
-                            :disabled="!o_state.b_streaming__webcam || !s_path_map"
-                            @click="b_running ? f_stop() : f_start()"
-                        >{{ b_running ? 'stop locate' : 'locate me' }}</button>
                     </div>
 
                     <div class="live-note" v-if="s_status">{{ s_status }}</div>
@@ -109,23 +105,12 @@ let o_component__map = {
                         </div>
                     </div>
 
-                    <div class="live-row">
-                        <span class="live-label">steps/px</span>
+                    <div class="live-row" data-tooltip="Steps per pixel&#10;Come from the X/Y calibration in Setup (st/px). With these set, click the map to move the stage there.">
+                        <span class="live-label">steps/px <span class="ui-info"></span></span>
                         <input type="number" class="live-number" v-model.number="n_step__per_px_x" placeholder="x" @change="f_save_config" />
                         <input type="number" class="live-number" v-model.number="n_step__per_px_y" placeholder="y" @change="f_save_config" />
                     </div>
-                    <div class="live-note">
-                        steps per pixel come from the backlash calibration's
-                        <b>scale</b> column. with these set, click the map to move the
-                        stage there.
-                    </div>
                 </template>
-
-                <!-- build / annotate shortcuts -->
-                <div class="map-actions">
-                    <button class="btn-small" @click="f_open('scan')">Scan</button>
-                    <button class="btn-small" @click="f_open('autostitch')">AStitch</button>
-                </div>
 
             </div>
         </div>

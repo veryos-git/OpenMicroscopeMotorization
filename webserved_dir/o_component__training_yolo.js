@@ -31,17 +31,17 @@ let o_component__training_yolo = {
         <p v-if="o_model">Labels: {{ o_model.a_s_label.join(', ') }}</p>
         <p v-else>No fine-tuned model for this dataset yet.</p>
         <label>New model name <input v-model="s_name_model" maxlength="100" placeholder="Optional name" :disabled="b_busy" aria-label="New YOLO model name"></label>
-        <label><input type="checkbox" v-model="b_parent" :disabled="b_busy || !o_model"> Fine-tune selected model (otherwise pretrained YOLO)</label>
-        <div class="training-label">
+        <label data-tooltip="Fine-tune selected model&#10;Continue training from the selected saved model. Off: start from the pretrained YOLO base model."><input type="checkbox" v-model="b_parent" :disabled="b_busy || !o_model"> Fine-tune selected model (otherwise pretrained YOLO)</label>
+        <div class="training-label" data-tooltip="Fine tune YOLO&#10;Uses saved images except “bad”. Capture at least two XY regions for training and validation. First use downloads the base model.">
             <label>Epochs <input type="number" min="1" max="500" v-model.number="n_epoch" :disabled="b_busy" aria-label="YOLO epochs"></label>
             <button @click="f_train" :disabled="b_busy || b_capture_busy || !o_status?.b_ready">Fine tune YOLO</button>
+            <span class="ui-info"></span>
         </div>
-        <small>Uses saved images except “bad”. Capture at least two XY regions for training and validation. First use downloads the base model.</small>
-        <div class="training-label">
+        <div class="training-label" data-tooltip="Infer YOLO&#10;Runs once on the selected crop, or the full camera frame if no crop is selected. Detections are previews, not saved annotations.">
             <label>Confidence <input type="number" min="0.01" max="1" step="0.05" v-model.number="n_confidence" :disabled="b_busy" aria-label="YOLO confidence"></label>
             <button @click="f_infer" :disabled="b_busy || b_capture_busy || !o_status?.b_ready || !o_model">Infer YOLO</button>
+            <span class="ui-info"></span>
         </div>
-        <small>Runs once on the selected crop, or the full camera frame if no crop is selected. Detections are previews, not saved annotations.</small>
         <div v-if="o_status?.o_job">
             <p role="status">{{ o_status.o_job.s_dataset_name }} · {{ o_status.o_job.s_kind }} · {{ o_status.o_job.s_status }}<span v-if="o_status.o_job.n_epoch_total"> · epoch {{ o_status.o_job.n_epoch }} / {{ o_status.o_job.n_epoch_total }}</span></p>
             <progress v-if="o_status.o_job.n_epoch_total" :value="o_status.o_job.n_epoch" :max="o_status.o_job.n_epoch_total"></progress>

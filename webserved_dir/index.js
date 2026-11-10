@@ -8,6 +8,7 @@ import { f_install_control_catalog } from './control_catalog.module.js';
 import { f_a_control_effects } from './control_effects.module.js';
 import { f_wait_for_esp_status } from './serial_handshake.module.js';
 import { f_o_hardware_led_config } from './hardware_led.module.js';
+import { f_o_size__default, f_o_size } from './scale_calibration.module.js';
 import { createApp, reactive, watch, markRaw } from 'vue';
 import { createRouter, createWebHistory } from 'vue-router';
 import {
@@ -24,8 +25,6 @@ import { o_component__webcam } from './o_component__webcam.js';
 import { o_component__jog } from './o_component__jog.js';
 import { o_component__map } from './o_component__map.js';
 import { o_component__gamepad } from './o_component__gamepad.js';
-import { o_component__motion } from './o_component__motion.js';
-import { o_component__optics } from './o_component__optics.js';
 import { o_component__scan } from './o_component__scan.js';
 import { o_component__camera_setting } from './o_component__camera_setting.js';
 import { o_component__led_setting } from './o_component__led_setting.js';
@@ -233,11 +232,17 @@ let o_state = reactive({
         a_n_ts_ms__backlash: [0, 0, 0],  // per motor
         n_ts_ms__flat: 0,
         n_ts_ms__focus: 0,              // focus step / DoF (tool pending)
-        n_ts_ms__scale: 0,              // µm/px (tool pending)
+        n_ts_ms__scale: 0,              // µm/px (Size window)
         o_camera__baseline: null,
+        o_camera__scale: null,          // camera image size the µm/px value was stored for
+        o_scale__record: null,          // how µm/px was measured: points, known distance, snapshot path
         n_step__focus: 0,
         n_um__per_px: 0,
     },
+
+    // Size window: remembered known distance and the reference overlays (grid,
+    // ruler, object) drawn over the live image
+    o_size: f_o_size__default(),
 
     // live slide-map localizer
     b_running__locate: false,
@@ -252,7 +257,7 @@ let o_state = reactive({
 
     // UI
     o_motion_detection: f_o_motion_config(),
-    o_panel_visibility: { motion_detection: false, setup: false, map: false, motion: false, gamepad: false, optics: false, slide_library: false, scan: false, camera_setting: false, led_setting: false, macro: false, auto_move: false, autostitch: false, filter: false, calibration: false, focus: false, focus_step: false, focus_stack: false, scale: false, stats: false, cellpose: false, zoom: false, record: false, recording_library: false, video: false, training: false },
+    o_panel_visibility: { motion_detection: false, setup: false, map: false, gamepad: false, slide_library: false, scan: false, camera_setting: false, led_setting: false, macro: false, auto_move: false, autostitch: false, filter: false, calibration: false, focus: false, focus_step: false, focus_stack: false, scale: false, stats: false, cellpose: false, zoom: false, record: false, recording_library: false, video: false, training: false },
     o_key_held: {},
 
     // scan
@@ -470,14 +475,12 @@ let f_apply_setting_from_db = function(){
     o_state.n_rpm__focus_jog = o_manual_speed.z;
     o_state.s_id__webcam_device = f_get('s_id__webcam_device', '');
 
-    let o_vis = f_get_json('o_panel_visibility', { map: false, motion: false, gamepad: false, optics: false, scan: false, camera_setting: false, stats: false });
+    let o_vis = f_get_json('o_panel_visibility', { map: false, gamepad: false, scan: false, camera_setting: false, stats: false });
     o_state.o_panel_visibility.setup = o_state.o_panel_visibility.setup || o_vis.setup || false;
     o_state.o_panel_visibility.map = o_vis.map || false;
-    o_state.o_panel_visibility.motion = o_vis.motion || false;
     o_state.o_panel_visibility.motion_detection = o_vis.motion_detection || false;
     Object.assign(o_state.o_motion_detection, f_o_motion_config(f_get_json('o_motion_detection', {})));
     o_state.o_panel_visibility.gamepad = o_vis.gamepad || false;
-    o_state.o_panel_visibility.optics = o_vis.optics || false;
     o_state.o_panel_visibility.slide_library = o_vis.slide_library || false;
     o_state.o_panel_visibility.scan = o_vis.scan || false;
     o_state.o_panel_visibility.camera_setting = o_vis.camera_setting || false;
@@ -528,6 +531,8 @@ let f_apply_setting_from_db = function(){
 
     // calibration profile (timestamps + recorded results per step)
     Object.assign(o_state.o_calibration, f_get_json('o_calibration', {}));
+
+    Object.assign(o_state.o_size, f_o_size(f_get_json('o_size', {})));
 
     o_state.o_mapping__w = f_get_json('o_mapping__w', o_state.o_mapping__w);
     o_state.o_mapping__s = f_get_json('o_mapping__s', o_state.o_mapping__s);
@@ -1134,8 +1139,6 @@ o_app.component('o_component__webcam', o_component__webcam);
 o_app.component('o_component__jog', o_component__jog);
 o_app.component('o_component__map', o_component__map);
 o_app.component('o_component__gamepad', o_component__gamepad);
-o_app.component('o_component__motion', o_component__motion);
-o_app.component('o_component__optics', o_component__optics);
 o_app.component('o_component__scan', o_component__scan);
 o_app.component('o_component__camera_setting', o_component__camera_setting);
 o_app.component('o_component__led_setting', o_component__led_setting);

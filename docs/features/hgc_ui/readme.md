@@ -40,6 +40,10 @@ Tools → Quick settings.
 
 
 
+The cockpit rules (no scrolling, one place per function, text in tooltips) are in
+`cockpit_rules.md`. They were applied to every window on 10.11.2026.
+
+
 problem: 
 - the UI is simply to crowded. for advanced users it makes sense to see all details but for a quick look it is overwhelming. 
 possible solution: 

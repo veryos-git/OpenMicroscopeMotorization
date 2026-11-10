@@ -10,6 +10,7 @@ import {
     f_o_wsmsg,
     o_sfunexposed__f_v_crud__indb,
 } from './constructors.module.js';
+import { o_component__icon } from './o_component__icon.js';
 
 // Slide library panel: list projects → list slides, create and name them, and
 // save/restore the per-slide stage position. The DB tables (a_o_project /
@@ -18,10 +19,11 @@ import {
 
 let o_component__slide_library = {
     name: 'component-slide-library',
+    components: { ui_icon: o_component__icon },
     template: `
         <div class="overlay-panel panel-slide-library" :class="{ visible: o_state.o_panel_visibility.slide_library }">
             <div class="panel-header">
-                <h2>Slide Library</h2>
+                <h2><ui_icon s_name="slide" /> Slide Library</h2>
                 <button class="panel-close" @click="f_close">&times;</button>
             </div>
             <div class="panel-body">
@@ -39,14 +41,16 @@ let o_component__slide_library = {
                 <div class="live-row" v-if="o_slide__current">
                     <span class="live-label">stage pos</span>
                     <span class="slide-lib-current">{{ s_stage_position__label }}</span>
-                </div>
-                <div class="slide-lib-new" v-if="o_slide__current">
-                    <button class="btn-small" @click="f_save_position" :disabled="!o_state.b_connected__esp">save pos</button>
-                    <button class="btn-small" @click="f_go_to_position" :disabled="!b_stage_position__saved || !o_state.b_connected__esp">go to</button>
+                    <button class="cockpit-icon-button" @click="f_save_position" :disabled="!o_state.b_connected__esp" aria-label="save pos"
+                        data-tooltip="Save position&#10;Remember the current stage position for this slide."><ui_icon s_name="save" /></button>
+                    <button class="cockpit-icon-button" @click="f_go_to_position" :disabled="!b_stage_position__saved || !o_state.b_connected__esp" aria-label="go to"
+                        data-tooltip="Go to position&#10;Drive the stage back to the saved position of this slide."><ui_icon s_name="go" /></button>
                 </div>
 
+                <div class="slide-lib-columns">
+                <div class="slide-lib-column">
                 <div class="live-label">project</div>
-                <div class="slide-lib-list">
+                <div class="slide-lib-list cockpit-list">
                     <div
                         class="slide-lib-item"
                         :class="{ active: n_id__project__current === o_project.n_id }"
@@ -55,7 +59,7 @@ let o_component__slide_library = {
                         @click="f_select_project(o_project)"
                     >
                         <span class="slide-lib-name">{{ o_project.s_name }}</span>
-                        <button class="btn-small" @click.stop="f_delete_project(o_project)">del</button>
+                        <button class="cockpit-icon-button danger" @click.stop="f_delete_project(o_project)" :aria-label="'Delete project ' + o_project.s_name" data-tooltip="Delete this project"><ui_icon s_name="trash" /></button>
                     </div>
                     <div class="map-select-empty" v-if="!a_o_project.length">no projects yet</div>
                 </div>
@@ -67,13 +71,15 @@ let o_component__slide_library = {
                         placeholder="new project name"
                         @keyup.enter="f_create_project"
                     />
-                    <button class="btn-small" @click="f_create_project" :disabled="!s_name__project__new.trim()">+ project</button>
+                    <button class="cockpit-icon-button" @click="f_create_project" :disabled="!s_name__project__new.trim()" aria-label="+ project" data-tooltip="Create the project"><ui_icon s_name="plus" /></button>
+                </div>
                 </div>
 
-                <div class="live-label" style="margin-top:12px;">slide</div>
+                <div class="slide-lib-column">
+                <div class="live-label">slide</div>
                 <div class="live-note" v-if="!n_id__project__current">select or create a project first</div>
                 <template v-else>
-                    <div class="slide-lib-list">
+                    <div class="slide-lib-list cockpit-list">
                         <div
                             class="slide-lib-item"
                             :class="{ active: n_id__slide__current === o_slide.n_id }"
@@ -82,7 +88,7 @@ let o_component__slide_library = {
                             @click="f_select_slide(o_slide)"
                         >
                             <span class="slide-lib-name">{{ o_slide.s_name }}</span>
-                            <button class="btn-small" @click.stop="f_delete_slide(o_slide)">del</button>
+                            <button class="cockpit-icon-button danger" @click.stop="f_delete_slide(o_slide)" :aria-label="'Delete slide ' + o_slide.s_name" data-tooltip="Delete this slide"><ui_icon s_name="trash" /></button>
                         </div>
                         <div class="map-select-empty" v-if="!a_o_slide__project.length">no slides in this project</div>
                     </div>
@@ -94,9 +100,11 @@ let o_component__slide_library = {
                             placeholder="slide name (e.g. honey bee leg)"
                             @keyup.enter="f_create_slide"
                         />
-                        <button class="btn-small" @click="f_create_slide" :disabled="!s_name__slide__new.trim()">+ slide</button>
+                        <button class="cockpit-icon-button" @click="f_create_slide" :disabled="!s_name__slide__new.trim()" aria-label="+ slide" data-tooltip="Create the slide"><ui_icon s_name="plus" /></button>
                     </div>
                 </template>
+                </div>
+                </div>
 
             </div>
         </div>

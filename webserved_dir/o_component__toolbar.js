@@ -66,13 +66,6 @@ let o_component__toolbar = {
                 <button class="panel-close" @click="b_details = false" aria-label="Close quick settings">×</button></div>
             <div class="panel-body">
                 <div class="toolbar-row toolbar-row--speed"><o_component__manual_speed s_context="toolbar" /></div>
-                <!-- USB camera quick access (shown while streaming) -->
-                <div class="toolbar-row toolbar-row--camera" v-if="o_state.o_camera.b_active">
-                    <button class="toolbar-toggle toolbar-icon" @click="f_toggle_panel('camera_setting')" aria-label="Camera settings"
-                        title="Camera settings — FPS, resolution, exposure and white balance"><ui_icon s_name="camera" /></button>
-                    <span class="toolbar-camera-hint">{{ o_cam.n_width }}×{{ o_cam.n_height }} · {{ Math.round(o_cam.n_frame_rate) }} fps</span>
-                </div>
-
                 <div class="toolbar-row toolbar-row--context">
                     <label class="toolbar-context-label" for="toolbar-project">Project</label>
                     <select
@@ -110,18 +103,17 @@ let o_component__toolbar = {
                     <button class="toolbar-toggle toolbar-icon" @click="f_on_refresh_maps" aria-label="Refresh maps" title="Refresh map list"><ui_icon s_name="refresh" /></button>
                 </div>
                 <div class="toolbar-row toolbar-row--hardware">
-                    <button class="toolbar-toggle hardware-overview" @click="f_open_setup" aria-label="Hardware overview — open Setup">
+                    <div class="hardware-overview" role="status" aria-label="Hardware overview">
                         <span v-for="o_item in a_o_hardware" :key="o_item.s_label" :class="'hardware-state--' + o_item.s_status" :title="o_item.s_detail">{{ o_item.s_label }}: {{ o_item.s_value }}</span>
-                    </button>
+                    </div>
                     <span class="conn-badge" :class="{ connected: o_state.b_connected__esp }"><span class="dot"></span>{{ s_connection_label }}</span>
                 </div>
             </div>
         </section>
         <section id="toolbar-tools" ref="el_tools" class="overlay-panel toolbar-tools" :class="{ visible: b_tools }" aria-label="All tools">
-            <div class="panel-header"><h2><ui_icon s_name="tools" /> Tools</h2><span class="panel-drag-hint" title="Drag to move"><ui_icon s_name="move" /></span>
+            <div class="panel-header"><h2><ui_icon s_name="tools" /> Tools <span class="ui-info" tabindex="0" role="note" data-tooltip="Pin tools&#10;Right-click a tool to pin it to the bar. Right-click a shortcut in the bar to remove it."></span></h2><span class="panel-drag-hint" title="Drag to move"><ui_icon s_name="move" /></span>
                 <button class="panel-close" aria-label="Close tools" title="Close tools" @click="f_close_tools(true)">×</button></div>
             <div class="panel-body">
-                <p class="toolbar-pin-hint">Right-click a tool to pin it to the bar.</p>
                 <div class="toolbar-tools-groups">
                     <section v-for="group in a_o_tool_group" :key="group.s_label" :aria-label="group.s_label">
                         <h3>{{ group.s_label }}</h3>
@@ -158,16 +150,15 @@ let o_component__toolbar = {
                     { s_panel: 'record', s_icon: 'record', s_label: 'Time-lapse', s_title: 'Record images at intervals, at one or more positions' },
                     { s_panel: 'video', s_icon: 'video', s_label: 'Video', s_title: 'Record real-time video, bursts or pre-roll' },
                     { s_panel: 'focus_stack', s_icon: 'stack', s_label: 'Focus stack', s_title: 'Combine images at different focus depths' },
-                    { s_panel: 'autostitch', s_icon: 'scan', s_label: 'Auto stitch', s_title: 'Stitch images with feature matching' },
+                    { s_panel: 'autostitch', s_icon: 'stitch', s_label: 'Auto stitch', s_title: 'Stitch images with feature matching' },
                 ] },
                 { s_label: 'Image', a_o_tool: [
                     { s_panel: 'zoom', s_icon: 'zoom', s_label: 'Zoom', s_title: 'Digital zoom · Ctrl + drag on the image' },
                     { s_panel: 'camera_setting', s_icon: 'camera', s_label: 'Camera', s_title: 'Camera resolution, frame rate, exposure and white balance' },
                     { s_panel: 'led_setting', s_icon: 'led', s_label: 'LED', s_title: 'LED · red, green, blue and warm/cold white' },
                     { s_panel: 'filter', s_icon: 'filter', s_label: 'Filters', s_title: 'Adjust live image processing' },
-                    { s_panel: 'calibration', s_icon: 'calibration', s_label: 'Calibration', s_title: 'Scale (µm/px) and flat-field correction' },
-                    { s_panel: 'scale', s_icon: 'scale', s_label: 'Scale', s_title: 'Show a calibrated scale on the image' },
-                    { s_panel: 'optics', s_icon: 'focus', s_label: 'Optics', s_title: 'Open the imaging controls overview' },
+                    { s_panel: 'calibration', s_icon: 'flat', s_label: 'Flat field', s_title: 'Capture the flat-field correction image, switch the correction on or off' },
+                    { s_panel: 'scale', s_icon: 'scale', s_label: 'Size', s_title: 'Calibrate the size, measure distances, show a grid, ruler or reference object' },
                 ] },
                 { s_label: 'Library', a_o_tool: [
                     { s_panel: 'slide_library', s_icon: 'slide', s_label: 'Slides', s_title: 'Organize projects and slides' },
@@ -186,8 +177,7 @@ let o_component__toolbar = {
                     { s_panel: 'auto_move', s_icon: 'auto', s_label: 'Auto move', s_title: 'Configure automatic stage movement' },
                     { s_panel: 'macro', s_icon: 'macro', s_label: 'Macros', s_title: 'Record and replay movement sequences' },
                     { s_panel: 'stats', s_icon: 'stats', s_label: 'Motor stats', s_title: 'Inspect motor position and activity' },
-                    { s_panel: 'focus_step', s_icon: 'focus', s_label: 'Focus step', s_title: 'Measure depth of field for focus stacking' },
-                    { s_panel: 'motion', s_icon: 'move', s_label: 'Motion', s_title: 'Open the stage movement overview' },
+                    { s_panel: 'focus_step', s_icon: 'depth', s_label: 'Focus step', s_title: 'Measure depth of field for focus stacking' },
                 ] },
                 { s_label: 'Workspace', a_o_tool: [
                     { s_panel: 'setup', s_icon: 'chip', s_label: 'Setup', s_title: 'Microcontroller settings · ESP32 connections, motors and LED' },

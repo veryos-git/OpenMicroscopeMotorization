@@ -1,28 +1,30 @@
 import { o_state, f_send_wsmsg_with_response, f_save_setting__debounced } from './index.js';
 import { f_o_wsmsg } from './constructors.module.js';
 import { f_o_capture__frame, f_save_image } from './o_capture.module.js';
+import { o_component__icon } from './o_component__icon.js';
 
 let o_component__autostitch = {
     name: 'component-autostitch',
+    components: { ui_icon: o_component__icon },
     template: `
         <div class="overlay-panel panel-autostitch" :class="{ visible: o_state.o_panel_visibility.autostitch }">
             <div class="panel-header">
-                <h2>Auto Stitch</h2>
+                <h2><ui_icon s_name="stitch" /> Auto Stitch</h2>
                 <button class="panel-close" @click="f_close" :disabled="b_running">&times;</button>
             </div>
             <div class="panel-body">
 
                 <!-- config state (not running, no result yet) -->
                 <template v-if="!b_running && !s_path__base_image">
-                    <div class="autostitch-field">
+                    <div class="autostitch-field" data-tooltip="Session name&#10;Used for the folder the captured images and the mosaic are saved in.">
                         <label>Session Name</label>
                         <input type="text" v-model="s_name__session" @change="f_save_config" />
                     </div>
-                    <div class="autostitch-field">
+                    <div class="autostitch-field" data-tooltip="Delay between stitch (second)&#10;Pause between two capture-and-stitch rounds.">
                         <label>Delay between stitch (second)</label>
                         <input type="number" v-model.number="n_sec__delay" min="0" max="60" @change="f_save_config" />
                     </div>
-                    <div class="autostitch-field">
+                    <div class="autostitch-field" data-tooltip="Min extension (%)&#10;A new image is only added when it extends the mosaic by at least this much.">
                         <label>Min Extension (%)</label>
                         <input type="number" v-model.number="n_pct__min_extension" min="0" max="50" step="0.5" @change="f_save_config" />
                     </div>

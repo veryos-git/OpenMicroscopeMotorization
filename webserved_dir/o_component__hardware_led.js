@@ -96,16 +96,14 @@ let o_component__hardware_led = {
             <details class="micro-led-details">
                 <summary>LED options</summary>
                 <fieldset :disabled="b_busy || !o_config.b_enabled" class="micro-led-options">
-                    <label class="micro-field">LED count<input type="number" min="1" max="16" step="1" v-model.number="o_config.n_count" @change="f_save" /></label>
-                    <label class="micro-field">Startup brightness<input type="number" min="0" max="255" step="1" v-model.number="o_config.o_startup.n_brightness" @change="f_save" /></label>
-                    <p class="micro-hint">Brightness: 0–255. The W channel is warm or cool white according to the LED module.</p>
+                    <label class="micro-field" data-tooltip="Number of LEDs on the data line">LED count<input type="number" min="1" max="16" step="1" v-model.number="o_config.n_count" @change="f_save" /></label>
+                    <label class="micro-field" data-tooltip="Startup brightness · 0–255 · the W channel is warm or cool white according to the LED module">Startup brightness<input type="number" min="0" max="255" step="1" v-model.number="o_config.o_startup.n_brightness" @change="f_save" /></label>
                 </fieldset>
             </details>
-            <p class="setup-hint">Hardware and startup changes are saved automatically. Use “Generate Firmware &amp; Flash ESP32” below to apply them.</p>
+            <button class="btn-small" @click="f_open_live" :disabled="o_state.b_flashing"
+                data-tooltip="Open LED settings&#10;Live brightness, colour and on/off. Hardware and startup changes on this page are saved automatically and applied by Flash.">Open LED settings</button>
             <p v-if="s_config_error" class="setup-hint setup-hint--blocked" role="alert">{{ s_config_error }}</p>
             <p v-else-if="b_needs_flash" class="setup-hint">Saved LED settings differ from the connected controller. Flash to apply them.</p>
-            <button class="btn-small" @click="f_open_live" :disabled="o_state.b_flashing">Open LED settings</button>
-            <p class="setup-hint">Control live brightness, colour and on/off from LED settings in the main toolbar.</p>
             <p v-if="s_error || o_report?.s_error || o_state.s_error__hardware_led" class="setup-hint setup-hint--blocked" role="alert">{{ s_error || o_report?.s_error || o_state.s_error__hardware_led }}</p>
         </section>
     `,

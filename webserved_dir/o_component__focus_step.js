@@ -1,5 +1,6 @@
 import { f_n_motor__axis, o_state, f_send_esp_move_step, f_send_esp_stop, f_save_setting__debounced, f_save_calibration } from './index.js';
 import { f_n_score__video, f_o_focus__fast } from './focus_search.module.js';
+import { o_component__icon } from './o_component__icon.js';
 
 // focus step / depth-of-field calibration.
 //
@@ -65,61 +66,47 @@ let f_n_step__width__half = function(a_o_sample) {
 
 let o_component__focus_step = {
     name: 'component-focus-step',
+    components: { ui_icon: o_component__icon },
     template: `
         <div class="overlay-panel panel-focus_step" :class="{ visible: o_state.o_panel_visibility.focus_step }">
             <div class="panel-header">
-                <h2>Focus Step</h2>
+                <h2><ui_icon s_name="depth" /> Focus Step <span class="ui-info" tabindex="0" role="note" data-tooltip="Focus step&#10;Measures the depth of field by sweeping the focus motor through focus and fitting the sharpness peak. Half the peak width is the recommended step for focus stacking."></span></h2>
                 <button class="panel-close" @click="f_close" :disabled="b_running">&times;</button>
             </div>
             <div class="panel-body">
 
-                <div class="focus-note">
-                    measures the depth of field by sweeping the focus motor through
-                    focus and fitting the sharpness peak. half the peak width is the
-                    recommended step for focus stacking.
-                </div>
-
+                <div class="cockpit-status">{{ s_motor__focus_label }}</div>
                 <div class="focus-config">
-                    <div class="focus-field">
-                        <label>Focus motor</label>
-                        <span>{{ s_motor__focus_label }}</span>
-                    </div>
-                    <div class="focus-field">
+                    <div class="focus-field" data-tooltip="Probe step&#10;Focus motor steps between two sharpness samples.">
                         <label>Probe step</label>
                         <input type="number" min="1" v-model.number="o_config.n_step__probe" @change="f_save_config">
                     </div>
-                    <div class="focus-field">
-                        <label>Samples each side</label>
+                    <div class="focus-field" data-tooltip="Samples each side&#10;Number of samples taken above and below focus.">
+                        <label>Samples / side</label>
                         <input type="number" min="2" max="40" v-model.number="o_config.n_its__sweep" @change="f_save_config">
                     </div>
-                    <div class="focus-field">
+                    <div class="focus-field" data-tooltip="Settle (ms)&#10;Wait after each move before measuring.">
                         <label>Settle (ms)</label>
                         <input type="number" min="0" step="50" v-model.number="o_config.n_ms__settle" @change="f_save_config">
                     </div>
-                    <div class="focus-field">
+                    <div class="focus-field focus-field--check" data-tooltip="Autofocus first&#10;Find focus before the sweep starts.">
                         <label>Autofocus first</label>
                         <input type="checkbox" v-model="o_config.b_autofocus" @change="f_save_config">
                     </div>
-                    <div class="focus-field" v-if="o_config.b_autofocus">
+                    <div class="focus-field" v-if="o_config.b_autofocus" data-tooltip="Autofocus step&#10;Search step of the autofocus that runs first.">
                         <label>Autofocus step</label>
                         <input type="number" min="1" v-model.number="o_config.n_step__autofocus" @change="f_save_config">
                     </div>
                 </div>
 
-                <button class="btn-scan-start" @click="f_measure" :disabled="!b_ready">Measure</button>
-
-                <div class="focus-note" v-if="!o_state.b_connected__esp">connect the ESP32 first</div>
-                <div class="focus-note" v-else-if="!o_state.b_streaming__webcam">start a camera first</div>
-                <div class="focus-note" v-else>
-                    focus the specimen (or let it autofocus) and make sure there is
-                    texture in the center of the view. use manual exposure so the
-                    brightness does not drift across the sweep.
+                <div class="cockpit-footer">
+                    <button v-if="!b_running" class="btn-scan-start" @click="f_measure" :disabled="!b_ready"
+                        data-tooltip="Measure&#10;Focus the specimen (or let it autofocus) and make sure there is texture in the center of the view. Use manual exposure so the brightness does not drift across the sweep.">Measure</button>
+                    <button v-if="b_running" class="btn-scan-stop" @click="f_stop">Stop</button>
+                    <div class="focus-status" :class="{ running: b_running }" role="status">{{ !o_state.b_connected__esp ? 'connect the ESP32 first' : !o_state.b_streaming__webcam ? 'start a camera first' : s_status }}</div>
                 </div>
 
-                <div class="focus-status" :class="{ running: b_running }">{{ s_status }}</div>
-                <button v-if="b_running" class="btn-scan-stop" @click="f_stop">Stop</button>
-
-                <div class="focus-plot" v-if="a_o_sample.length">
+                <div class="focus-plot" v-if="a_o_sample.length" :data-tooltip="'Sharpness over focus position — ' + a_o_sample.length + ' samples'">
                     <svg viewBox="0 0 100 46" preserveAspectRatio="none">
                         <polyline :points="s_points__plot"></polyline>
                         <circle
@@ -128,9 +115,6 @@ let o_component__focus_step = {
                             r="1.6" class="plot-best"
                         ></circle>
                     </svg>
-                    <div class="focus-plot-caption">
-                        sharpness over focus position &mdash; {{ a_o_sample.length }} samples
-                    </div>
                 </div>
 
                 <div class="focus-result" v-if="o_result">

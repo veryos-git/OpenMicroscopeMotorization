@@ -1,8 +1,8 @@
 // Manual speeds follow logical axes, even when physical motors are reassigned.
 const a_o_speed_preset = [
-    { s_name: 'Slow', xy: 0.5, z: 0.15 },
-    { s_name: 'Normal', xy: 5, z: 0.5 },
-    { s_name: 'Fast', xy: 10, z: 1.5 },
+    { s_name: 'Slow', xy: 0.5, z: 1 },
+    { s_name: 'Normal', xy: 5, z: 3 },
+    { s_name: 'Fast', xy: 10, z: 9 },
 ];
 function f_n_speed(value, fallback) {
     const n = Number(value);

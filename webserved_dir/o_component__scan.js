@@ -4,6 +4,8 @@ import { f_n_motor__axis, o_state, f_send_esp_move_step, f_send_esp_stop, f_send
 import { f_o_wsmsg } from './constructors.module.js';
 import { f_n_score__video, f_o_focus__fast } from './focus_search.module.js';
 import { f_o_capture__frame, f_save_image } from './o_capture.module.js';
+import { o_component__icon } from './o_component__icon.js';
+import { o_component__tab } from './o_component__cockpit.js';
 
 let N_RPM__SCAN = 8.0;
 let N_MS__SETTLE = 500;
@@ -15,51 +17,57 @@ let N_PCT__FOCUS_ROI = 60;
 
 let o_component__scan = {
     name: 'component-scan',
+    components: { ui_icon: o_component__icon, ui_tab: o_component__tab },
     template: `
-        <div class="overlay-panel panel-scan" :class="{ visible: o_state.o_panel_visibility.scan }">
+        <div class="overlay-panel panel-scan" :class="{ visible: o_state.o_panel_visibility.scan }" @cockpit-reveal="s_tab = $event.detail">
             <div class="panel-header">
-                <h2>Tile Scan</h2>
+                <h2><ui_icon s_name="scan" /> Tile Scan</h2>
+                <span v-if="s_status !== 'idle' || b_testing" class="panel-state running">{{ b_testing ? 'moving' : s_status }}</span>
                 <button class="panel-close" @click="f_close" :disabled="s_status === 'scanning' || b_testing">&times;</button>
             </div>
+            <ui_tab :a_o_tab="a_o_tab" :s_tab="s_tab__shown" @update:s_tab="s_tab = $event" />
             <div class="panel-body">
                 <div v-if="s_error__jobs" class="scan-stitch-error">{{ s_error__jobs }}</div>
-                <details class="scan-jobs" :open="a_o_job.some(job => ['queued', 'running'].includes(job.s_status) || (job.s_status === 'capturing' && job.o_option?.b_live_scan))">
-                    <summary>Scans · {{ a_o_job.length }} <span v-if="n_jobs_pending">· {{ n_jobs_pending }} pending</span></summary>
-                    <div class="scan-hint">Stitching runs in the background. You can capture the next scan while jobs are queued or running.</div>
+
+                <!-- ── Scans: captured scans, stitch jobs and results ── -->
+                <div class="cockpit-pane scan-jobs cockpit-list" data-cockpit-pane="jobs" v-show="s_tab__shown === 'jobs'">
+                    <div class="cockpit-status" v-if="!a_o_job.length">No scans yet. Stitching runs in the background; you can capture the next scan while jobs are queued.</div>
                     <article v-for="job in a_o_job" :key="job.s_id" class="scan-job">
-                        <div class="scan-job-title"><strong>{{ job.s_name }}</strong><span>{{ job.s_status }}</span></div>
-                        <div class="scan-hint">{{ job.n_tiles }} tiles</div>
-                        <div class="scan-field-row">
-                            <button class="btn-small" @click="f_open_folder(job)">Open folder</button>
-                            <a v-if="job.s_status === 'complete' && job.o_result?.s_path_original_colors" class="btn-small"
-                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_original_colors) + '&v=' + job.n_finished" target="_blank" rel="noopener">Original colors PNG</a>
-                            <a v-if="job.s_status === 'complete' && job.o_result?.s_path_original_colors_jpeg" class="btn-small"
-                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_original_colors_jpeg) + '&v=' + job.n_finished" target="_blank" rel="noopener">Original colors JPEG</a>
-                            <a v-if="job.s_status === 'complete' && job.o_result?.s_path_flatfield" class="btn-small"
-                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_flatfield) + '&v=' + job.n_finished" target="_blank" rel="noopener">Flat-field only PNG</a>
-                            <a v-if="job.s_status === 'complete' && job.o_result?.s_path_flatfield_jpeg" class="btn-small"
-                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_flatfield_jpeg) + '&v=' + job.n_finished" target="_blank" rel="noopener">Flat-field only JPEG</a>
-                            <a v-if="job.s_status === 'complete' && job.o_result?.s_path_exposure" class="btn-small"
-                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_exposure) + '&v=' + job.n_finished" target="_blank" rel="noopener">Exposure only PNG</a>
-                            <a v-if="job.s_status === 'complete' && job.o_result?.s_path_exposure_jpeg" class="btn-small"
-                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_exposure_jpeg) + '&v=' + job.n_finished" target="_blank" rel="noopener">Exposure only JPEG</a>
-                            <a v-if="job.s_status === 'complete' && job.o_result?.s_path_output" class="btn-small"
-                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_output) + '&v=' + job.n_finished" target="_blank" rel="noopener">{{ job.o_result.s_path_flatfield ? 'Both corrections PNG' : job.o_result.s_path_original_colors ? 'Adjusted PNG' : 'Open mosaic' }}</a>
-                            <a v-if="job.s_status === 'complete' && job.o_result?.s_path_jpeg" class="btn-small"
-                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_jpeg) + '&v=' + job.n_finished" target="_blank" rel="noopener">{{ job.o_result.s_path_flatfield ? 'Both corrections JPEG' : job.o_result.s_path_original_colors ? 'Adjusted JPEG' : 'Open JPEG' }}</a>
-                            <button class="btn-small" v-if="!['capturing', 'queued', 'running'].includes(job.s_status)"
-                                :disabled="job.n_tiles < 2 || b_queueing" @click="f_stitch(job)">{{ job.s_status === 'ready' ? 'Stitch' : 'Stitch again' }}</button>
+                        <div class="scan-job-title"><strong>{{ job.s_name }}</strong><span>{{ job.n_tiles }} tiles · {{ job.s_status }}</span></div>
+                        <div class="scan-job-body">
+                            <div class="scan-field-row">
+                                <button class="btn-small" @click="f_open_folder(job)">Open folder</button>
+                                <a v-if="job.s_status === 'complete' && job.o_result?.s_path_original_colors" class="btn-small"
+                                    :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_original_colors) + '&v=' + job.n_finished" target="_blank" rel="noopener">Original colors PNG</a>
+                                <a v-if="job.s_status === 'complete' && job.o_result?.s_path_original_colors_jpeg" class="btn-small"
+                                    :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_original_colors_jpeg) + '&v=' + job.n_finished" target="_blank" rel="noopener">Original colors JPEG</a>
+                                <a v-if="job.s_status === 'complete' && job.o_result?.s_path_flatfield" class="btn-small"
+                                    :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_flatfield) + '&v=' + job.n_finished" target="_blank" rel="noopener">Flat-field only PNG</a>
+                                <a v-if="job.s_status === 'complete' && job.o_result?.s_path_flatfield_jpeg" class="btn-small"
+                                    :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_flatfield_jpeg) + '&v=' + job.n_finished" target="_blank" rel="noopener">Flat-field only JPEG</a>
+                                <a v-if="job.s_status === 'complete' && job.o_result?.s_path_exposure" class="btn-small"
+                                    :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_exposure) + '&v=' + job.n_finished" target="_blank" rel="noopener">Exposure only PNG</a>
+                                <a v-if="job.s_status === 'complete' && job.o_result?.s_path_exposure_jpeg" class="btn-small"
+                                    :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_exposure_jpeg) + '&v=' + job.n_finished" target="_blank" rel="noopener">Exposure only JPEG</a>
+                                <a v-if="job.s_status === 'complete' && job.o_result?.s_path_output" class="btn-small"
+                                    :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_output) + '&v=' + job.n_finished" target="_blank" rel="noopener">{{ job.o_result.s_path_flatfield ? 'Both corrections PNG' : job.o_result.s_path_original_colors ? 'Adjusted PNG' : 'Open mosaic' }}</a>
+                                <a v-if="job.s_status === 'complete' && job.o_result?.s_path_jpeg" class="btn-small"
+                                    :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_jpeg) + '&v=' + job.n_finished" target="_blank" rel="noopener">{{ job.o_result.s_path_flatfield ? 'Both corrections JPEG' : job.o_result.s_path_original_colors ? 'Adjusted JPEG' : 'Open JPEG' }}</a>
+                                <button class="btn-small" v-if="!['capturing', 'queued', 'running'].includes(job.s_status)"
+                                    :disabled="job.n_tiles < 2 || b_queueing" @click="f_stitch(job)">{{ job.s_status === 'ready' ? 'Stitch' : 'Stitch again' }}</button>
+                            </div>
+                            <a v-if="job.s_status === 'complete' && job.o_result?.s_path_output" class="scan-job-thumb"
+                                :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_original_colors || job.o_result.s_path_output)" target="_blank" rel="noopener"
+                                data-tooltip="Open the full-size mosaic">
+                                <img class="scan-stitch-preview" loading="lazy" :alt="job.o_result.s_path_original_colors ? 'Stitched scan — original colors' : 'Stitched scan'"
+                                    :src="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_original_colors_preview || job.o_result.s_path_original_colors_jpeg || job.o_result.s_path_original_colors || job.o_result.s_path_preview || job.o_result.s_path_output) + '&v=' + job.n_finished" />
+                            </a>
                         </div>
                         <div v-if="job.s_error" class="scan-stitch-error">{{ job.s_error }}</div>
-                        <a v-if="job.s_status === 'complete' && job.o_result?.s_path_output"
-                            :href="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_original_colors || job.o_result.s_path_output)" target="_blank" rel="noopener">
-                            <img class="scan-stitch-preview" loading="lazy" :alt="job.o_result.s_path_original_colors ? 'Stitched scan — original colors' : 'Stitched scan'"
-                                :src="'/api/file?path=' + encodeURIComponent(job.o_result.s_path_original_colors_preview || job.o_result.s_path_original_colors_jpeg || job.o_result.s_path_original_colors || job.o_result.s_path_preview || job.o_result.s_path_output) + '&v=' + job.n_finished" />
-                        </a>
                         <div class="scan-hint" v-if="job.s_status === 'running'">{{ job.a_s_line.at(-1) }}</div>
                         <div v-if="job.o_option?.b_live_scan && job.s_status !== 'complete'">
-                            <div class="scan-hint">Live preview — provisional alignment; final colors and placement may change.</div>
                             <img v-if="job.o_live?.s_path_preview" class="scan-stitch-preview" alt="Provisional live scan mosaic"
+                                data-tooltip="Live preview&#10;Provisional alignment; final colors and placement may change."
                                 :src="'/api/file?path=' + encodeURIComponent(job.o_live.s_path_preview) + '&v=' + job.o_live.n_revision" />
                             <div v-else class="scan-hint">Waiting for live alignment…</div>
                             <div v-if="job.o_live?.s_error" class="scan-hint">{{ job.o_live.s_error }} Capture can continue; final stitching will retry.</div>
@@ -68,30 +76,41 @@ let o_component__scan = {
                             <div class="scan-stitch-log"><div v-for="(line, i) in job.a_s_line" :key="i">{{ line }}</div></div>
                         </details>
                     </article>
-                </details>
-
+                </div>
 
                 <!-- ── Config (idle) ─────────────────────── -->
                 <template v-if="s_status === 'idle'">
                     <fieldset class="scan-config" :disabled="b_testing || o_state.b_scanning">
 
-                    <div class="scan-field">
-                        <label for="scan-area-mode">Scan area</label>
-                        <select id="scan-area-mode" v-model="s_mode__area" @change="f_save_config">
-                            <option value="grid">Rectangular grid</option>
-                            <option value="free">Free outline</option>
-                        </select>
+                    <!-- ── Area: where the tiles go ── -->
+                    <div class="cockpit-pane" data-cockpit-pane="area" v-show="s_tab__shown === 'area'">
+                    <div class="cockpit-grid">
+                        <div class="scan-field cockpit-field" data-tooltip="Scan area&#10;Rectangular grid: tile counts and step distances.&#10;Free outline: mark the sample boundary point by point.">
+                            <label for="scan-area-mode">Scan area</label>
+                            <select id="scan-area-mode" v-model="s_mode__area" @change="f_save_config">
+                                <option value="grid">Rectangular grid</option>
+                                <option value="free">Free outline</option>
+                            </select>
+                        </div>
+                        <div v-if="s_mode__area === 'free'" class="scan-field cockpit-field" data-tooltip="Overlap between neighbouring tiles&#10;Needed for stitching.">
+                            <label for="scan-free-overlap">Overlap (%)</label>
+                            <input id="scan-free-overlap" type="number" min="0" max="90" step="5" v-model.number="n_overlap__pct" @change="f_save_config" />
+                        </div>
+                        <div v-else class="scan-field cockpit-field" data-tooltip="Overlap between neighbouring tiles&#10;Used by Compute grid. Needed for stitching.">
+                            <label>Overlap %</label>
+                            <input type="number" v-model.number="n_overlap__pct" min="0" max="90" step="5" @change="f_save_config" />
+                        </div>
                     </div>
-                    <div v-if="s_mode__area === 'free'" class="scan-section scan-free">
-                        <div class="scan-hint">Move around the sample boundary in order. Focus manually at each point, then add it. The last edge closes automatically; inward bends are supported.</div>
+                    <div v-if="s_mode__area === 'free'" class="cockpit-section scan-free">
+                        <div class="cockpit-section-head">
+                            <span class="cockpit-label">Outline</span>
+                            <span class="ui-info" tabindex="0" role="note" data-tooltip="Free outline&#10;Move around the sample boundary in order. Focus manually at each point, then add it. The last edge closes automatically; inward bends are supported.&#10;Tiles cover the outline with a small border. Focus is interpolated without autofocus. Points are cleared for a new slide, motor reassignment or controller disconnect."></span>
+                            <span class="cockpit-readout dim">{{ a_o_point__free.length }} / 128 points</span>
+                        </div>
                         <div class="scan-field-row">
                             <button class="btn-small" @click="f_add_free_point" :disabled="!b_free_point_ready || a_o_point__free.length >= 128" title="Save the current X, Y and focused Z position">Add focused point</button>
                             <button class="btn-small" @click="a_o_point__free.pop(); s_error__free = ''" :disabled="!a_o_point__free.length">Undo point</button>
                             <button class="btn-small" @click="f_clear_free_points" :disabled="!a_o_point__free.length">Clear outline</button>
-                        </div>
-                        <div class="scan-field">
-                            <label for="scan-free-overlap">Overlap (%)</label>
-                            <input id="scan-free-overlap" type="number" min="0" max="90" step="5" v-model.number="n_overlap__pct" @change="f_save_config" />
                         </div>
                         <svg v-if="a_o_point__free.length" class="scan-free-preview" viewBox="0 0 300 200" role="img" aria-label="Free scan outline and planned capture path">
                             <polygon :points="o_free_preview.s_outline" class="scan-free-outline" />
@@ -113,150 +132,92 @@ let o_component__scan = {
                                 </div>
                             </div>
                         </details>
-                        <div class="scan-hint">{{ s_motor__focus_label }}</div>
-                        <div class="scan-field">
-                            <label for="scan-free-settle">Focus settle (ms)</label>
-                            <input id="scan-free-settle" type="number" min="0" step="50" v-model.number="n_ms__focus_settle" @change="f_save_config" />
-                        </div>
-                        <div class="scan-hint">Tiles cover the outline with a small border. Focus is interpolated without autofocus. Points are cleared for a new slide, motor reassignment or controller disconnect.</div>
                     </div>
 
                     <template v-if="s_mode__area === 'grid'">
-                    <div class="scan-section">
-                        <div class="scan-label">Auto Grid (mark points)</div>
-                        <div class="scan-hint">
-                            calibrate steps/px first (Backlash panel, the motors assigned to X and Y).
-                            then jog around the area and mark points — the grid covers
-                            the bounding box of every point.
+                    <div class="cockpit-section">
+                        <div class="cockpit-section-head">
+                            <span class="cockpit-label">Auto Grid (mark points)</span>
+                            <span class="ui-info" tabindex="0" role="note" data-tooltip="Auto grid from marked points&#10;Calibrate steps/px first (Setup, the motors assigned to X and Y). Then jog around the area and mark points — the grid covers the bounding box of every point."></span>
+                            <span class="cockpit-readout dim">{{ a_o_point__grid.length }} point(s) marked</span>
                         </div>
                         <div class="scan-field-row">
-                            <button class="btn-small" @click="f_add_point" :disabled="!o_state.b_connected__esp">Add point</button>
-                            <button class="btn-small" @click="f_remove_point" :disabled="!a_o_point__grid.length">Undo</button>
-                            <button class="btn-small" @click="f_clear_points" :disabled="!a_o_point__grid.length">Clear</button>
+                            <button class="btn-small" @click="f_add_point" :disabled="!o_state.b_connected__esp" data-tooltip="Mark the current stage position">Add point</button>
+                            <button class="btn-small" @click="f_remove_point" :disabled="!a_o_point__grid.length" data-tooltip="Remove the last marked point">Undo</button>
+                            <button class="btn-small" @click="f_clear_points" :disabled="!a_o_point__grid.length" data-tooltip="Remove every marked point">Clear</button>
+                            <button
+                                class="btn-small btn-scan-test-square cockpit-grow"
+                                @click="f_auto_grid"
+                                :disabled="!n_step__per_px__x || !n_step__per_px__y || !o_state.b_connected__esp || a_o_point__grid.length < 2"
+                                data-tooltip="Compute grid&#10;Fill in step distances and tile counts so the grid covers every marked point."
+                            >Compute grid</button>
                         </div>
-                        <div class="scan-field">
-                            <label>Overlap %</label>
-                            <input type="number" v-model.number="n_overlap__pct" min="0" max="90" step="5" @change="f_save_config" />
-                        </div>
-                        <div class="scan-hint">
-                            {{ a_o_point__grid.length }} point(s) marked
-                            <template v-if="s_box__label"> · bounding box {{ s_box__label }}</template>
-                        </div>
-                        <div class="scan-hint">
+                        <div class="cockpit-status" :class="{ warning: !n_step__per_px__x || !n_step__per_px__y }">
                             steps/px &mdash; X {{ n_step__per_px__x.toFixed(2) }} · Y {{ n_step__per_px__y.toFixed(2) }}
                             <template v-if="!n_step__per_px__x || !n_step__per_px__y">(calibrate both axes first)</template>
+                            <template v-if="s_box__label"> · bounding box {{ s_box__label }}</template>
                         </div>
-                        <button
-                            class="btn-small btn-scan-test-square"
-                            @click="f_auto_grid"
-                            :disabled="!n_step__per_px__x || !n_step__per_px__y || !o_state.b_connected__esp || a_o_point__grid.length < 2"
-                        >Compute grid</button>
                     </div>
 
-                    <div class="scan-section">
-                        <div class="scan-label">Movement Distance (steps)</div>
-                        <div class="scan-hint">
-                            Set slightly less than camera field of view so adjacent
-                            tiles overlap. Overlap is needed for stitching.
-                        </div>
-
-                        <div class="scan-field">
-                            <label>X distance</label>
+                    <div class="cockpit-section">
+                        <div class="scan-axis-table">
+                            <span></span>
+                            <span class="cockpit-label" data-tooltip="Movement distance (steps)&#10;Set slightly less than the camera field of view so adjacent tiles overlap. Overlap is needed for stitching.">Steps / tile <span class="ui-info"></span></span>
+                            <span class="cockpit-label" data-tooltip="Tile grid&#10;Number of images along each axis.">Tiles <span class="ui-info"></span></span>
+                            <span class="cockpit-label" data-tooltip="Test moves&#10;− / + move one tile distance. The line button drives the whole row or column and returns.">Test <span class="ui-info"></span></span>
+                            <b class="scan-axis-name">X</b>
+                            <input type="number" min="1" aria-label="X distance (steps)" v-model.number="n_step__x" @change="f_save_config">
+                            <input type="number" min="1" max="100" aria-label="X tiles (columns)" v-model.number="n_tile_x" @change="f_save_config">
                             <div class="scan-field-row">
-                                <input
-                                    type="number"
-                                    v-model.number="n_step__x"
-                                    min="1"
-                                    @change="f_save_config"
-                                >
-                                <button
-                                    class="btn-small"
-                                    @click="f_test_distance('x', 1)"
-                                    :disabled="b_testing || !o_state.b_connected__esp"
-                                >Test +X</button>
-                                <button
-                                    class="btn-small"
-                                    @click="f_test_distance('x', -1)"
-                                    :disabled="b_testing || !o_state.b_connected__esp"
-                                >Test &minus;X</button>
+                                <button class="btn-small" @click="f_test_distance('x', -1)" :disabled="b_testing || !o_state.b_connected__esp"
+                                    aria-label="Test −X" data-tooltip="Move one tile distance in −X">&minus;X</button>
+                                <button class="btn-small" @click="f_test_distance('x', 1)" :disabled="b_testing || !o_state.b_connected__esp"
+                                    aria-label="Test +X" data-tooltip="Move one tile distance in +X">+X</button>
+                                <button class="btn-small" @click="f_test_axis('x')"
+                                    :disabled="b_testing || !o_state.b_connected__esp || n_step__x < 1 || n_tile_x < 1"
+                                    data-tooltip="Drive the full row and return">Test X</button>
+                            </div>
+                            <b class="scan-axis-name">Y</b>
+                            <input type="number" min="1" aria-label="Y distance (steps)" v-model.number="n_step__y" @change="f_save_config">
+                            <input type="number" min="1" max="100" aria-label="Y tiles (rows)" v-model.number="n_tile_y" @change="f_save_config">
+                            <div class="scan-field-row">
+                                <button class="btn-small" @click="f_test_distance('y', -1)" :disabled="b_testing || !o_state.b_connected__esp"
+                                    aria-label="Test −Y" data-tooltip="Move one tile distance in −Y">&minus;Y</button>
+                                <button class="btn-small" @click="f_test_distance('y', 1)" :disabled="b_testing || !o_state.b_connected__esp"
+                                    aria-label="Test +Y" data-tooltip="Move one tile distance in +Y">+Y</button>
+                                <button class="btn-small" @click="f_test_axis('y')"
+                                    :disabled="b_testing || !o_state.b_connected__esp || n_step__y < 1 || n_tile_y < 1"
+                                    data-tooltip="Drive the full column and return">Test Y</button>
                             </div>
                         </div>
+                        <div class="cockpit-row scan-total-row">
+                            <div class="scan-total cockpit-grow">{{ n_tile_x }} &times; {{ n_tile_y }} = {{ n_tile_x * n_tile_y }} images</div>
+                            <button
+                                class="btn-small"
+                                @click="f_test_square"
+                                :disabled="b_testing || !o_state.b_connected__esp || n_step__x < 1 || n_step__y < 1 || n_tile_x < 1 || n_tile_y < 1"
+                                data-tooltip="Test Square&#10;Drive around the border of the whole grid and return to the start."
+                            >{{ b_testing ? 'Testing...' : 'Test Square' }}</button>
+                        </div>
+                    </div>
+                    </template>
+                    </div>
 
-                        <div class="scan-field">
-                            <label>Y distance</label>
-                            <div class="scan-field-row">
-                                <input
-                                    type="number"
-                                    v-model.number="n_step__y"
-                                    min="1"
-                                    @change="f_save_config"
-                                >
-                                <button
-                                    class="btn-small"
-                                    @click="f_test_distance('y', 1)"
-                                    :disabled="b_testing || !o_state.b_connected__esp"
-                                >Test +Y</button>
-                                <button
-                                    class="btn-small"
-                                    @click="f_test_distance('y', -1)"
-                                    :disabled="b_testing || !o_state.b_connected__esp"
-                                >Test &minus;Y</button>
+                    <!-- ── Focus: how each tile is kept sharp ── -->
+                    <div class="cockpit-pane" data-cockpit-pane="focus" v-show="s_tab__shown === 'focus'">
+                    <div class="cockpit-status" :class="{ warning: !b_focus_motor_available }">{{ s_motor__focus_label }}</div>
+                    <template v-if="s_mode__area === 'free'">
+                        <div class="cockpit-grid cockpit-section">
+                            <div class="scan-field cockpit-field" data-tooltip="Focus settle (ms)&#10;Wait after each focus move before the image is captured.">
+                                <label for="scan-free-settle">Focus settle (ms)</label>
+                                <input id="scan-free-settle" type="number" min="0" step="50" v-model.number="n_ms__focus_settle" @change="f_save_config" />
                             </div>
+                            <div class="cockpit-status">Free outline: focus is interpolated from the focused outline points (Area tab).</div>
                         </div>
-                    </div>
-
-                    <div class="scan-section">
-                        <div class="scan-label">Tile Grid</div>
-
-                        <div class="scan-field">
-                            <label>X tiles (columns)</label>
-                            <input
-                                type="number"
-                                v-model.number="n_tile_x"
-                                min="1" max="100"
-                                @change="f_save_config"
-                            >
-                        </div>
-
-                        <div class="scan-field">
-                            <label>Y tiles (rows)</label>
-                            <input
-                                type="number"
-                                v-model.number="n_tile_y"
-                                min="1" max="100"
-                                @change="f_save_config"
-                            >
-                        </div>
-
-                        <div class="scan-total">
-                            {{ n_tile_x }} &times; {{ n_tile_y }} = {{ n_tile_x * n_tile_y }} images
-                        </div>
-
-                        <button
-                            class="btn-small btn-scan-test-square"
-                            @click="f_test_square"
-                            :disabled="b_testing || !o_state.b_connected__esp || n_step__x < 1 || n_step__y < 1 || n_tile_x < 1 || n_tile_y < 1"
-                        >{{ b_testing ? 'Testing...' : 'Test Square' }}</button>
-
-                        <div class="scan-field-row" style="margin-top: 8px;">
-                            <button
-                                class="btn-small"
-                                style="flex: 1; margin-left: 0;"
-                                @click="f_test_axis('x')"
-                                :disabled="b_testing || !o_state.b_connected__esp || n_step__x < 1 || n_tile_x < 1"
-                            >Test X</button>
-                            <button
-                                class="btn-small"
-                                style="flex: 1; margin-left: 0;"
-                                @click="f_test_axis('y')"
-                                :disabled="b_testing || !o_state.b_connected__esp || n_step__y < 1 || n_tile_y < 1"
-                            >Test Y</button>
-                        </div>
-                    </div>
-
-                    <div class="scan-section">
-                        <div class="scan-label">Focus</div>
-                        <div class="scan-field">
+                    </template>
+                    <template v-if="s_mode__area === 'grid'">
+                    <div class="cockpit-grid cockpit-section">
+                        <div class="scan-field cockpit-field cockpit-span" data-tooltip="Focus method&#10;Keep current focus: no Z movement.&#10;Interpolate corner focus: save focus at padded corner points, no autofocus.&#10;Autofocus before every image: a short search around the focus the previous tile ended on (about 4 measurements). Costs a few seconds per tile and keeps a tilted slide sharp all the way across.">
                             <label for="scan-focus-mode">Focus method</label>
                             <select id="scan-focus-mode" v-model="s_mode__focus" @change="f_save_config">
                                 <option value="fixed">Keep current focus</option>
@@ -264,157 +225,123 @@ let o_component__scan = {
                                 <option value="autofocus" :disabled="!b_focus_motor_available">Autofocus before every image</option>
                             </select>
                         </div>
-                        <div class="scan-hint" v-if="b_focus__before_tile">
-                            a short search around the focus the previous tile ended on:
-                            it walks uphill only as far as it must and finishes with a
-                            parabola, so it needs about 4 measurements instead of the
-                            20 positions the Focus panel sweeps. costs a few seconds
-                            per tile and keeps a tilted slide sharp all the way across.
-                        </div>
-
-                        <div class="scan-field">
-                            <label>Focus motor</label>
-                            <span>{{ s_motor__focus_label }}</span>
-                        </div>
-                        <template v-if="s_mode__focus === 'corners'">
-                            <div class="scan-hint">
-                                Set the grid size and movement distances first, then set the scan start.
-                                Visit each focus point, adjust focus with the Z controls, and save it.
-                                Focus points are padded inward so you can focus on the sample inside the scan area.
-                            </div>
-                            <div class="scan-field">
-                                <label for="scan-focus-padding">Focus point padding (%)</label>
-                                <input id="scan-focus-padding" type="number" min="0" max="49" step="1"
-                                    v-model.number="n_pct__focus_padding" @change="f_save_config" />
-                            </div>
-                            <div class="scan-hint">Padding is a percentage of the scan width and height from each edge. Capture still covers the full grid; focus extends to its edges.</div>
-                            <div v-if="!b_focus_padding_valid" class="scan-stitch-error">Enter a padding from 0 to 49%.</div>
-                            <button class="btn-small" @click="f_set_focus_start" :disabled="!b_corner_controls_ready">Set scan start here</button>
-                            <div class="scan-hint" v-if="a_n_grid__start">Scan start: X {{ a_n_grid__start[0] }}, Y {{ a_n_grid__start[1] }} steps</div>
-                            <div class="scan-hint" v-else>Set the scan start, or use Compute grid to choose it from marked bounds.</div>
-                            <div v-for="corner in a_o_focus_corner" :key="corner.n_index" class="scan-focus-corner">
-                                <strong>Focus point {{ corner.n_index + 1 }} · {{ corner.s_label }}</strong>
-                                <div class="scan-hint">{{ a_n_focus__corner[corner.n_index] === null ? 'Focus not saved' : 'Z ' + a_n_focus__corner[corner.n_index] + ' steps' }}</div>
-                                <div class="scan-field-row">
-                                    <button class="btn-small" @click="f_go_focus_corner(corner)" :disabled="!a_n_grid__start || !b_corner_controls_ready">Go to point {{ corner.n_index + 1 }}</button>
-                                    <button class="btn-small" @click="f_save_focus_corner(corner)" :disabled="!b_corner_controls_ready || !f_b_at_focus_corner(corner)">Save focus</button>
-                                </div>
-                            </div>
-                            <div class="scan-hint">{{ b_corner_focus_ready ? 'Corner focus ready. You can start from any position.' : 'Save focus at every distinct point before starting.' }}</div>
-                            <div class="scan-hint">Focus values are cleared when the grid or padding changes, the controller disconnects, or you select New Scan.</div>
-                        </template>
-                        <div class="scan-field" v-if="b_focus__before_tile">
+                        <div class="scan-field cockpit-field" v-if="b_focus__before_tile" data-tooltip="Search step&#10;Focus motor steps between two sharpness measurements.">
                             <label>Search step</label>
                             <input type="number" min="1" v-model.number="n_step__focus" @change="f_save_config">
                         </div>
-                        <div class="scan-field" v-if="b_focus__before_tile">
+                        <div class="scan-field cockpit-field" v-if="b_focus__before_tile" data-tooltip="Max. travel&#10;Largest distance the per-tile search may move away from the previous focus.">
                             <label>Max. travel</label>
                             <input type="number" min="10" step="10" v-model.number="n_step__focus_max" @change="f_save_config">
                         </div>
-                        <div class="scan-hint" v-if="b_focus__before_tile">
-                            the settle has to cover the camera latency too — measuring a
-                            frame that was still in flight when the motor moved reads the
-                            sharpness of the previous position.
+                        <div class="scan-field cockpit-field" v-if="s_mode__focus === 'corners'" data-tooltip="Focus point padding (%)&#10;Focus points are padded inward so you can focus on the sample inside the scan area. A percentage of the scan width and height from each edge. Capture still covers the full grid; focus extends to its edges.">
+                            <label for="scan-focus-padding">Focus point padding (%)</label>
+                            <input id="scan-focus-padding" type="number" min="0" max="49" step="1"
+                                v-model.number="n_pct__focus_padding" @change="f_save_config" />
                         </div>
-                        <div class="scan-field" v-if="s_mode__focus !== 'fixed'">
+                        <div class="scan-field cockpit-field" v-if="s_mode__focus !== 'fixed'" data-tooltip="Focus settle (ms)&#10;The settle has to cover the camera latency too — measuring a frame that was still in flight when the motor moved reads the sharpness of the previous position.">
                             <label>Focus settle (ms)</label>
                             <input type="number" min="0" step="50" v-model.number="n_ms__focus_settle" @change="f_save_config">
                         </div>
                     </div>
-
+                    <div class="cockpit-section" v-if="s_mode__focus === 'corners'">
+                        <div class="cockpit-section-head">
+                            <span class="cockpit-label">Corner focus</span>
+                            <span class="ui-info" tabindex="0" role="note" data-tooltip="Corner focus&#10;Set the grid size and movement distances first, then set the scan start. Visit each focus point, adjust focus with the Z controls, and save it.&#10;Focus values are cleared when the grid or padding changes, the controller disconnects, or you select New Scan."></span>
+                            <span class="cockpit-readout dim" v-if="a_n_grid__start">start X {{ a_n_grid__start[0] }}, Y {{ a_n_grid__start[1] }}</span>
+                            <span class="cockpit-readout dim" v-else>scan start not set</span>
+                        </div>
+                        <div v-if="!b_focus_padding_valid" class="scan-stitch-error">Enter a padding from 0 to 49%.</div>
+                        <button class="btn-small" @click="f_set_focus_start" :disabled="!b_corner_controls_ready" data-tooltip="Use the current stage position as the first tile. Compute grid also sets it from the marked bounds.">Set scan start here</button>
+                        <div v-for="corner in a_o_focus_corner" :key="corner.n_index" class="scan-focus-corner">
+                            <strong :data-tooltip="'Focus point ' + (corner.n_index + 1) + ' · ' + corner.s_label">{{ corner.n_index + 1 }} · {{ corner.s_label }}</strong>
+                            <span class="cockpit-readout" :class="{ dim: a_n_focus__corner[corner.n_index] === null }">{{ a_n_focus__corner[corner.n_index] === null ? 'not saved' : 'Z ' + a_n_focus__corner[corner.n_index] }}</span>
+                            <button class="btn-small" @click="f_go_focus_corner(corner)" :disabled="!a_n_grid__start || !b_corner_controls_ready" :aria-label="'Go to point ' + (corner.n_index + 1)" :data-tooltip="'Move the stage to focus point ' + (corner.n_index + 1)">Go</button>
+                            <button class="btn-small" @click="f_save_focus_corner(corner)" :disabled="!b_corner_controls_ready || !f_b_at_focus_corner(corner)" :aria-label="'Save focus at point ' + (corner.n_index + 1)" data-tooltip="Save the current Z position for this point (only at the point itself)">Save focus</button>
+                        </div>
+                        <div class="cockpit-status" :class="{ running: b_corner_focus_ready }">{{ b_corner_focus_ready ? 'Corner focus ready. You can start from any position.' : 'Save focus at every distinct point before starting.' }}</div>
+                    </div>
                     </template>
-                    <div class="scan-section">
-                        <div class="scan-label">Stitching</div>
-                        <div class="scan-field">
-                            <label for="scan-registration-width">Alignment image width (px)</label>
-                            <select id="scan-registration-width" v-model.number="n_registration__max_width" @change="f_save_config">
+                    </div>
+
+                    <!-- ── Stitch: how the mosaic is built ── -->
+                    <div class="cockpit-pane" data-cockpit-pane="stitch" v-show="s_tab__shown === 'stitch'">
+                    <div class="cockpit-grid cockpit-grid--3">
+                        <div class="scan-field cockpit-field" data-tooltip="Alignment image width (px)&#10;Alignment uses downscaled copies saved in dowscaled/. The original images are combined using those positions to preserve full-resolution detail. Larger copies retain more detail for alignment; smaller copies process faster.">
+                            <label for="scan-registration-width">Align width</label>
+                            <select id="scan-registration-width" aria-label="Alignment image width (px)" v-model.number="n_registration__max_width" @change="f_save_config">
                                 <option :value="1024">1024</option>
                                 <option :value="512">512</option>
                                 <option :value="256">256</option>
                                 <option :value="128">128</option>
                             </select>
                         </div>
-                        <div class="scan-hint">
-                            Alignment uses copies at most {{ n_registration__max_width }} pixels wide, saved in
-                            dowscaled/. The original images are combined using those
-                            positions to preserve full-resolution detail.
-                            Larger copies retain more detail for alignment; smaller copies process faster.
-                        </div>
-
-                        <div class="scan-field">
-                            <label>Min. match score</label>
+                        <div class="scan-field cockpit-field" data-tooltip="Min. match score&#10;Lower it (e.g. 0.15) for low-contrast slides, raise it when wrong pairs get accepted.">
+                            <label>Min. score</label>
                             <input
-                                type="number"
+                                type="number" aria-label="Min. match score"
                                 v-model.number="n_score__min"
                                 min="0.05" max="0.95" step="0.05"
                                 @change="f_save_config"
                             >
                         </div>
-                        <div class="scan-hint">
-                            lower it (e.g. 0.15) for low-contrast slides, raise it when
-                            wrong pairs get accepted.
-                        </div>
-
-                        <div class="scan-field">
-                            <label>Max. output size (px, 0 = full)</label>
+                        <div class="scan-field cockpit-field" data-tooltip="Max. output size (px)&#10;Longest side of the stitched mosaic. 0 = full resolution.">
+                            <label>Max. output</label>
                             <input
-                                type="number"
+                                type="number" aria-label="Max. output size (px, 0 = full)"
                                 v-model.number="n_dim__max"
                                 min="0" step="1000"
                                 @change="f_save_config"
                             >
                         </div>
-
-                        <label class="scan-toggle">
+                    </div>
+                    <div class="cockpit-section scan-toggle-list">
+                        <label class="scan-toggle" data-tooltip="Feather blending&#10;Blend tile seams smoothly. Every stitch saves four versions as PNG and JPEG: original colors, flat-field only, exposure only, and both corrections.">
                             <input type="checkbox" v-model="b_feather" @change="f_save_config" />
                             <span>Feather blending</span>
                         </label>
-                        <div class="scan-hint">Every stitch saves four versions as PNG and JPEG: original colors, flat-field only, exposure only, and both corrections.</div>
-                        <label class="scan-toggle">
+                        <label class="scan-toggle" data-tooltip="LoFTR rescue matcher (slow)&#10;Retries pairs that correlation could not solve. Needs torch + kornia in the venv.">
                             <input type="checkbox" v-model="b_matcher__loftr" @change="f_save_config" />
                             <span>LoFTR rescue matcher (slow)</span>
                         </label>
-                        <div class="scan-hint">
-                            LoFTR retries pairs that correlation could not solve.
-                            Needs torch + kornia in the venv.
-                        </div>
-                    </div>
-
-                    <div class="scan-section">
-                        <div class="scan-label">After scan</div>
-                        <label class="scan-toggle">
+                        <label class="scan-toggle" data-tooltip="After scan&#10;Drives the stage back to where it was when the scan started.">
                             <input type="checkbox" v-model="b_return__after_scan" @change="f_save_config" />
                             <span>Return motors to their start position</span>
                         </label>
-                        <div class="scan-hint">
-                            drives the stage back to where it was when the scan started.
-                        </div>
+                    </div>
                     </div>
 
-                    <div v-if="s_scan_block_reason" id="scan-start-reason" class="scan-stitch-error" role="status">{{ s_scan_block_reason }}</div>
-                    <button
-                        class="btn-scan-start"
-                        @click="f_start_scan(false)"
-                        :disabled="!b_scan_ready"
-                        :title="s_scan_block_reason" :aria-describedby="s_scan_block_reason ? 'scan-start-reason' : null"
-                    >Start classical scan</button>
-                    <button class="btn-scan-start" @click="f_start_scan(true)"
-                        :disabled="!b_scan_ready"
-                        :title="s_scan_block_reason" :aria-describedby="s_scan_block_reason ? 'scan-start-reason' : null"
-                    >Start live scan</button>
-                    <div class="scan-hint">Live scan aligns tiles during capture and shows a provisional mosaic. Preview updates may lag behind capture.</div>
+                    <!-- ── Start: always in the same place ── -->
+                    <div class="cockpit-footer" v-show="s_tab__shown !== 'jobs'">
+                        <div v-if="s_scan_block_reason" id="scan-start-reason" class="scan-stitch-error" role="status">{{ s_scan_block_reason }}</div>
+                        <div class="cockpit-row">
+                            <button
+                                class="btn-scan-start cockpit-grow"
+                                @click="f_start_scan(false)"
+                                :disabled="!b_scan_ready"
+                                :title="s_scan_block_reason" :aria-describedby="s_scan_block_reason ? 'scan-start-reason' : null"
+                            >Start classical scan</button>
+                            <button class="btn-scan-start cockpit-grow" @click="f_start_scan(true)"
+                                :disabled="!b_scan_ready"
+                                :title="s_scan_block_reason || 'Live scan aligns tiles during capture and shows a provisional mosaic. Preview updates may lag behind capture.'" :aria-describedby="s_scan_block_reason ? 'scan-start-reason' : null"
+                            >Start live scan</button>
+                        </div>
+                    </div>
                     </fieldset>
-                    <div v-if="b_testing" class="scan-progress-text">{{ s_status__detail || 'Moving stage…' }}</div>
-                    <button v-if="b_testing" class="btn-scan-stop" @click="f_stop_scan">Stop movement</button>
+                    <div class="cockpit-footer" v-if="b_testing">
+                        <div class="scan-progress-text">{{ s_status__detail || 'Moving stage…' }}</div>
+                        <button class="btn-scan-stop" @click="f_stop_scan">Stop movement</button>
+                    </div>
                 </template>
 
                 <!-- ── Progress (scanning) ───────────────── -->
-                <template v-if="s_status === 'scanning'">
-                    <div class="scan-progress-text">{{ s_status__detail }}</div>
-
-                    <div class="scan-progress-count">
-                        Capturing {{ Math.min(n_cnt__tile__captured + 1, n_cnt__tile__planned) }} / {{ n_cnt__tile__planned }}
+                <div class="cockpit-pane" v-if="s_status === 'scanning'" v-show="s_tab__shown === 'run'">
+                    <div class="cockpit-row">
+                        <div class="scan-progress-count cockpit-grow">
+                            Capturing {{ Math.min(n_cnt__tile__captured + 1, n_cnt__tile__planned) }} / {{ n_cnt__tile__planned }}
+                        </div>
+                        <div class="scan-elapsed">Elapsed: {{ s_elapsed }}</div>
                     </div>
+                    <div class="scan-progress-text">{{ s_status__detail }}</div>
 
                     <div
                         class="scan-grid"
@@ -432,17 +359,17 @@ let o_component__scan = {
                         ></div>
                     </div>
 
-                    <div class="scan-elapsed">Elapsed: {{ s_elapsed }}</div>
                     <div class="scan-elapsed" v-if="b_focus__before_tile && n_cnt__focus_measure">
                         focus: {{ n_cnt__focus_measure }} measurements on the last tile
                     </div>
-
+                </div>
+                <div class="cockpit-footer" v-if="s_status === 'scanning'">
                     <button class="btn-scan-stop" @click="f_stop_scan">Stop Scan</button>
-                </template>
+                </div>
 
                 <!-- ── Summary (complete) ────────────────── -->
                 <template v-if="s_status === 'complete'">
-                    <div class="scan-summary">
+                    <div class="scan-summary cockpit-pane" v-show="s_tab__shown === 'run'">
                         <div class="scan-summary-item">
                             <span class="scan-summary-label">Images captured</span>
                             <span class="scan-summary-value">{{ n_cnt__tile__captured }} / {{ n_cnt__tile__planned }}</span>
@@ -456,13 +383,15 @@ let o_component__scan = {
                             <span class="scan-summary-value">{{ s_elapsed }}</span>
                         </div>
                     </div>
-                    <div class="scan-field-row" style="margin-top: 10px;">
-                        <button
-                            class="btn-small"
-                            @click="f_stitch"
-                            :disabled="n_cnt__tile__captured < 2 || b_queueing || b_current_job_busy"
-                        >Queue stitching</button>
-                        <button class="btn-scan-start" @click="f_reset">New Scan</button>
+                    <div class="cockpit-footer">
+                        <div class="cockpit-row">
+                            <button
+                                class="btn-small"
+                                @click="f_stitch"
+                                :disabled="n_cnt__tile__captured < 2 || b_queueing || b_current_job_busy"
+                            >Queue stitching</button>
+                            <button class="btn-scan-start cockpit-grow" @click="f_reset">New Scan</button>
+                        </div>
                     </div>
                 </template>
 
@@ -473,6 +402,9 @@ let o_component__scan = {
     data: function() {
         return {
             o_state: o_state,
+
+            // window pane: 'area' | 'focus' | 'stitch' | 'jobs'
+            s_tab: 'area',
 
             // Outline points are session-only because stage coordinates can reset.
             s_mode__area: 'grid',
@@ -541,6 +473,30 @@ let o_component__scan = {
     },
 
     computed: {
+        // while a scan runs or has finished, the three setup panes give way to one run pane
+        a_o_tab: function() {
+            let o_tab__jobs = {
+                s_id: 'jobs', s_icon: 'list', s_label: 'Scans',
+                s_badge: String(this.a_o_job.length), b_running: this.n_jobs_pending > 0,
+                s_tooltip: 'Scans\nCaptured scans, stitching jobs and results.' + (this.n_jobs_pending ? ' ' + this.n_jobs_pending + ' pending.' : ''),
+            };
+            if (this.s_status !== 'idle') return [
+                { s_id: 'run', s_icon: this.s_status === 'scanning' ? 'play' : 'check', b_running: this.s_status === 'scanning',
+                    s_label: this.s_status === 'scanning' ? 'Progress' : 'Summary', s_tooltip: 'Current scan' },
+                o_tab__jobs,
+            ];
+            return [
+                { s_id: 'area', s_icon: this.s_mode__area === 'free' ? 'outline' : 'grid', s_label: 'Area', s_tooltip: 'Area\nWhere the tiles go: grid or free outline, step distances and tile counts.' },
+                { s_id: 'focus', s_icon: 'focus', s_label: 'Focus', s_tooltip: 'Focus\nHow each tile is kept sharp.' },
+                { s_id: 'stitch', s_icon: 'stitch', s_label: 'Stitch', s_tooltip: 'Stitch\nHow the tiles are aligned and blended into one mosaic.' },
+                o_tab__jobs,
+            ];
+        },
+        s_tab__shown: function() {
+            if (this.s_tab === 'jobs') return 'jobs';
+            if (this.s_status !== 'idle') return 'run';
+            return ['area', 'focus', 'stitch'].includes(this.s_tab) ? this.s_tab : 'area';
+        },
         b_focus__before_tile: function() { return this.s_mode__area === 'grid' && this.s_mode__focus === 'autofocus'; },
         b_focus_motor_available: function() { return f_n_motor__axis('z') !== null; },
         b_grid_valid: function() {
@@ -1130,6 +1086,8 @@ let o_component__scan = {
             let o_self = this;
 
             if (!o_self.b_scan_ready) return;
+            // a live scan is watched in its provisional mosaic, a classical one in the tile grid
+            o_self.s_tab = b_live ? 'jobs' : 'area';
             o_self.o_plan__capture = null;
             if (o_self.s_mode__area === 'free') {
                 const plan = JSON.parse(JSON.stringify(o_self.o_free_plan_result.o_plan));

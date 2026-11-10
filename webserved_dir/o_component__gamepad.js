@@ -1,7 +1,9 @@
 import { o_state, f_save_setting__debounced } from './index.js';
+import { o_component__icon } from './o_component__icon.js';
 
 const o_component__gamepad = {
     name: 'component-gamepad',
+    components: { ui_icon: o_component__icon },
     data() { return { o_state, a_cluster: [
         [{ i: 12, label: '↑' }, { i: 14, label: '←' }, { i: 15, label: '→' }, { i: 13, label: '↓' }],
         [{ i: 3, label: '△' }, { i: 2, label: '□' }, { i: 1, label: '○' }, { i: 0, label: '×' }],
@@ -18,14 +20,19 @@ const o_component__gamepad = {
     },
     template: `
         <div class="overlay-panel panel-gamepad" :class="{ visible: o_state.o_panel_visibility.gamepad }">
-            <div class="panel-header"><h2>Gamepad</h2><button class="panel-close" aria-label="Close Gamepad" @click="f_close">&times;</button></div>
+            <div class="panel-header"><h2><ui_icon s_name="gamepad" /> Gamepad <span class="ui-info" tabindex="0" role="note" data-tooltip="Gamepad&#10;Right stick: X/Y movement. Left stick up/down: Z focus. Speed = stick value × the corresponding XY or Z RPM (0.5 = half speed). Hold to keep moving; center to stop. A 15% center dead zone ignores drift. Buttons and triggers are shown for testing."></span></h2>
+                <span class="panel-state gamepad-status" role="status">{{ o_state.s_status__gamepad }}</span>
+                <button class="panel-close" aria-label="Close Gamepad" @click="f_close">&times;</button></div>
             <div class="panel-body">
-                <label for="gamepad-select">Controller</label>
-                <select id="gamepad-select" v-model.number="o_state.n_index__gamepad" @change="f_change">
+                <div class="cockpit-row gamepad-source">
+                <label for="gamepad-select" class="cockpit-label">Controller</label>
+                <select id="gamepad-select" class="cockpit-grow" v-model.number="o_state.n_index__gamepad" @change="f_change">
                     <option :value="-1" disabled>Select a controller</option>
                     <option v-if="o_state.n_index__gamepad !== -1 && !o_state.a_o_gamepad.some(p => p.index === o_state.n_index__gamepad)" :value="o_state.n_index__gamepad">Controller disconnected</option>
                     <option v-for="pad in o_state.a_o_gamepad" :key="pad.index" :value="pad.index">{{ pad.index + 1 }} · {{ pad.id }}</option>
                 </select>
+                <label class="gamepad-enable" data-tooltip="Enable motor control&#10;Off: the sticks are only displayed and do not move the stage."><input type="checkbox" v-model="o_state.b_enabled__gamepad" @change="f_change"> Enable motor control</label>
+                </div>
                 <p class="setup-hint" v-if="!o_state.a_o_gamepad.length">Plug in your USB controller, then press a button to make it available.</p>
                 <p class="setup-hint" v-if="o_state.s_error__gamepad">{{ o_state.s_error__gamepad }}</p>
                 <p class="setup-hint" v-if="o_state.o_input__gamepad && o_state.o_input__gamepad.mapping !== 'standard'">Using the displayed stick axes for this USB controller. Button labels may differ from the PlayStation layout.</p>
@@ -46,10 +53,7 @@ const o_component__gamepad = {
                         <small>X {{ f_axis(side * 2).toFixed(2) }} · Y {{ f_axis(side * 2 + 1).toFixed(2) }}</small>
                     </div>
                 </div>
-                <label class="gamepad-enable"><input type="checkbox" v-model="o_state.b_enabled__gamepad" @change="f_change"> Enable motor control</label>
                 <o_component__manual_speed s_context="gamepad" />
-                <p class="setup-hint">Right stick: X/Y movement. Left stick up/down: Z focus. Speed = stick value × the corresponding XY or Z RPM (0.5 = half speed). Hold to keep moving; center to stop. A 15% center dead zone ignores drift. Buttons and triggers are shown for testing.</p>
-                <p class="gamepad-status" role="status">{{ o_state.s_status__gamepad }}</p>
             </div>
         </div>
     `,

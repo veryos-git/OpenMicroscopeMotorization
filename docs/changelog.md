@@ -3,6 +3,36 @@
 What changed in the app, newest first. Before 2026-10-25 the entries are taken
 from commit messages; commits titled only "updates" are not listed (see `git log`).
 
+## 2026-11-10
+
+**Size** (notes: `docs/features/hgc_size/notes_mgc.md`)
+- New **Size** window with three tabs. It replaces the old Scale window.
+- Calibrate: click two points a known distance apart on the live image (for example one cell of a 0.1 mm grid slide), type the distance in mm or µm, save. A magnifier follows the cursor; placed points can be dragged.
+- Calibrate keeps a snapshot: the camera image from the moment the second point is set is saved with the measured line drawn in (`scans/size_calibration/`). Its thumbnail sits under the stored scale; click it to open the full image. Needs an app server restart.
+- Measure: click points on the live image; every line shows its length and the last point the total. Drag a point to move it, click it to remove it.
+- Reference: grid, ruler, or an object of typical size (human hair, red blood cell, …) or an own picture, semi-transparent over the live image. They stay on while the window is closed and get a switch-off icon in the top bar.
+- Measure and Reference need a stored scale. A scale stored for another camera resolution is not used and the window says so.
+- The Calibration window is now **Flat field** only.
+
+**Fixed**
+- Marking calibration points on the live image no longer moves the stage (the clicks used to reach mouse movement).
+
+**Cockpit UI pass** (rules: `docs/features/hgc_ui/cockpit_rules.md`)
+- No window scrolls any more at 1366 × 768 and larger. Only data lists scroll inside their own area (scans, saved training captures, recordings, macro commands, logs).
+- Large windows have pictogram tabs, one pane per function: Scan → Area / Focus / Stitch / Scans; Training → Data / Stage / Draw / Model / Saved. Start scan and Capture stay in a fixed footer.
+- Explanations moved out of the windows into tooltips. Hover (or focus) a field, a button or an **i** pictogram to read them. Every plain `title` now shows as the same instant tooltip.
+- Every window header carries the pictogram of its tool, plus its state and quick actions (Filter on/off + reset, Statistics reset, Recordings refresh, Motion detection switch).
+- Search (Ctrl+Shift+P) switches to the pane that holds the found control.
+- Statistics is one table (a column per motor). Recordings is one line per session; the player opens for the selected one. Slide library shows projects and slides side by side.
+- Auto stitch and Focus step have their own pictograms.
+- Speed presets: Z focus is now 1 / 3 / 9 RPM for Slow / Normal / Fast (was 0.15 / 0.5 / 1.5). XY is unchanged.
+
+**Removed** (moved to `archive/hub_panels/`)
+- Motion and Optics windows: they only opened other windows, which Tools already does.
+- Scan and AStitch buttons at the bottom of the Map window (same reason); the Scan button stays when a slide has no map yet.
+- "Recapture" in Scale (Capture does the same).
+- Camera settings button and Setup link in Quick settings. Camera is opened from Tools (or its pinned shortcut) only; the hardware line in Quick settings is now a read-only status.
+
 ## 2026-10-25
 
 **Calibration**

@@ -20,7 +20,7 @@ try {
     await page.evaluate(() => { o_state.o_panel_visibility.setup = false; o_state.o_panel_visibility.gamepad = false; });
     await bar.getByRole('button', { name: 'Fast', exact: true }).click();
     assert.equal(await bar.locator('#toolbar-speed-xy').inputValue(), '10');
-    assert.equal(await bar.locator('#toolbar-speed-z').inputValue(), '1.5');
+    assert.equal(await bar.locator('#toolbar-speed-z').inputValue(), '9');
     await bar.locator('#toolbar-speed-z').fill('0.25');
     await bar.locator('#toolbar-speed-z').press('Tab');
     await page.waitForFunction(() => JSON.parse(o_state.a_o_setting.find(s => s.s_key === 'o_rpm__manual')?.s_value || '{}').z === 0.25);
@@ -46,7 +46,7 @@ try {
     assert.equal(await bar.locator('#toolbar-speed-z').inputValue(), '0.25');
     await bar.getByRole('button', { name: 'Slow', exact: true }).click();
     await bar.getByRole('button', { name: 'Normal', exact: true }).click();
-    await page.waitForFunction(() => JSON.parse(o_state.a_o_setting.find(s => s.s_key === 'o_rpm__manual')?.s_value || '{}').z === 0.5);
+    await page.waitForFunction(() => JSON.parse(o_state.a_o_setting.find(s => s.s_key === 'o_rpm__manual')?.s_value || '{}').z === 3);
     await page.evaluate(() => { o_state.o_motor__axis.z = null; });
     assert.equal(await bar.locator('#toolbar-speed-z').isDisabled(), true);
     for(const width of [1920, 3440]) {

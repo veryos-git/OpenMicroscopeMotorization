@@ -1,6 +1,7 @@
 import { f_o_camera_geometry, f_el_camera_frame } from './camera_frame.module.js';
 import { f_action } from './o_actions.js';
 import { o_state, f_save_setting__debounced } from './index.js';
+import { o_component__icon } from './o_component__icon.js';
 
 // digital zoom: pick a region of the live image and watch it magnified in a
 // floating overlay window.  the region is kept in camera pixels, so it survives
@@ -31,6 +32,7 @@ let N_PX__PREVIEW_MIN = 140;
 
 let o_component__zoom = {
     name: 'component-zoom',
+    components: { ui_icon: o_component__icon },
     template: `
         <!-- region of interest, projected onto the live image.  no pointer
              events, so mouse jog and every other overlay keep working. -->
@@ -67,7 +69,7 @@ let o_component__zoom = {
                 class="panel-header zoom-header"
                 @pointerdown="f_on_panel_down"
             >
-                <h2>Digital zoom</h2>
+                <h2><ui_icon s_name="zoom" /> Digital zoom</h2>
                 <button class="panel-close" @click="f_close" @pointerdown.stop>&times;</button>
             </div>
             <div class="panel-body">

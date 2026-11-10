@@ -106,7 +106,7 @@ for (const width of [1440, 800, 360, 320]) Deno.test(`compact toolbar actions an
                 for (const name of ['Scan', 'Focus', 'Zoom']) { await click(name); check(o_state.o_panel_visibility[name.toLowerCase()], 'Quick panel: ' + name); }
                 await click('Stop all motors'); check(calls.stop === 1, 'Stop dispatch');
                 await change('[aria-label="Movement speed preset"]', 'Fast');
-                check(o_state.n_rpm__jog === 10 && o_state.n_rpm__focus_jog === 1.5 && calls.settings.o_rpm__manual.z === 1.5, 'Speed preset updates both axes');
+                check(o_state.n_rpm__jog === 10 && o_state.n_rpm__focus_jog === 9 && calls.settings.o_rpm__manual.z === 9, 'Speed preset updates both axes');
                 check(!document.querySelector('#quick-speed-z'), 'No numeric speeds in the main bar');
                 await choose('quick_settings');
                 check(visible(document.querySelector('#toolbar-details')), 'Quick settings open as an overlay');

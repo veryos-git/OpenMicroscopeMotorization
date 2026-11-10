@@ -58,8 +58,8 @@ Deno.test('automatic SAM ignores obsolete results after editing, disabling, dele
         .replace(/^import\s*[\s\S]*?from\s*['"][^'"]+['"];?/gm, '')
         .replace(/export \{[^}]+\};?/, '');
     let release;
-    const methods = new Function('f_o_capture__frame', 'o_component__training_yolo', 'o_sam_method', source + '\nreturn o_component__training.methods;')(
-        async () => ({ n_scl_x: 1, n_scl_y: 1, o_blob: new Blob() }), {}, {},
+    const methods = new Function('f_o_capture__frame', 'o_component__training_yolo', 'o_sam_method', 'o_component__icon', 'o_component__tab', source + '\nreturn o_component__training.methods;')(
+        async () => ({ n_scl_x: 1, n_scl_y: 1, o_blob: new Blob() }), {}, {}, {}, {},
     );
     for (const change of [vm => vm.n_revision++, vm => vm.b_sam = false, vm => vm.a_o_box = [],
         vm => vm.a_o_box[0].n_x = .1, vm => vm.s_dataset = 'other']) {

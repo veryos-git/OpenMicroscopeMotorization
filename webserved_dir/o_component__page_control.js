@@ -12,10 +12,8 @@ let o_component__page_control = {
         <o_component__toolbar />
         <o_component__setup />
         <o_component__map />
-        <o_component__motion />
         <o_component__motion_detection />
         <o_component__gamepad />
-        <o_component__optics />
         <o_component__stats />
         <o_component__scan />
         <o_component__camera_setting />

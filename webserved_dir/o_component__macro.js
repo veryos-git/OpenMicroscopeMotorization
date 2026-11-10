@@ -1,11 +1,13 @@
 import { o_state, f_send_esp, f_save_setting__debounced } from './index.js';
+import { o_component__icon } from './o_component__icon.js';
 
 let o_component__macro = {
     name: 'component-macro',
+    components: { ui_icon: o_component__icon },
     template: `
         <div class="overlay-panel panel-macro" :class="{ visible: o_state.o_panel_visibility.macro }">
             <div class="panel-header">
-                <h2>Macro</h2>
+                <h2><ui_icon s_name="macro" /> Macro</h2>
                 <button class="panel-close" @click="f_close">&times;</button>
             </div>
             <div class="panel-body">
@@ -17,6 +19,7 @@ let o_component__macro = {
                         :class="{ recording: o_state.b_recording__macro }"
                         @click="f_toggle_record"
                         :disabled="o_state.b_playing__macro"
+                        data-tooltip="Record&#10;Every motor command sent while recording is stored with its timing and can be replayed."
                     >
                         <span class="macro-dot" :class="{ active: o_state.b_recording__macro }"></span>
                         {{ o_state.b_recording__macro ? 'Stop Recording' : 'Record' }}

@@ -15,6 +15,8 @@ import { f_o_box, f_o_box_edit, f_o_box_handle, f_validate_sample } from './trai
 import { f_a_grid, f_a_plane, f_focus_sweep, f_o_video_rect } from './training_workflow.module.js';
 import { f_move_training } from './training_motion.module.js';
 import { f_action, o_actions } from './o_actions.js';
+import { o_component__icon } from './o_component__icon.js';
+import { o_component__tab } from './o_component__cockpit.js';
 
 let f_o_request = async function (s_action, o_option, s_dataset) {
     if (s_dataset) {
@@ -27,7 +29,7 @@ let f_o_request = async function (s_action, o_option, s_dataset) {
 };
 let o_component__training = {
     name: 'component-training',
-    components: { o_component__training_yolo },
+    components: { o_component__training_yolo, ui_icon: o_component__icon, ui_tab: o_component__tab },
     template: `
     <teleport v-for="o_view in a_o_view" :key="o_view.s_id" :to="o_view.s_target">
     <svg class="training-live-overlay" :data-view="o_view.s_id"
@@ -77,10 +79,14 @@ let o_component__training = {
             <span v-if="b_sam_point_busy"> · Working…</span>
         </div>
     </teleport>
-    <div class="overlay-panel panel-training" :class="{visible: o_state.o_panel_visibility.training}">
-        <div class="panel-header"><h2>Training</h2><button class="panel-close" aria-label="Close training data" :disabled="b_busy" @click="o_state.o_panel_visibility.training = false">&times;</button></div>
+    <div class="overlay-panel panel-training" :class="{visible: o_state.o_panel_visibility.training}" @cockpit-reveal="s_tab = $event.detail">
+        <div class="panel-header"><h2><ui_icon s_name="training" /> Training</h2>
+            <span v-if="o_state.b_training_busy" class="panel-state running">busy</span>
+            <button class="panel-close" aria-label="Close training data" :disabled="b_busy" @click="o_state.o_panel_visibility.training = false">&times;</button></div>
+        <ui_tab :a_o_tab="a_o_tab" :s_tab="s_tab" @update:s_tab="s_tab = $event" />
         <div class="panel-body">
-            <section class="training-dataset">
+            <!-- ── Data: dataset and labels ── -->
+            <section class="training-dataset cockpit-pane" data-cockpit-pane="data" v-show="s_tab === 'data'">
                 <label>Dataset
                     <select :value="s_dataset" @change="f_switch_dataset($event.target.value)" :disabled="b_busy" aria-label="Training dataset">
                         <option value="" disabled>Select a dataset</option>
@@ -93,114 +99,167 @@ let o_component__training = {
                 </div>
             </section>
             <fieldset :disabled="b_busy || !s_dataset">
-                <div class="training-label" v-for="(o_label, n_idx) in a_o_label" :key="o_label.s_id">
-                    <input v-model="o_label.s_name" maxlength="100" :aria-label="'Label ' + (n_idx + 1)">
-                    <button :class="{selected:s_label===o_label.s_id}" @click="s_label=o_label.s_id" :aria-pressed="s_label===o_label.s_id" :aria-label="'Select label ' + (n_idx+1)">{{ f_s_shortcut(n_idx) }}</button>
-                    <input type="color" v-model="o_label.s_color" :aria-label="'Color for label ' + (n_idx + 1)">
-                    <button @click="f_remove_label(o_label.s_id)" :disabled="a_o_label.length === 1" :aria-label="'Remove label ' + (n_idx + 1)">−</button>
-                </div>
-                <button @click="f_add_label">+ Label</button>
-                <div class="training-axis-head"><span>Axis</span><span>Regions</span><span>Steps</span><span>Test move</span></div>
-                <div class="training-axis" v-for="s_axis in ['x','y']" :key="s_axis">
-                    <b>{{ s_axis.toUpperCase() }}</b>
-                    <input type="number" min="1" max="100" v-model.number="o_grid_config[s_axis]" @change="f_reset_grid" :aria-label="s_axis.toUpperCase()+' regions'">
-                    <input type="number" min="1" max="1000000" v-model.number="o_grid_config['n_step_'+s_axis]" @change="f_reset_grid" :aria-label="s_axis.toUpperCase()+' step distance'">
-                    <div><button @click="f_jog(s_axis,-1)" :disabled="!b_stage_ready" :aria-label="'Test '+s_axis+' negative'">{{ s_axis==='x'?'←':'↑' }}</button><button @click="f_jog(s_axis,1)" :disabled="!b_stage_ready" :aria-label="'Test '+s_axis+' positive'">{{ s_axis==='x'?'→':'↓' }}</button></div>
-                </div>
-                <div class="training-navigation">
-                    <div class="training-grid" :style="{gridTemplateColumns:'repeat('+o_grid_config.x+', 1fr)'}" aria-label="Region coverage">
-                        <span v-for="o_cell in a_o_cell" :key="o_cell.n_idx" :class="{current:o_cell.n_idx===n_region, captured:a_n_captured.includes(o_cell.n_idx), visited:a_n_visited.includes(o_cell.n_idx)}"
-                            :style="{gridColumn:o_cell.n_x+1,gridRow:o_cell.n_y+1}" :title="'Region '+(o_cell.n_idx+1)+(a_n_captured.includes(o_cell.n_idx)?' · captured':'')">{{ o_cell.n_idx+1 }}</span>
+                <div class="cockpit-pane" data-cockpit-pane="data" v-show="s_tab === 'data'">
+                    <div class="cockpit-section-head">
+                        <span class="cockpit-label">Labels</span>
+                        <span class="ui-info" tabindex="0" role="note" data-tooltip="Labels&#10;Name, shortcut key and colour of each target class. The highlighted label is used for new boxes; number keys select labels."></span>
                     </div>
-                    <button @click="f_next" :disabled="!b_stage_ready || n_region>=a_o_cell.length-1">Next →</button>
-                </div>
-                <small>Region {{ n_region+1 }} / {{ a_o_cell.length }} · green = captured · dot = visited</small>
-                <button class="training-reset" @click="f_reset_grid">Start new grid here</button>
-                <div class="training-focus">
-                    <label>Planes <input type="number" min="1" max="100" v-model.number="n_plane" aria-label="Focus plane count"></label>
-                    <button @click="f_set_focus('start')" :disabled="!b_focus_ready">Start<br><small>{{ n_focus_start ?? 'unset' }}</small></button>
-                    <button @click="f_set_focus('end')" :disabled="!b_focus_ready">End<br><small>{{ n_focus_end ?? 'unset' }}</small></button>
-                    <button @click="f_test_focus" :disabled="!b_focus_ready || n_focus_start===null || n_focus_end===null">Test</button>
-                </div>
-                <small>Set Start and End at the current focus. Test and Capture return here afterward.</small>
-                <div class="training-label">
-                    <button @click="f_toggle_crop" :disabled="!o_live">{{ b_crop ? 'Cancel crop' : 'Crop' }}</button>
-                    <button @click="f_set_crop(null)" :disabled="!o_crop && !b_crop">Clear crop</button>
-                    <span v-if="o_crop">{{ o_crop.n_scl_x }} × {{ o_crop.n_scl_y }} px</span>
-                </div>
-                <p v-if="b_crop">{{ o_crop_start ? 'Click the opposite corner to finish the crop.' : 'Click the first corner of the crop on either live view.' }} Escape cancels.</p>
-                <small>Only the crop is saved and used for YOLO. Annotate every target inside it. Changing the crop clears unsaved boxes.</small>
-                <section class="training-sam-control">
-                    <button v-if="!b_sam_point" @click="f_sam_start" :disabled="!o_live || b_moving || o_state.b_scanning">SAM: hover &amp; click</button>
-                    <template v-else>
-                        <b>SAM · {{ b_sam_snapshot_busy ? 'Taking image…' : 'Frozen image' }}</b>
-                        <div class="training-label">
-                            <button @click="f_sam_start">New image</button>
-                            <button @click="f_sam_close">Back to boxes / live</button>
+                    <div class="training-label-list cockpit-list">
+                        <div class="training-label" v-for="(o_label, n_idx) in a_o_label" :key="o_label.s_id">
+                            <input v-model="o_label.s_name" maxlength="100" :aria-label="'Label ' + (n_idx + 1)">
+                            <button :class="{selected:s_label===o_label.s_id}" @click="s_label=o_label.s_id" :aria-pressed="s_label===o_label.s_id" :aria-label="'Select label ' + (n_idx+1)" data-tooltip="Use this label for new boxes">{{ f_s_shortcut(n_idx) }}</button>
+                            <input type="color" v-model="o_label.s_color" :aria-label="'Color for label ' + (n_idx + 1)">
+                            <button @click="f_remove_label(o_label.s_id)" :disabled="a_o_label.length === 1" :aria-label="'Remove label ' + (n_idx + 1)" data-tooltip="Remove label">−</button>
                         </div>
-                        <label><input type="checkbox" v-model="b_sam_hover" @change="f_sam_leave"> Hover preview before the first click</label>
-                        <div class="training-label">
-                            <button @click="f_sam_keep" :disabled="!o_sam_result?.o_bounds || o_sam_result.b_preview || b_sam_point_busy">Add selection</button>
-                            <button @click="f_sam_reset_point">Reset points</button>
-                        </div>
-                        <small>Left click includes; right click excludes; middle click resets. Add selection uses the selected label. New image refreshes the snapshot.</small>
-                        <p v-if="b_sam_point_busy" role="status">SAM is working… The first prompt prepares the image; later prompts reuse it.</p>
-                    </template>
-                </section>
-                <details class="training-settings">
-                    <summary>Annotation settings</summary>
-                    <label><input type="checkbox" v-model="b_sam" @change="f_sam_setting"> Automatically segment boxes with SAM</label>
-                    <p>Shows selected pixels after drawing or editing a box. Capture saves a new mask for each focus plane. The first use downloads the model.</p>
-                </details>
-                <small v-if="n_sam_pending" role="status">SAM is segmenting {{ n_sam_pending }} box(es)…</small>
-                <p v-if="s_sam_error" class="record-error" role="alert">{{ s_sam_error }}</p>
-                <p v-if="!b_sam_point">Hold Ctrl and drag on the live image or zoom preview to draw. Number keys select labels. Drag the bottom-left square to resize; Shift-drag a box to move it. Plain dragging in the zoom preview pans.</p>
-                <div v-for="(o_box,n_idx) in a_o_box" :key="o_box.s_id" class="training-label">
-                    <span :style="{color:o_box.s_color}">{{ n_idx+1 }}. {{ o_box.s_label }}</span>
-                    <button @click="a_o_box.splice(n_idx,1)">Delete box</button>
+                    </div>
+                    <button @click="f_add_label">+ Label</button>
                 </div>
-                <small v-if="a_o_sam_point.length">Add the selection or reset points before capturing.</small>
-                <button class="training-capture" @click="f_capture" :disabled="b_crop || a_o_sam_point.length>0 || !o_live || !a_o_box.length || !b_focus_ready || n_focus_start===null || n_focus_end===null">Capture</button>
-            </fieldset>
-            <button v-if="o_state.b_training_busy" class="training-stop" @click="f_stop">Stop</button>
-            <p role="status">{{ s_message }}</p>
-            <p class="record-error" role="alert" v-if="s_error">{{ s_error }}</p>
-            <o_component__training_yolo v-if="o_state.o_panel_visibility.training && s_dataset" :key="s_dataset" :s_dataset="s_dataset" :b_capture_busy="b_busy || b_crop" :o_crop="o_crop" @prediction="a_o_prediction=$event" />
-            <div v-if="a_o_prediction.length" class="training-label">
-                <button @click="f_accept_prediction" :disabled="b_busy || !!o_start">Use detections as boxes</button>
-                <button @click="a_o_prediction=[]">Clear detections</button>
-            </div>
-            <div class="training-label"><h3>Saved capture ({{ a_o_sample.length }})</h3><button @click="f_refresh" :disabled="b_busy">Refresh</button>
-                <a :href="'/api/training/export?dataset='+encodeURIComponent(s_dataset)" download="training-data.tar" v-if="a_o_sample.length">Export YOLO dataset</a></div>
-            <p v-if="a_o_sample.length">Export includes all quality ratings. Each capture retains its own label names and colors.</p>
-            <article v-for="o_saved in a_o_sample" :key="o_saved.s_id" class="training-saved">
-                <div class="training-filmstrip">
-                    <svg :viewBox="'0 0 ' + o_saved.n_scl_x + ' ' + o_saved.n_scl_y" aria-label="Annotated capture">
-                        <image :href="f_s_image(o_saved)" :width="o_saved.n_scl_x" :height="o_saved.n_scl_y" />
-                        <template v-for="o_box in o_saved.a_o_box" :key="'mask-'+o_box.s_id">
-                            <path v-if="o_box.o_segmentation" :d="f_s_sam_path(o_box.o_segmentation, o_saved.n_scl_x, o_saved.n_scl_y)"
-                                :fill="o_box.s_color" fill-opacity="0.3" fill-rule="evenodd" />
+
+                <!-- ── Stage: region grid, focus planes and crop ── -->
+                <div class="cockpit-pane" data-cockpit-pane="stage" v-show="s_tab === 'stage'">
+                    <div class="training-axis-head"><span>Axis</span><span>Regions</span><span>Steps</span><span>Test move</span></div>
+                    <div class="training-axis" v-for="s_axis in ['x','y']" :key="s_axis">
+                        <b>{{ s_axis.toUpperCase() }}</b>
+                        <input type="number" min="1" max="100" v-model.number="o_grid_config[s_axis]" @change="f_reset_grid" :aria-label="s_axis.toUpperCase()+' regions'">
+                        <input type="number" min="1" max="1000000" v-model.number="o_grid_config['n_step_'+s_axis]" @change="f_reset_grid" :aria-label="s_axis.toUpperCase()+' step distance'">
+                        <div><button @click="f_jog(s_axis,-1)" :disabled="!b_stage_ready" :aria-label="'Test '+s_axis+' negative'">{{ s_axis==='x'?'←':'↑' }}</button><button @click="f_jog(s_axis,1)" :disabled="!b_stage_ready" :aria-label="'Test '+s_axis+' positive'">{{ s_axis==='x'?'→':'↓' }}</button></div>
+                    </div>
+                    <div class="training-navigation">
+                        <div class="training-grid" :style="{gridTemplateColumns:'repeat('+o_grid_config.x+', 1fr)'}" aria-label="Region coverage">
+                            <span v-for="o_cell in a_o_cell" :key="o_cell.n_idx" :class="{current:o_cell.n_idx===n_region, captured:a_n_captured.includes(o_cell.n_idx), visited:a_n_visited.includes(o_cell.n_idx)}"
+                                :style="{gridColumn:o_cell.n_x+1,gridRow:o_cell.n_y+1}" :title="'Region '+(o_cell.n_idx+1)+(a_n_captured.includes(o_cell.n_idx)?' · captured':'')">{{ o_cell.n_idx+1 }}</span>
+                        </div>
+                        <div class="training-navigation-action">
+                            <button @click="f_next" :disabled="!b_stage_ready || n_region>=a_o_cell.length-1" data-tooltip="Move the stage to the next region">Next →</button>
+                            <button class="training-reset" @click="f_reset_grid" data-tooltip="Start new grid here&#10;Region 1 becomes the current stage position; coverage is cleared.">New grid</button>
+                        </div>
+                    </div>
+                    <small data-tooltip="green = captured · dot = visited">Region {{ n_region+1 }} / {{ a_o_cell.length }} <span class="ui-info"></span></small>
+                    <div class="cockpit-section">
+                        <div class="cockpit-section-head">
+                            <span class="cockpit-label">Focus planes</span>
+                            <span class="ui-info" tabindex="0" role="note" data-tooltip="Focus planes&#10;Set Start and End at the current focus. Test and Capture return here afterward."></span>
+                        </div>
+                        <div class="training-focus">
+                            <label>Planes <input type="number" min="1" max="100" v-model.number="n_plane" aria-label="Focus plane count"></label>
+                            <button @click="f_set_focus('start')" :disabled="!b_focus_ready" data-tooltip="Use the current focus as the first plane">Start<br><small>{{ n_focus_start ?? 'unset' }}</small></button>
+                            <button @click="f_set_focus('end')" :disabled="!b_focus_ready" data-tooltip="Use the current focus as the last plane">End<br><small>{{ n_focus_end ?? 'unset' }}</small></button>
+                            <button @click="f_test_focus" :disabled="!b_focus_ready || n_focus_start===null || n_focus_end===null" data-tooltip="Drive through every plane and return">Test</button>
+                        </div>
+                    </div>
+                    <div class="cockpit-section">
+                        <div class="cockpit-section-head">
+                            <span class="cockpit-label">Crop</span>
+                            <span class="ui-info" tabindex="0" role="note" data-tooltip="Crop&#10;Only the crop is saved and used for YOLO. Annotate every target inside it. Changing the crop clears unsaved boxes."></span>
+                            <span class="cockpit-readout" v-if="o_crop">{{ o_crop.n_scl_x }} × {{ o_crop.n_scl_y }} px</span>
+                            <span class="cockpit-readout dim" v-else>full frame</span>
+                        </div>
+                        <div class="training-label">
+                            <button @click="f_toggle_crop" :disabled="!o_live">{{ b_crop ? 'Cancel crop' : 'Crop' }}</button>
+                            <button @click="f_set_crop(null)" :disabled="!o_crop && !b_crop">Clear crop</button>
+                        </div>
+                        <p v-if="b_crop">{{ o_crop_start ? 'Click the opposite corner to finish the crop.' : 'Click the first corner of the crop on either live view.' }} Escape cancels.</p>
+                    </div>
+                </div>
+
+                <!-- ── Draw: boxes and SAM selections ── -->
+                <div class="cockpit-pane" data-cockpit-pane="draw" v-show="s_tab === 'draw'">
+                    <section class="training-sam-control">
+                        <button v-if="!b_sam_point" @click="f_sam_start" :disabled="!o_live || b_moving || o_state.b_scanning"
+                            data-tooltip="SAM: hover &amp; click&#10;Freeze the image and select pixels by pointing. Left click includes; right click excludes; middle click resets.">SAM: hover &amp; click</button>
+                        <template v-else>
+                            <div class="cockpit-section-head">
+                                <b>SAM · {{ b_sam_snapshot_busy ? 'Taking image…' : 'Frozen image' }}</b>
+                                <span class="ui-info" tabindex="0" role="note" data-tooltip="SAM points&#10;Left click includes; right click excludes; middle click resets. Add selection uses the selected label. New image refreshes the snapshot."></span>
+                            </div>
+                            <div class="training-label">
+                                <button @click="f_sam_start">New image</button>
+                                <button @click="f_sam_close">Back to boxes / live</button>
+                            </div>
+                            <label><input type="checkbox" v-model="b_sam_hover" @change="f_sam_leave"> Hover preview before the first click</label>
+                            <div class="training-label">
+                                <button @click="f_sam_keep" :disabled="!o_sam_result?.o_bounds || o_sam_result.b_preview || b_sam_point_busy">Add selection</button>
+                                <button @click="f_sam_reset_point">Reset points</button>
+                            </div>
+                            <p v-if="b_sam_point_busy" role="status">SAM is working… The first prompt prepares the image; later prompts reuse it.</p>
                         </template>
-                        <rect v-for="o_box in o_saved.a_o_box" :key="o_box.s_id"
-                            :x="o_box.n_x * o_saved.n_scl_x" :y="o_box.n_y * o_saved.n_scl_y"
-                            :width="o_box.n_scl_x * o_saved.n_scl_x" :height="o_box.n_scl_y * o_saved.n_scl_y"
-                            fill="none" :stroke="o_box.s_color" stroke-width="2" vector-effect="non-scaling-stroke" />
-                    </svg>
-                    <div class="training-crop-row"><figure v-for="o_box in o_saved.a_o_box" :key="o_box.s_id">
-                        <svg :viewBox="[o_box.n_x * o_saved.n_scl_x, o_box.n_y * o_saved.n_scl_y, o_box.n_scl_x * o_saved.n_scl_x, o_box.n_scl_y * o_saved.n_scl_y].join(' ')">
-                            <image :href="f_s_image(o_saved)" :width="o_saved.n_scl_x" :height="o_saved.n_scl_y" />
-                        </svg><figcaption>{{ o_box.s_label }}</figcaption>
-                    </figure></div>
+                    </section>
+                    <label class="training-settings cockpit-check" data-tooltip="Automatically segment boxes with SAM&#10;Shows selected pixels after drawing or editing a box. Capture saves a new mask for each focus plane. The first use downloads the model."><input type="checkbox" v-model="b_sam" @change="f_sam_setting"> Automatically segment boxes with SAM</label>
+                    <small v-if="n_sam_pending" role="status">SAM is segmenting {{ n_sam_pending }} box(es)…</small>
+                    <p v-if="s_sam_error" class="record-error" role="alert">{{ s_sam_error }}</p>
+                    <div class="cockpit-section">
+                        <div class="cockpit-section-head">
+                            <span class="cockpit-label">Boxes</span>
+                            <span class="ui-info" tabindex="0" role="note" data-tooltip="Drawing boxes&#10;Hold Ctrl and drag on the live image or zoom preview to draw. Number keys select labels. Drag the bottom-left square to resize; Shift-drag a box to move it. Plain dragging in the zoom preview pans."></span>
+                            <span class="cockpit-readout dim">{{ a_o_box.length }} box(es)</span>
+                        </div>
+                        <div class="training-box-list cockpit-list">
+                            <div v-for="(o_box,n_idx) in a_o_box" :key="o_box.s_id" class="training-label">
+                                <span :style="{color:o_box.s_color}">{{ n_idx+1 }}. {{ o_box.s_label }}</span>
+                                <button @click="a_o_box.splice(n_idx,1)">Delete box</button>
+                            </div>
+                        </div>
+                        <small v-if="!a_o_box.length && !b_sam_point">Ctrl + drag on the live image to draw the first box.</small>
+                        <small v-if="a_o_sam_point.length">Add the selection or reset points before capturing.</small>
+                    </div>
                 </div>
-                <small>{{ new Date(o_saved.n_ts_ms).toLocaleString() }} · Region {{ (o_saved.o_region?.n_idx ?? 0)+1 }} · Plane {{ (o_saved.n_plane ?? 0)+1 }}</small>
-                <div class="training-label">
-                    <label>Quality <select :value="o_saved.s_quality" @change="f_tag(o_saved, $event.target.value)" :disabled="b_busy">
-                        <option value="unrated">Unrated</option><option value="bad">Bad</option><option value="medium">Medium</option><option value="good">Good</option>
-                    </select></label>
-                    <button @click="f_delete(o_saved)" :disabled="b_busy">Delete capture</button>
-                    <a :href="f_s_image(o_saved)" :download="o_saved.s_id + '.png'">PNG</a>
+            </fieldset>
+
+            <!-- ── Model: YOLO fine-tuning and inference ── -->
+            <div class="cockpit-pane" data-cockpit-pane="model" v-show="s_tab === 'model'">
+                <small v-if="!s_dataset">Select a dataset first (Data tab).</small>
+                <o_component__training_yolo v-if="o_state.o_panel_visibility.training && s_dataset" :key="s_dataset" :s_dataset="s_dataset" :b_capture_busy="b_busy || b_crop" :o_crop="o_crop" @prediction="a_o_prediction=$event" />
+                <div v-if="a_o_prediction.length" class="training-label">
+                    <button @click="f_accept_prediction" :disabled="b_busy || !!o_start">Use detections as boxes</button>
+                    <button @click="a_o_prediction=[]">Clear detections</button>
                 </div>
-            </article>
+            </div>
+
+            <!-- ── Saved: captured training images ── -->
+            <div class="cockpit-pane" data-cockpit-pane="saved" v-show="s_tab === 'saved'">
+                <div class="training-label"><h3>Saved capture ({{ a_o_sample.length }})</h3><button @click="f_refresh" :disabled="b_busy">Refresh</button>
+                    <a :href="'/api/training/export?dataset='+encodeURIComponent(s_dataset)" download="training-data.tar" v-if="a_o_sample.length"
+                        data-tooltip="Export YOLO dataset&#10;Includes all quality ratings. Each capture retains its own label names and colors.">Export YOLO dataset</a></div>
+                <div class="training-saved-list cockpit-list">
+                    <article v-for="o_saved in a_o_sample" :key="o_saved.s_id" class="training-saved">
+                        <div class="training-filmstrip">
+                            <svg :viewBox="'0 0 ' + o_saved.n_scl_x + ' ' + o_saved.n_scl_y" aria-label="Annotated capture">
+                                <image :href="f_s_image(o_saved)" :width="o_saved.n_scl_x" :height="o_saved.n_scl_y" />
+                                <template v-for="o_box in o_saved.a_o_box" :key="'mask-'+o_box.s_id">
+                                    <path v-if="o_box.o_segmentation" :d="f_s_sam_path(o_box.o_segmentation, o_saved.n_scl_x, o_saved.n_scl_y)"
+                                        :fill="o_box.s_color" fill-opacity="0.3" fill-rule="evenodd" />
+                                </template>
+                                <rect v-for="o_box in o_saved.a_o_box" :key="o_box.s_id"
+                                    :x="o_box.n_x * o_saved.n_scl_x" :y="o_box.n_y * o_saved.n_scl_y"
+                                    :width="o_box.n_scl_x * o_saved.n_scl_x" :height="o_box.n_scl_y * o_saved.n_scl_y"
+                                    fill="none" :stroke="o_box.s_color" stroke-width="2" vector-effect="non-scaling-stroke" />
+                            </svg>
+                            <div class="training-crop-row"><figure v-for="o_box in o_saved.a_o_box" :key="o_box.s_id">
+                                <svg :viewBox="[o_box.n_x * o_saved.n_scl_x, o_box.n_y * o_saved.n_scl_y, o_box.n_scl_x * o_saved.n_scl_x, o_box.n_scl_y * o_saved.n_scl_y].join(' ')">
+                                    <image :href="f_s_image(o_saved)" :width="o_saved.n_scl_x" :height="o_saved.n_scl_y" />
+                                </svg><figcaption>{{ o_box.s_label }}</figcaption>
+                            </figure></div>
+                        </div>
+                        <small>{{ new Date(o_saved.n_ts_ms).toLocaleString() }} · Region {{ (o_saved.o_region?.n_idx ?? 0)+1 }} · Plane {{ (o_saved.n_plane ?? 0)+1 }}</small>
+                        <div class="training-label">
+                            <label>Quality <select :value="o_saved.s_quality" @change="f_tag(o_saved, $event.target.value)" :disabled="b_busy">
+                                <option value="unrated">Unrated</option><option value="bad">Bad</option><option value="medium">Medium</option><option value="good">Good</option>
+                            </select></label>
+                            <button @click="f_delete(o_saved)" :disabled="b_busy">Delete capture</button>
+                            <a :href="f_s_image(o_saved)" :download="o_saved.s_id + '.png'">PNG</a>
+                        </div>
+                    </article>
+                </div>
+            </div>
+
+            <!-- ── Capture: always in the same place ── -->
+            <div class="cockpit-footer training-footer">
+                <button class="training-capture" @click="f_capture" :title="s_capture_block_reason"
+                    :disabled="b_busy || !s_dataset || b_crop || a_o_sam_point.length>0 || !o_live || !a_o_box.length || !b_focus_ready || n_focus_start===null || n_focus_end===null">Capture</button>
+                <button v-if="o_state.b_training_busy" class="training-stop" @click="f_stop">Stop</button>
+                <p role="status" v-if="s_message">{{ s_message }}</p>
+                <p class="record-error" role="alert" v-if="s_error">{{ s_error }}</p>
+            </div>
         </div>
     </div>`,
     data: function () {
@@ -218,6 +277,8 @@ let o_component__training = {
         return {
             ...f_o_sam_state(),
             o_state,
+            // window pane: 'data' | 'stage' | 'draw' | 'model' | 'saved'
+            s_tab: 'data',
             a_o_label,
             s_label: a_o_label[0].s_id,
             a_o_box: [],
@@ -335,6 +396,29 @@ let o_component__training = {
         },
         b_focus_ready: function () {
             return this.b_stage_ready && f_n_motor__axis('z') !== null;
+        },
+        a_o_tab: function () {
+            return [
+                { s_id: 'data', s_icon: 'database', s_label: 'Data', s_tooltip: 'Data\nDataset and label classes.' },
+                { s_id: 'stage', s_icon: 'grid', s_label: 'Stage', s_tooltip: 'Stage\nRegion grid, focus planes and crop.' },
+                { s_id: 'draw', s_icon: 'tag', s_label: 'Draw', s_badge: this.a_o_box.length ? String(this.a_o_box.length) : '',
+                    s_tooltip: 'Draw\nBoxes and SAM selections on the live image.' },
+                { s_id: 'model', s_icon: 'training', s_label: 'Model', s_tooltip: 'Model\nFine-tune YOLO and run detection.' },
+                { s_id: 'saved', s_icon: 'image', s_label: 'Saved', s_badge: this.a_o_sample.length ? String(this.a_o_sample.length) : '',
+                    s_tooltip: 'Saved\nCaptured training images, quality rating and export.' },
+            ];
+        },
+        // why Capture is unavailable, shown as its tooltip
+        s_capture_block_reason: function () {
+            if (this.b_busy) return 'Wait for the current operation to finish.';
+            if (!this.s_dataset) return 'Select or create a dataset (Data tab).';
+            if (!this.o_live) return 'Start the camera first.';
+            if (this.b_crop) return 'Finish or cancel the crop first.';
+            if (this.a_o_sam_point.length > 0) return 'Add the SAM selection or reset its points first.';
+            if (!this.a_o_box.length) return 'Draw at least one box: Ctrl + drag on the live image (Draw tab).';
+            if (!this.b_focus_ready) return 'The stage and focus motor must be connected and standing still.';
+            if (this.n_focus_start === null || this.n_focus_end === null) return 'Set the Start and End focus planes (Stage tab).';
+            return 'Capture every focus plane of this region';
         },
         a_o_cell: function () {
             try {
