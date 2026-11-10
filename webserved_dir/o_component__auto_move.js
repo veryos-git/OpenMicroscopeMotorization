@@ -1,7 +1,12 @@
 import { f_n_motor__axis, o_state, f_send_esp_move_step, f_send_esp_stop, f_send_esp_stop_all, f_send_esp_circle_start, f_save_setting__debounced } from './index.js';
 import { o_component__icon } from './o_component__icon.js';
+import { f_o_camera_geometry, f_el_camera_frame } from './camera_frame.module.js';
 
 let N_MS__MOVE_TIMEOUT = 30000;
+// wait after the last move of a cycle, so the snapshot shows the stage at rest
+let N_MS__SNAPSHOT_SETTLE = 400;
+// long side of the snapshot overlay in pixels (it holds a 4 byte sum per channel)
+let N_SCL__SNAPSHOT_MAX = 2048;
 
 let o_component__auto_move = {
     name: 'component-auto-move',
@@ -87,6 +92,22 @@ let o_component__auto_move = {
                     </div>
                 </div>
 
+                <!-- snapshot overlay -->
+                <div class="cockpit-row" v-if="s_mode === 'rectangle'" data-tooltip="Snapshot overlay&#10;Loop only. A snapshot is taken with the stage at rest: one at the start and one after every cycle. Their average lies over the live image: sharp when the stage returns exactly, ghost copies when it drifts. 0 = no snapshots.">
+                    <label class="cockpit-label" for="auto-move-overlay">Overlay</label>
+                    <input
+                        id="auto-move-overlay" class="cockpit-grow" type="range" min="0" max="100" step="5" aria-label="Snapshot overlay"
+                        v-model.number="n_pct__overlay"
+                        @change="f_save_config"
+                    >
+                    <span class="cockpit-readout">{{ n_pct__overlay }}%</span>
+                    <span class="cockpit-readout dim" v-if="n_cnt__snapshot" data-tooltip="Snapshots in the overlay">{{ n_cnt__snapshot }} &times;</span>
+                    <button
+                        class="cockpit-icon-button" v-if="n_cnt__snapshot" :disabled="b_running"
+                        @click="f_clear_snapshot" aria-label="Clear snapshots" data-tooltip="Clear snapshots"
+                    ><ui_icon s_name="trash" /></button>
+                </div>
+
                 <!-- status -->
                 <div class="scan-progress-text" v-if="b_running">{{ s_status__detail }}</div>
 
@@ -112,6 +133,16 @@ let o_component__auto_move = {
 
             </div>
         </div>
+
+        <!-- average of the cycle snapshots, drawn over the live image -->
+        <teleport to="body">
+            <canvas
+                class="auto-move-overlay"
+                ref="el_overlay"
+                v-show="n_cnt__snapshot > 0"
+                :style="{ opacity: n_pct__overlay / 100 }"
+            ></canvas>
+        </teleport>
     `,
 
     data: function() {
@@ -134,11 +165,22 @@ let o_component__auto_move = {
             b_loop: false,
             b_stop_requested: false,
             s_status__detail: '',
+
+            // snapshot overlay
+            n_pct__overlay: 50,
+            n_cnt__snapshot: 0,
         };
     },
 
     mounted: function() {
         this.f_load_config();
+    },
+
+    watch: {
+        // the overlay belongs to the rectangle, whose controls are gone in the other mode
+        s_mode: function() {
+            this.f_clear_snapshot();
+        },
     },
 
     methods: {
@@ -147,6 +189,7 @@ let o_component__auto_move = {
 
         f_close: function() {
             if (this.b_running) return;
+            this.f_clear_snapshot();
             o_state.o_panel_visibility.auto_move = false;
             f_save_setting__debounced('o_panel_visibility', o_state.o_panel_visibility);
         },
@@ -166,6 +209,7 @@ let o_component__auto_move = {
                     if (o_config.n_step__y) o_self.n_step__y = o_config.n_step__y;
                     if (o_config.n_step__radius) o_self.n_step__radius = o_config.n_step__radius;
                     if (o_config.n_rpm) o_self.n_rpm = o_config.n_rpm;
+                    if (typeof o_config.n_pct__overlay === 'number') o_self.n_pct__overlay = o_config.n_pct__overlay;
                 } catch (e) { /* ignore parse errors */ }
             }
         },
@@ -177,6 +221,7 @@ let o_component__auto_move = {
                 n_step__y: this.n_step__y,
                 n_step__radius: this.n_step__radius,
                 n_rpm: this.n_rpm,
+                n_pct__overlay: this.n_pct__overlay,
             });
         },
 
@@ -236,6 +281,51 @@ let o_component__auto_move = {
             await o_self.f_move_motor_n_step(f_n_motor__axis('y'), -o_self.n_step__y);
         },
 
+        // ── Snapshot overlay ─────────────────────────────────────────
+
+        // add what the live view shows right now to the overlay, which is the average of all snapshots.
+        // the sums are kept apart from the canvas: blending 8 bit images would lose the later cycles.
+        f_snapshot: async function() {
+            let o_self = this;
+            o_self.s_status__detail = 'Snapshot...';
+            await new Promise(function(f_resolve) { setTimeout(f_resolve, N_MS__SNAPSHOT_SETTLE); });
+            let el_video = document.getElementById('webcamVideo');
+            let o_geometry = f_o_camera_geometry(el_video);
+            // a stopped run leaves the stage somewhere on the path
+            if (o_self.b_stop_requested || !o_geometry.n_scl_x || el_video.readyState < 2) return;
+
+            let n_scl = Math.min(1, N_SCL__SNAPSHOT_MAX / Math.max(o_geometry.n_scl_x, o_geometry.n_scl_y));
+            let n_scl_x = Math.round(o_geometry.n_scl_x * n_scl);
+            let n_scl_y = Math.round(o_geometry.n_scl_y * n_scl);
+            let el_overlay = o_self.$refs.el_overlay;
+            // first snapshot, or the camera size changed
+            if (!o_self._a_n_sum || el_overlay.width !== n_scl_x || el_overlay.height !== n_scl_y) {
+                el_overlay.width = n_scl_x;
+                el_overlay.height = n_scl_y;
+                o_self._a_n_sum = new Uint32Array(n_scl_x * n_scl_y * 4);
+                o_self.n_cnt__snapshot = 0;
+            }
+            // the processed image while the filter shows it, else the camera frame
+            let el_filter = document.querySelector('.filter-canvas');
+            let el_source = el_filter && el_filter.offsetParent !== null ? el_filter : f_el_camera_frame(el_video);
+            let o_ctx = el_overlay.getContext('2d', { willReadFrequently: true });
+            o_ctx.drawImage(el_source, 0, 0, n_scl_x, n_scl_y);
+            let o_image = o_ctx.getImageData(0, 0, n_scl_x, n_scl_y);
+            let a_n_sum = o_self._a_n_sum;
+            let n_cnt = o_self.n_cnt__snapshot + 1;
+            for (let n_idx = 0; n_idx < a_n_sum.length; n_idx++) {
+                a_n_sum[n_idx] += o_image.data[n_idx];
+                o_image.data[n_idx] = a_n_sum[n_idx] / n_cnt;
+            }
+            o_ctx.putImageData(o_image, 0, 0);
+            o_self.n_cnt__snapshot = n_cnt;
+        },
+
+        f_clear_snapshot: function() {
+            this._a_n_sum = null;
+            this.n_cnt__snapshot = 0;
+        },
+
         // ── Main execution ───────────────────────────────────────────
 
         f_run: async function(b_loop) {
@@ -248,12 +338,18 @@ let o_component__auto_move = {
             o_self.b_running = true;
             o_self.b_loop = b_loop;
             o_self.b_stop_requested = false;
+            // only the rectangle ends every cycle with the stage at rest at the origin, which a snapshot needs
+            let b_snapshot = b_loop && o_self.s_mode === 'rectangle' && o_self.n_pct__overlay > 0;
+            if (b_snapshot) o_self.f_clear_snapshot();
 
             if (o_self.s_mode === 'rectangle') {
+                // the first snapshot is taken before any movement
+                if (b_snapshot) await o_self.f_snapshot();
                 do {
                     await o_self.f_run_rectangle();
                     if (o_self.b_stop_requested) break;
                     if (!o_state.b_connected__esp) break;
+                    if (b_snapshot) await o_self.f_snapshot();
                 } while (o_self.b_loop && !o_self.b_stop_requested);
 
             } else if (o_self.s_mode === 'circle') {

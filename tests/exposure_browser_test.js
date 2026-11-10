@@ -8,7 +8,7 @@ Deno.test('exposure UI renders raw histogram, independent warnings and both patt
         if (path === '/index.js') return js(`
             import {reactive} from './lib/vue.esm-browser.js';
             export const saved=[];
-            export const o_state=reactive({o_filter:{},o_panel_visibility:{filter:true},
+            export const o_state=reactive({o_filter:{},o_panel_visibility:{camera_setting:true},
                 b_streaming__webcam:true,o_flat_field:{b_active:false}});
             export function f_save_setting__debounced(key,value){saved.push({key,value:JSON.parse(JSON.stringify(value))});}
         `);

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-const panels = ['filter', 'setup', 'camera_setting', 'scan'];
+const panels = ['setup', 'camera_setting', 'scan'];
 const javascript = text => new Response(text, {headers: {'content-type': 'text/javascript'}});
 
 Deno.test('search reaches hidden inputs and reset icons restore individual settings', async () => {
@@ -24,7 +24,7 @@ Deno.test('search reaches hidden inputs and reset icons restore individual setti
                 n_rpm__jog: 5, n_rpm__focus_jog: 0.5, o_key_held: {},
                 o_record: { b_running: false, n_its__frame__done: 4 }, o_video: { b_recording: false },
                 o_motion_detection: { b_enabled: false }, o_flat_field: { b_active: false },
-                o_camera: { b_active: true, s_mode__exposure: 'manual', n_time__exposure: 10,
+                o_camera: { b_active: true, a_o_mode: [], a_o_control: [], s_mode__exposure: 'manual', n_time__exposure: 10,
                     o_capability: { exposureMode: ['manual', 'continuous'], exposureTime: {min: 1, max: 100, step: 1} } },
                 a_o_project: [{n_id: 1, s_name: 'Project one'}], a_o_slide: [{n_id: 2, n_o_project_n_id: 1, s_name: 'Slide one'}],
                 a_o_map: [], a_o_map__scanned: [], a_o_setting: [], n_id__project__current: 0, n_id__slide__current: 0,
@@ -40,7 +40,9 @@ Deno.test('search reaches hidden inputs and reset icons restore individual setti
             import {calls, o_state} from './index.js';
             export const f_s_key__iso = () => null;
             export function f_apply_camera_setting(...args) { calls.camera.push(args); }
-            export function f_set_camera_mode(key, value) { o_state.o_camera.s_mode__exposure = value; }
+            export function f_apply_camera_resolution() {}
+            export function f_apply_camera_control() {}
+            export function f_read_camera() {}
             export function f_apply_camera__saved() {}
         `);
         if (path === '/o_recording.module.js') return javascript(`import {o_state} from './index.js'; export function f_recording_stop() { o_state.o_record.b_running = false; }`);
@@ -53,7 +55,8 @@ Deno.test('search reaches hidden inputs and reset icons restore individual setti
             import {createApp, nextTick, compile, reactive} from './lib/vue.esm-browser.js';
             import {o_component__toolbar} from './o_component__toolbar.js';
             import {o_component__manual_speed} from './o_component__manual_speed.js';
-            import {o_component__filter, f_o_filter__default} from './o_component__filter.js';
+            import {o_component__camera_setting} from './o_component__camera_setting.js';
+            import {f_o_filter__default} from './o_component__filter.js';
             import {o_component__actions} from './o_component__actions.js';
             import {f_install_control_catalog, f_a_control_results, f_a_changed_controls, f_reset_control, f_reveal_control, o_control_ui} from './control_catalog.module.js';
             import {f_a_control_effects} from './control_effects.module.js';
@@ -85,8 +88,8 @@ Deno.test('search reaches hidden inputs and reset icons restore individual setti
                 o_state.o_filter.n_contrast = 1.7; // saved setting must have a reset immediately
                 const local = reactive({amount: 4, notes: 'first line', extra: true, locked: false, secret: 'hidden', device: 'first'});
                 const fixture = {data: () => ({local, o_state}), template: '<div class="overlay-panel panel-setup" :class="{visible:o_state.o_panel_visibility.setup}"><div class="panel-header">Setup</div><div class="panel-body"><details><summary>Advanced</summary><button aria-label="Optional controls" data-control-model="local.extra" data-control-reset="local.extra = value" @click="local.extra = !local.extra">Optional controls</button><label>Samples <input aria-label="Samples" type="number" v-model.number="local.amount" :disabled="local.locked"></label><label>Notes <textarea aria-label="Notes" :data-control-scope="local.device" v-model="local.notes"></textarea></label><input aria-label="Secret" type="password" v-model="local.secret"><label v-if="local.extra">Optional value <input aria-label="Optional value" v-model.number="local.amount"></label></details></div></div>'};
-                const components = {o_component__toolbar, o_component__manual_speed, o_component__filter, o_component__actions, fixture};
-                app = createApp({components, template:'<o_component__toolbar/><o_component__filter/><fixture/><o_component__actions/>'});
+                const components = {o_component__toolbar, o_component__manual_speed, o_component__camera_setting, o_component__actions, fixture};
+                app = createApp({components, template:'<o_component__toolbar/><o_component__camera_setting/><fixture/><o_component__actions/>'});
                 for (const [name, component] of Object.entries(components)) app.component(name, component);
                 app.config.warnHandler = message => errors.push(message);
                 app.config.errorHandler = error => errors.push(error.stack);
@@ -98,16 +101,16 @@ Deno.test('search reaches hidden inputs and reset icons restore individual setti
                 await edit('.action-dialog input[aria-label="Search actions"]', 'brightness');
                 check(document.querySelector('.action-results').textContent.includes('Brightness'), 'Setting search result');
                 document.querySelector('.action-results button').click(); await tick();
-                check(!o_action_ui.open && o_state.o_panel_visibility.filter, 'Selection opens filter panel');
+                check(!o_action_ui.open && o_state.o_panel_visibility.camera_setting, 'Selection opens camera window');
                 check(document.activeElement.matches('[aria-label^="Brightness"]'), 'Selected field receives focus');
                 await edit('#filter-n_brightness', '0.22');
                 check(o_state.o_filter.n_brightness === 0.22 && calls.settings.o_filter.n_brightness === 0.22, 'Exact input applied and persisted');
                 check(document.querySelectorAll('[aria-label="Reset Brightness"]').length === 1, 'One icon per setting');
-                o_state.o_panel_visibility.filter = false; await tick();
+                o_state.o_panel_visibility.camera_setting = false; await tick();
                 await click('Reset Brightness');
                 check(o_state.o_filter.n_brightness === 0 && o_state.o_filter.n_contrast === 1.7, 'Only selected effect resets');
-                check(!o_state.o_panel_visibility.filter && !document.querySelector('[aria-label="Reset Brightness"]'), 'Reset without opening panel');
-                o_state.o_panel_visibility.filter = true;
+                check(!o_state.o_panel_visibility.camera_setting && !document.querySelector('[aria-label="Reset Brightness"]'), 'Reset without opening panel');
+                o_state.o_panel_visibility.camera_setting = true;
                 await edit('#filter-n_gamma', ''); check(o_state.o_filter.n_gamma === 1, 'Empty gamma ignored');
                 await edit('#filter-n_gamma', '-8'); check(o_state.o_filter.n_gamma === 0.2, 'Gamma bounds enforced');
                 await click('Reset Gamma');

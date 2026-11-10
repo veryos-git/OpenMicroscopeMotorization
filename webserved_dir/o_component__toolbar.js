@@ -154,9 +154,8 @@ let o_component__toolbar = {
                 ] },
                 { s_label: 'Image', a_o_tool: [
                     { s_panel: 'zoom', s_icon: 'zoom', s_label: 'Zoom', s_title: 'Digital zoom · Ctrl + drag on the image' },
-                    { s_panel: 'camera_setting', s_icon: 'camera', s_label: 'Camera', s_title: 'Camera resolution, frame rate, exposure and white balance' },
+                    { s_panel: 'camera_setting', s_icon: 'camera', s_label: 'Camera', s_title: 'Camera resolution, frame rate, exposure and white balance · histogram and live image filter' },
                     { s_panel: 'led_setting', s_icon: 'led', s_label: 'LED', s_title: 'LED · red, green, blue and warm/cold white' },
-                    { s_panel: 'filter', s_icon: 'filter', s_label: 'Filters', s_title: 'Adjust live image processing' },
                     { s_panel: 'calibration', s_icon: 'flat', s_label: 'Flat field', s_title: 'Capture the flat-field correction image, switch the correction on or off' },
                     { s_panel: 'scale', s_icon: 'scale', s_label: 'Size', s_title: 'Calibrate the size, measure distances, show a grid, ruler or reference object' },
                 ] },

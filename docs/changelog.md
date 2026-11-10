@@ -5,6 +5,19 @@ from commit messages; commits titled only "updates" are not listed (see `git log
 
 ## 2026-11-10
 
+**Auto move**
+- Rectangle loop can show drift: with **Overlay** above 0, a snapshot is taken with the stage at rest at the start and after every cycle, and the average of all snapshots lies half transparent over the live image. A stage that returns exactly gives a sharp overlay, a drifting one a trail of ghost copies. The slider sets the transparency, the bin removes the snapshots; they are kept in memory only.
+- Rectangle only: the circle never stops at a fixed point while it loops, so it takes no snapshots.
+
+**Camera**
+- The Camera and Image Filter windows are one **Camera** window: camera settings on top, then the live histogram, exposure markers and image filter. Tools lists it once, as Camera.
+- Resolution lists the real sensor sizes of the connected camera (read on the server with `v4l2-ctl`, see readme) instead of a fixed list, and always shows the size the camera is delivering. Choosing one switches the sensor itself; the browser may no longer keep another size and scale it. Without `v4l2-ctl` the old fixed list is offered.
+- New **ISO** slider (the camera's gain). The browser cannot reach it, so it is set on the server with `v4l2-ctl` and only shown on Linux. It is saved and restored like the other camera settings. Needs an app server restart.
+- `deno task start` installs `v4l2-ctl` on Linux when it is missing (see readme).
+- Manual exposure has a fine tune slider under the exposure time: the list picks the coarse time, the slider lengthens or shortens it up to halfway to the neighbouring entry. The resulting time is shown in ms.
+- The header shows the live camera frame size. Filter reset and on/off sit on the Image filter line.
+- Layout is a functional draft until the window is drawn (`docs/features/hgc_ui/readme_hgc.md`).
+
 **Size** (notes: `docs/features/hgc_size/notes_mgc.md`)
 - New **Size** window with three tabs. It replaces the old Scale window.
 - Calibrate: click two points a known distance apart on the live image (for example one cell of a 0.1 mm grid slide), type the distance in mm or µm, save. A magnifier follows the cursor; placed points can be dragged.

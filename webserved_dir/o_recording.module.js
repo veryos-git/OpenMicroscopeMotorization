@@ -10,7 +10,7 @@ import {
 import { f_o_wsmsg, o_sfunexposed__f_v_crud__indb } from './constructors.module.js';
 import { f_o_capture__frame, f_save_image__recording } from './o_capture.module.js';
 import { f_n_score__video, f_o_focus__fast } from './focus_search.module.js';
-import { f_o_camera_snapshot, f_o_camera_track, f_set_camera_mode } from './o_camera.module.js';
+import { f_o_camera_snapshot, f_o_camera_track, f_apply_camera_setting } from './o_camera.module.js';
 
 // recording engine: one loop that captures a frame sequence over hours or days
 // at one or many positions, keeping focus, and writing everything the analysis
@@ -111,12 +111,12 @@ let f_recording_lock_camera = async function() {
         return false;
     };
     if(f_b_mode('exposureMode', 'manual')){
-        await f_set_camera_mode('exposureMode', 'manual');
+        await f_apply_camera_setting('exposureMode', 'manual');
     } else {
         a_s_warn.push('camera does not report manual exposure');
     }
     if(f_b_mode('whiteBalanceMode', 'manual')){
-        await f_set_camera_mode('whiteBalanceMode', 'manual');
+        await f_apply_camera_setting('whiteBalanceMode', 'manual');
     } else {
         a_s_warn.push('camera does not report manual white balance');
     }

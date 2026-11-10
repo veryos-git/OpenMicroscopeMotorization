@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 
 // Real Vue, toolbar, speed controls and action registry; no camera or motors used.
-const panels = ['motion_detection', 'setup', 'map', 'motion', 'gamepad', 'optics', 'slide_library', 'scan', 'camera_setting', 'led_setting', 'macro', 'auto_move', 'autostitch', 'filter', 'flat', 'focus', 'focus_step', 'focus_stack', 'scale', 'stats', 'cellpose', 'zoom', 'record', 'recording_library', 'video', 'training'];
+const panels = ['motion_detection', 'setup', 'map', 'motion', 'gamepad', 'optics', 'slide_library', 'scan', 'camera_setting', 'led_setting', 'macro', 'auto_move', 'autostitch', 'flat', 'focus', 'focus_step', 'focus_stack', 'scale', 'stats', 'cellpose', 'zoom', 'record', 'recording_library', 'video', 'training'];
 const javascript = text => new Response(text, { headers: { 'content-type': 'text/javascript' } });
 
 for (const width of [1440, 800, 360, 320]) Deno.test(`compact toolbar actions and layout at ${width}px`, async () => {
@@ -36,7 +36,6 @@ for (const width of [1440, 800, 360, 320]) Deno.test(`compact toolbar actions an
             import {calls, o_state} from './index.js';
             export const f_s_key__iso = () => null;
             export function f_apply_camera_setting(...args) { calls.camera.push(args); }
-            export function f_set_camera_mode(key, value) { o_state.o_camera.s_mode__exposure = value; }
             export function f_apply_camera__saved() {}
         `);
         if (path === '/o_recording.module.js') return javascript(`import {o_state} from './index.js'; export function f_recording_stop() { o_state.o_record.b_running = false; }`);

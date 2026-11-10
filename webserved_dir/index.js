@@ -31,7 +31,7 @@ import { o_component__led_setting } from './o_component__led_setting.js';
 import { o_component__macro } from './o_component__macro.js';
 import { o_component__auto_move } from './o_component__auto_move.js';
 import { o_component__autostitch } from './o_component__autostitch.js';
-import { o_component__filter, f_o_filter__default } from './o_component__filter.js';
+import { f_o_filter__default } from './o_component__filter.js';
 import { o_component__calibration_overlay } from './o_component__calibration_overlay.js';
 import { o_component__scale } from './o_component__scale.js';
 import { o_component__focus_step } from './o_component__focus_step.js';
@@ -257,7 +257,7 @@ let o_state = reactive({
 
     // UI
     o_motion_detection: f_o_motion_config(),
-    o_panel_visibility: { motion_detection: false, setup: false, map: false, gamepad: false, slide_library: false, scan: false, camera_setting: false, led_setting: false, macro: false, auto_move: false, autostitch: false, filter: false, calibration: false, focus: false, focus_step: false, focus_stack: false, scale: false, stats: false, cellpose: false, zoom: false, record: false, recording_library: false, video: false, training: false },
+    o_panel_visibility: { motion_detection: false, setup: false, map: false, gamepad: false, slide_library: false, scan: false, camera_setting: false, led_setting: false, macro: false, auto_move: false, autostitch: false, calibration: false, focus: false, focus_step: false, focus_stack: false, scale: false, stats: false, cellpose: false, zoom: false, record: false, recording_library: false, video: false, training: false },
     o_key_held: {},
 
     // scan
@@ -277,16 +277,17 @@ let o_state = reactive({
     // quick bar and the Camera panel always show the same numbers.
     // o_capability mirrors track.getCapabilities(), the rest mirror track.getSettings().
     o_camera: {
-        s_label: '',
         s_device_id: '',
         n_width: 0,
         n_height: 0,
         n_frame_rate: 0,
+        // what the server knows about this camera through v4l2 (linux), see f_o_camera_device
+        s_path__device: '',
+        a_o_mode: [],
+        a_o_control: [],
         b_applying_resolution: false,
         s_error__resolution: '',
         s_error__setting: '',
-        o_setting: {},
-        o_requested: {},
         b_active: false,
         b_loaded: false,
         n_ts_ms__apply: 0,
@@ -488,7 +489,6 @@ let f_apply_setting_from_db = function(){
     o_state.o_panel_visibility.macro = o_vis.macro || false;
     o_state.o_panel_visibility.auto_move = o_vis.auto_move || false;
     o_state.o_panel_visibility.autostitch = o_vis.autostitch || false;
-    o_state.o_panel_visibility.filter = o_vis.filter || false;
     o_state.o_panel_visibility.calibration = o_vis.calibration || false;
     o_state.o_panel_visibility.focus = o_vis.focus || false;
     o_state.o_panel_visibility.focus_step = o_vis.focus_step || false;
@@ -1145,7 +1145,6 @@ o_app.component('o_component__led_setting', o_component__led_setting);
 o_app.component('o_component__macro', o_component__macro);
 o_app.component('o_component__auto_move', o_component__auto_move);
 o_app.component('o_component__autostitch', o_component__autostitch);
-o_app.component('o_component__filter', o_component__filter);
 o_app.component('o_component__calibration_overlay', o_component__calibration_overlay);
 o_app.component('o_component__scale', o_component__scale);
 o_app.component('o_component__focus_step', o_component__focus_step);

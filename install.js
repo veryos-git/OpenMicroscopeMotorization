@@ -6,6 +6,7 @@
 //   ./venv with numpy + opencv                    ->  stitch.py
 //   torch (cpu) + lightglue + kornia              ->  autostitch.py feature matching,
 //                                                     stitch.py --matcher loftr
+//   v4l2-ctl (linux only)                         ->  camera sensor sizes + gain in the Camera window
 //
 // every step is idempotent: already satisfied steps are skipped, so this is safe
 // to run on every `deno task start`.
@@ -629,6 +630,43 @@ let f_b_verify_compile = async function(s_bin) {
     return true;
 };
 
+// ─── Step: v4l2-ctl (linux only) ────────────────────────────────────
+
+// camera_functions.module.js reads the sensor sizes and sets the controls the browser
+// camera api has no access to with it. other systems keep the browser-only Camera window.
+let f_setup_v4l2 = async function() {
+    if (Deno.build.os !== 'linux') return;
+    f_log_step('v4l2-ctl (camera sensor sizes + gain)');
+    if (await f_b_binary_exists('v4l2-ctl')) {
+        f_log_ok('v4l2-ctl found');
+        return;
+    }
+    if (b_check_only) {
+        f_log_todo('v4l2-ctl missing — the Camera window has no ISO and only a generic resolution list');
+        a_s_problem.push('v4l2-ctl missing');
+        return;
+    }
+    // a system package, named v4l-utils by every one of these package managers
+    let a_a_s_arg__install = [
+        ['apt-get', 'install', '-y'],
+        ['dnf', 'install', '-y'],
+        ['pacman', '-S', '--noconfirm'],
+        ['zypper', '--non-interactive', 'install'],
+    ];
+    for (let a_s_arg__install of a_a_s_arg__install) {
+        if (!await f_b_binary_exists(a_s_arg__install[0])) continue;
+        f_log(`installing: sudo ${a_s_arg__install.join(' ')} v4l-utils   (sudo may ask for your password)`);
+        await f_b_run_live('sudo', [...a_s_arg__install, 'v4l-utils']);
+        break;
+    }
+    if (await f_b_binary_exists('v4l2-ctl')) {
+        f_log_ok('v4l2-ctl installed');
+        return;
+    }
+    f_log_error('could not install v4l2-ctl — install the package "v4l-utils" by hand');
+    a_s_problem.push('v4l2-ctl missing');
+};
+
 // ─── Step: serial port access ───────────────────────────────────────
 
 let f_check_serial = async function() {
@@ -671,6 +709,7 @@ console.log(`
 if (!b_skip_python) await f_setup_python();
 if (!b_skip_python && !b_skip_cellpose) await f_setup_cellpose();
 if (!b_skip_arduino) await f_setup_arduino();
+await f_setup_v4l2();
 await f_check_serial();
 
 if (a_s_problem.length === 0) {

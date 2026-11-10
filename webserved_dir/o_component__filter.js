@@ -219,10 +219,9 @@ let o_component__filter = {
     name: 'component-filter',
     components: { ui_icon: o_component__icon },
     template: `
-        <div class="overlay-panel panel-filter" :class="{ visible: o_state.o_panel_visibility.filter }">
-            <div class="panel-header">
-                <h2><ui_icon s_name="filter" /> Image Filter</h2>
-                <span class="panel-state" data-tooltip="Processed frame size">{{ n_scl_x__frame }} &times; {{ n_scl_y__frame }}</span>
+        <div class="filter-group">
+            <div class="cockpit-section-head">
+                <span class="filter-label">Image filter</span>
                 <button class="cockpit-icon-button" @click="f_reset" aria-label="Reset all filters" data-tooltip="Reset all filters&#10;Restore every processing value to neutral."><ui_icon s_name="undo" /></button>
                 <button
                     class="toolbar-toggle filter-power"
@@ -230,130 +229,121 @@ let o_component__filter = {
                     aria-label="Image processing" :aria-pressed="o_filter.b_enabled" @click="f_toggle"
                     data-tooltip="Image processing&#10;Kernel, brightness, contrast, gamma, saturation and colour effects on the live image."
                 >{{ o_filter.b_enabled ? 'on' : 'off' }}</button>
-                <button class="panel-close" @click="f_close">&times;</button>
             </div>
-            <div class="panel-body">
-                <div class="filter-note" v-if="s_error">{{ s_error }}</div>
-                <div class="filter-note" v-else-if="!o_state.b_streaming__webcam">
-                    start a camera in the top bar to see the filtered image
-                </div>
-
-                <div class="filter-group">
-                    <div class="cockpit-section-head">
-                        <span class="filter-label">Exposure</span>
-                        <span class="ui-info" tabindex="0" role="note" data-tooltip="Exposure of the raw camera image&#10;Bright: any RGB channel meets the threshold. Dark: all channels meet the threshold. These are pixel warnings; dark or bright areas can be intentional. Works with Processing off."></span>
-                        <label class="filter-check" data-tooltip="Live histogram&#10;White: brightness. Red, green, blue: camera color channels.">
-                            <input type="checkbox" v-model="o_filter.b_histogram" @change="f_on_change">
-                            <span>live histogram</span>
-                        </label>
-                    </div>
-                    <div v-if="o_filter.b_histogram" class="exposure-histogram" data-tooltip="Brightness / RGB histogram&#10;Left: 0 · black. Right: 255 · white. White curve: brightness. Red, green, blue: camera color channels.">
-                        <svg viewBox="0 0 256 100" preserveAspectRatio="none" role="img" aria-label="Live camera brightness and RGB histogram">
-                            <path v-for="(s_path, n_idx) in a_s_histogram_path" :key="n_idx" :d="s_path"
-                                :stroke="['#ddd','#ff4757','#00d4aa','#5b8def'][n_idx]"
-                                :fill="n_idx===0?'rgba(255,255,255,0.12)':'none'" stroke-width="1" vector-effect="non-scaling-stroke" />
-                        </svg>
-                        <div class="exposure-histogram-axis"><span>0 · black</span>
-                            <span v-if="o_histogram"><span class="exposure-low">dark {{ o_histogram.n_pct_low.toFixed(1) }}%</span> · <span class="exposure-high">bright {{ o_histogram.n_pct_high.toFixed(1) }}%</span></span>
-                            <span v-else>Waiting for camera pixels…</span>
-                            <span>255 · white</span></div>
-                    </div>
-                    <div class="exposure-warning-row">
-                        <label class="filter-check" data-tooltip="Mark overexposed pixels (red)">
-                            <input type="checkbox" v-model="o_filter.b_exposure__high" @change="f_on_change">
-                            <span>Mark overexposed pixels (red)</span>
-                        </label>
-                        <label class="filter-check" data-tooltip="Mark underexposed pixels (blue)">
-                            <input type="checkbox" v-model="o_filter.b_exposure__low" @change="f_on_change">
-                            <span>Mark underexposed pixels (blue)</span>
-                        </label>
-                    </div>
-                    <div class="exposure-thresholds">
-                        <label>Dark ≤ <input aria-label="Dark pixel threshold" type="number" min="0" :max="o_filter.n_exposure__high-1" v-model.number="o_filter.n_exposure__low" @change="f_on_change"></label>
-                        <label>Bright ≥ <input aria-label="Bright pixel threshold" type="number" :min="o_filter.n_exposure__low+1" max="255" v-model.number="o_filter.n_exposure__high" @change="f_on_change"></label>
-                        <label for="exposure-pattern" class="sr-only">Pattern</label>
-                        <select id="exposure-pattern" v-model="o_filter.s_exposure__pattern" @change="f_on_change" data-tooltip="Warning pattern drawn over marked pixels">
-                            <option value="zebra">Zebra stripes</option><option value="checkerboard">Checkerboard</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="filter-group">
-                    <div class="filter-slider">
-                        <label for="filter-n_brightness"><span><ui_icon s_name="brightness" />Brightness</span> <input id="filter-n_brightness" data-control-effect="filter.n_brightness" class="filter-exact-value" type="number" min="-0.5" max="0.5" step="0.01" aria-label="Brightness" :value="o_filter.n_brightness" @change="f_set_number('n_brightness', $event, -0.5, 0.5)"></label>
-                        <input
-                            type="range" min="-0.5" max="0.5" step="0.01" aria-label="Brightness slider"
-                            v-model.number="o_filter.n_brightness"
-                            @input="f_on_change"
-                        >
-                    </div>
-                    <div class="filter-slider">
-                        <label for="filter-n_contrast"><span><ui_icon s_name="contrast" />Contrast</span> <input id="filter-n_contrast" data-control-effect="filter.n_contrast" class="filter-exact-value" type="number" min="0" max="3" step="0.01" aria-label="Contrast" :value="o_filter.n_contrast" @change="f_set_number('n_contrast', $event, 0, 3)"></label>
-                        <input
-                            type="range" min="0" max="3" step="0.01" aria-label="Contrast slider"
-                            v-model.number="o_filter.n_contrast"
-                            @input="f_on_change"
-                        >
-                    </div>
-                    <div class="filter-slider">
-                        <label for="filter-n_gamma"><span><ui_icon s_name="gamma" />Gamma</span> <input id="filter-n_gamma" data-control-effect="filter.n_gamma" class="filter-exact-value" type="number" min="0.2" max="3" step="0.01" aria-label="Gamma" :value="o_filter.n_gamma" @change="f_set_number('n_gamma', $event, 0.2, 3)"></label>
-                        <input
-                            type="range" min="0.2" max="3" step="0.01" aria-label="Gamma slider"
-                            v-model.number="o_filter.n_gamma"
-                            @input="f_on_change"
-                        >
-                    </div>
-                    <div class="filter-slider">
-                        <label for="filter-n_saturation"><span><ui_icon s_name="color" />Saturation</span> <input id="filter-n_saturation" data-control-effect="filter.n_saturation" class="filter-exact-value" type="number" min="0" max="3" step="0.01" aria-label="Saturation" :value="o_filter.n_saturation" @change="f_set_number('n_saturation', $event, 0, 3)"></label>
-                        <input
-                            type="range" min="0" max="3" step="0.01" aria-label="Saturation slider"
-                            v-model.number="o_filter.n_saturation"
-                            @input="f_on_change"
-                        >
-                    </div>
-                </div>
-
-                <div class="filter-group cockpit-grid">
-                    <div class="cockpit-field" data-tooltip="Kernel&#10;Convolution applied to every pixel: sharpen, blur or edge detection.">
-                        <label class="filter-label" for="filter-kernel">Kernel</label>
-                        <select id="filter-kernel" aria-label="Kernel" v-model="o_filter.s_kernel" @change="f_on_change">
-                            <option v-for="o_kernel in a_o_kernel" :value="o_kernel.s_value">
-                                {{ o_kernel.s_label }}
-                            </option>
-                        </select>
-                    </div>
-                    <div class="cockpit-field" data-tooltip="False color&#10;Map brightness to a colour palette.">
-                        <label class="filter-label" for="filter-colormap">False color</label>
-                        <select id="filter-colormap" aria-label="False color" v-model="o_filter.s_colormap" @change="f_on_change">
-                            <option v-for="o_colormap in a_o_colormap" :value="o_colormap.s_value">
-                                {{ o_colormap.s_label }}
-                            </option>
-                        </select>
-                    </div>
-                    <div class="cockpit-span" v-if="o_filter.s_kernel === 'edge'">
-                        <div class="filter-slider">
-                            <label for="filter-n_edge_gain"><span><ui_icon s_name="focus" />Edge gain</span> <input id="filter-n_edge_gain" data-control-effect="filter.n_edge_gain" class="filter-exact-value" type="number" min="0.5" max="12" step="0.1" aria-label="Edge gain" :value="o_filter.n_edge_gain" @change="f_set_number('n_edge_gain', $event, 0.5, 12)"></label>
-                            <input
-                                type="range" min="0.5" max="12" step="0.1" aria-label="Edge gain slider"
-                                v-model.number="o_filter.n_edge_gain"
-                                @input="f_on_change"
-                            >
-                        </div>
-                        <label class="filter-check">
-                            <input type="checkbox" v-model="o_filter.b_binary__edge" @change="f_on_change">
-                            <span>black / white edges</span>
-                        </label>
-                    </div>
-                    <label class="filter-check">
-                        <input type="checkbox" v-model="o_filter.b_grayscale" @change="f_on_change">
-                        <span>grayscale</span>
-                    </label>
-                    <label class="filter-check">
-                        <input type="checkbox" v-model="o_filter.b_invert" @change="f_on_change">
-                        <span>invert</span>
-                    </label>
-                </div>
+            <div class="filter-note" v-if="s_error">{{ s_error }}</div>
+            <div class="cockpit-section-head">
+                <span class="filter-label">Exposure</span>
+                <span class="ui-info" tabindex="0" role="note" data-tooltip="Exposure of the raw camera image&#10;Bright: any RGB channel meets the threshold. Dark: all channels meet the threshold. These are pixel warnings; dark or bright areas can be intentional. Works with Processing off."></span>
+                <label class="filter-check" data-tooltip="Live histogram&#10;White: brightness. Red, green, blue: camera color channels.">
+                    <input type="checkbox" v-model="o_filter.b_histogram" @change="f_on_change">
+                    <span>live histogram</span>
+                </label>
             </div>
+            <div v-if="o_filter.b_histogram" class="exposure-histogram" data-tooltip="Brightness / RGB histogram&#10;Left: 0 · black. Right: 255 · white. White curve: brightness. Red, green, blue: camera color channels.">
+                <svg viewBox="0 0 256 100" preserveAspectRatio="none" role="img" aria-label="Live camera brightness and RGB histogram">
+                    <path v-for="(s_path, n_idx) in a_s_histogram_path" :key="n_idx" :d="s_path"
+                        :stroke="['#ddd','#ff4757','#00d4aa','#5b8def'][n_idx]"
+                        :fill="n_idx===0?'rgba(255,255,255,0.12)':'none'" stroke-width="1" vector-effect="non-scaling-stroke" />
+                </svg>
+                <div class="exposure-histogram-axis"><span>0 · black</span>
+                    <span v-if="o_histogram"><span class="exposure-low">dark {{ o_histogram.n_pct_low.toFixed(1) }}%</span> · <span class="exposure-high">bright {{ o_histogram.n_pct_high.toFixed(1) }}%</span></span>
+                    <span v-else>Waiting for camera pixels…</span>
+                    <span>255 · white</span></div>
+            </div>
+            <div class="exposure-warning-row">
+                <label class="filter-check" data-tooltip="Mark overexposed pixels (red)">
+                    <input type="checkbox" v-model="o_filter.b_exposure__high" @change="f_on_change">
+                    <span>Mark overexposed pixels (red)</span>
+                </label>
+                <label class="filter-check" data-tooltip="Mark underexposed pixels (blue)">
+                    <input type="checkbox" v-model="o_filter.b_exposure__low" @change="f_on_change">
+                    <span>Mark underexposed pixels (blue)</span>
+                </label>
+            </div>
+            <div class="exposure-thresholds">
+                <label>Dark ≤ <input aria-label="Dark pixel threshold" type="number" min="0" :max="o_filter.n_exposure__high-1" v-model.number="o_filter.n_exposure__low" @change="f_on_change"></label>
+                <label>Bright ≥ <input aria-label="Bright pixel threshold" type="number" :min="o_filter.n_exposure__low+1" max="255" v-model.number="o_filter.n_exposure__high" @change="f_on_change"></label>
+                <label for="exposure-pattern" class="sr-only">Pattern</label>
+                <select id="exposure-pattern" v-model="o_filter.s_exposure__pattern" @change="f_on_change" data-tooltip="Warning pattern drawn over marked pixels">
+                    <option value="zebra">Zebra stripes</option><option value="checkerboard">Checkerboard</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="filter-group">
+            <div class="filter-slider">
+                <label for="filter-n_brightness"><span><ui_icon s_name="brightness" />Brightness</span> <input id="filter-n_brightness" data-control-effect="filter.n_brightness" class="filter-exact-value" type="number" min="-0.5" max="0.5" step="0.01" aria-label="Brightness" :value="o_filter.n_brightness" @change="f_set_number('n_brightness', $event, -0.5, 0.5)"></label>
+                <input
+                    type="range" min="-0.5" max="0.5" step="0.01" aria-label="Brightness slider"
+                    v-model.number="o_filter.n_brightness"
+                    @input="f_on_change"
+                >
+            </div>
+            <div class="filter-slider">
+                <label for="filter-n_contrast"><span><ui_icon s_name="contrast" />Contrast</span> <input id="filter-n_contrast" data-control-effect="filter.n_contrast" class="filter-exact-value" type="number" min="0" max="3" step="0.01" aria-label="Contrast" :value="o_filter.n_contrast" @change="f_set_number('n_contrast', $event, 0, 3)"></label>
+                <input
+                    type="range" min="0" max="3" step="0.01" aria-label="Contrast slider"
+                    v-model.number="o_filter.n_contrast"
+                    @input="f_on_change"
+                >
+            </div>
+            <div class="filter-slider">
+                <label for="filter-n_gamma"><span><ui_icon s_name="gamma" />Gamma</span> <input id="filter-n_gamma" data-control-effect="filter.n_gamma" class="filter-exact-value" type="number" min="0.2" max="3" step="0.01" aria-label="Gamma" :value="o_filter.n_gamma" @change="f_set_number('n_gamma', $event, 0.2, 3)"></label>
+                <input
+                    type="range" min="0.2" max="3" step="0.01" aria-label="Gamma slider"
+                    v-model.number="o_filter.n_gamma"
+                    @input="f_on_change"
+                >
+            </div>
+            <div class="filter-slider">
+                <label for="filter-n_saturation"><span><ui_icon s_name="color" />Saturation</span> <input id="filter-n_saturation" data-control-effect="filter.n_saturation" class="filter-exact-value" type="number" min="0" max="3" step="0.01" aria-label="Saturation" :value="o_filter.n_saturation" @change="f_set_number('n_saturation', $event, 0, 3)"></label>
+                <input
+                    type="range" min="0" max="3" step="0.01" aria-label="Saturation slider"
+                    v-model.number="o_filter.n_saturation"
+                    @input="f_on_change"
+                >
+            </div>
+        </div>
+
+        <div class="filter-group cockpit-grid">
+            <div class="cockpit-field" data-tooltip="Kernel&#10;Convolution applied to every pixel: sharpen, blur or edge detection.">
+                <label class="filter-label" for="filter-kernel">Kernel</label>
+                <select id="filter-kernel" aria-label="Kernel" v-model="o_filter.s_kernel" @change="f_on_change">
+                    <option v-for="o_kernel in a_o_kernel" :value="o_kernel.s_value">
+                        {{ o_kernel.s_label }}
+                    </option>
+                </select>
+            </div>
+            <div class="cockpit-field" data-tooltip="False color&#10;Map brightness to a colour palette.">
+                <label class="filter-label" for="filter-colormap">False color</label>
+                <select id="filter-colormap" aria-label="False color" v-model="o_filter.s_colormap" @change="f_on_change">
+                    <option v-for="o_colormap in a_o_colormap" :value="o_colormap.s_value">
+                        {{ o_colormap.s_label }}
+                    </option>
+                </select>
+            </div>
+            <div class="cockpit-span" v-if="o_filter.s_kernel === 'edge'">
+                <div class="filter-slider">
+                    <label for="filter-n_edge_gain"><span><ui_icon s_name="focus" />Edge gain</span> <input id="filter-n_edge_gain" data-control-effect="filter.n_edge_gain" class="filter-exact-value" type="number" min="0.5" max="12" step="0.1" aria-label="Edge gain" :value="o_filter.n_edge_gain" @change="f_set_number('n_edge_gain', $event, 0.5, 12)"></label>
+                    <input
+                        type="range" min="0.5" max="12" step="0.1" aria-label="Edge gain slider"
+                        v-model.number="o_filter.n_edge_gain"
+                        @input="f_on_change"
+                    >
+                </div>
+                <label class="filter-check">
+                    <input type="checkbox" v-model="o_filter.b_binary__edge" @change="f_on_change">
+                    <span>black / white edges</span>
+                </label>
+            </div>
+            <label class="filter-check">
+                <input type="checkbox" v-model="o_filter.b_grayscale" @change="f_on_change">
+                <span>grayscale</span>
+            </label>
+            <label class="filter-check">
+                <input type="checkbox" v-model="o_filter.b_invert" @change="f_on_change">
+                <span>invert</span>
+            </label>
         </div>
 
         <!-- processed image, drawn on top of the raw webcam video -->
@@ -371,8 +361,6 @@ let o_component__filter = {
             a_o_kernel: a_o_kernel,
             a_o_colormap: a_o_colormap,
             s_error: '',
-            n_scl_x__frame: 0,
-            n_scl_y__frame: 0,
             n_id__frame: 0,
             o_histogram: null,
         };
@@ -398,10 +386,6 @@ let o_component__filter = {
         },
     },
     methods: {
-        f_close: function() {
-            o_state.o_panel_visibility.filter = false;
-            f_save_setting__debounced('o_panel_visibility', o_state.o_panel_visibility);
-        },
         f_set_number(key, event, min, max) {
             const value = Number(event.target.value);
             if (event.target.value.trim() && Number.isFinite(value)) {
@@ -428,7 +412,7 @@ let o_component__filter = {
             o_self.f_on_change();
         },
         f_histogram: function(n_now) {
-            if (!o_state.o_filter.b_histogram || !o_state.o_panel_visibility.filter ||
+            if (!o_state.o_filter.b_histogram || !o_state.o_panel_visibility.camera_setting ||
                 !o_state.b_streaming__webcam) { this.o_histogram = null; return; }
             if (n_now - (this._n_ts_histogram || 0) < 250) return;
             this._n_ts_histogram = n_now;
@@ -568,8 +552,6 @@ let o_component__filter = {
             if(el_canvas.width !== f_o_camera_geometry(el_video).n_scl_x || el_canvas.height !== f_o_camera_geometry(el_video).n_scl_y){
                 el_canvas.width = f_o_camera_geometry(el_video).n_scl_x;
                 el_canvas.height = f_o_camera_geometry(el_video).n_scl_y;
-                o_self.n_scl_x__frame = f_o_camera_geometry(el_video).n_scl_x;
-                o_self.n_scl_y__frame = f_o_camera_geometry(el_video).n_scl_y;
                 o_gl.viewport(0, 0, el_canvas.width, el_canvas.height);
             }
 

@@ -30,6 +30,7 @@ installed on first run (skipped afterwards, so `deno task start` stays fast):
 - `./venv` with `numpy` + `opencv-python` — used by `stitch.py` (the tile scan mosaic)
 - `torch` (cpu build) + `lightglue` + `kornia` — used by `autostitch.py` and by `stitch.py --matcher loftr`
 - `./venv_cellpose` with `torch` + `cellpose` — used by `cellpose_worker.py` for the `Cell pose` panel
+- linux only: `v4l2-ctl` (system package `v4l-utils`, installed with `sudo`, which may ask for your password) — gives the Camera window the real sensor sizes of the camera and the controls the browser cannot reach (ISO). on other systems the Camera window works without them
 
 the installer also runs `stitch.py --help` inside the venv, so a broken numpy/opencv
 install is reported before a scan is started rather than after it.
@@ -502,7 +503,7 @@ Interrupted or timed-out moves abort acquisition before another image is saved.
 
 ### Exposure histogram and pixel warnings
 
-Open **Image Filter** for a live brightness and RGB histogram of the camera frame
+Open **Camera** for a live brightness and RGB histogram of the camera frame
 before display filters. It samples a preview at most 512 pixels wide, updates
 four times per second, and pauses when the panel is closed. The percentages
 show sampled pixels meeting the current dark and bright thresholds.

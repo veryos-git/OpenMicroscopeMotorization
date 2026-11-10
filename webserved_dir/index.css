@@ -51,6 +51,14 @@ body {
   z-index: 4;
   pointer-events: none;
 }
+/* auto move snapshot overlay: mirrors #webcamVideo the same way, just below the mask */
+.auto-move-overlay {
+  position: fixed; inset: 0;
+  width: 100%; height: 100%;
+  object-fit: contain;
+  z-index: 3;
+  pointer-events: none;
+}
 #webcamPlaceholder {
   position: fixed; inset: 0;
   display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 12px;
@@ -1278,10 +1286,10 @@ input[type="range"]::-moz-range-thumb {
   font-size: 0.65rem; font-weight: 400; word-break: break-all; max-width: 180px;
 }
 
-/* ─── Camera settings panel ─── */
+/* ─── Camera panel: hardware settings + image filter ─── */
 .panel-camera-setting {
   top: var(--topbar-h); left: 50%; transform: translateX(-50%);
-  width: 340px; max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
+  width: 344px; max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
   --card-accent: var(--accent-0);
 }
 
@@ -1317,24 +1325,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .camera-setting-stack {
-  display: flex; flex-direction: column; gap: 12px;
-}
-
-.camera-setting-group {
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
-}
-.camera-setting-group:last-child { border-bottom: none; padding-bottom: 0; }
-
-.camera-setting-row {
-  display: flex; justify-content: space-between; align-items: center;
-  margin-bottom: 8px;
-}
-
-.camera-setting-label {
-  font-family: 'JetBrains Mono', monospace; font-size: 0.75rem;
-  font-weight: 700; color: var(--text); text-transform: uppercase;
-  letter-spacing: 1px;
+  display: flex; flex-direction: column; gap: 4px;
 }
 
 .mode-toggle {
@@ -1350,18 +1341,6 @@ input[type="range"]::-moz-range-thumb {
 .mode-btn:hover:not(.active) { color: var(--text); background: rgba(255,255,255,0.05); }
 .mode-btn.active { background: var(--accent-0); color: #000; }
 
-.camera-setting-slider { margin-top: 4px; }
-.camera-setting-slider label {
-  display: flex; justify-content: space-between;
-  font-family: 'JetBrains Mono', monospace; font-size: 0.65rem;
-  color: var(--dim); text-transform: uppercase; letter-spacing: 1px;
-  margin-bottom: 6px;
-}
-.camera-setting-slider .setting-value {
-  color: var(--text); font-weight: 700;
-}
-
-/* ─── Camera setting rows (new compact UI) ─── */
 .cam-setting-row {
   display: flex; align-items: center; gap: 8px; min-height: 32px;
 }
@@ -1386,12 +1365,6 @@ input[type="range"]::-moz-range-thumb {
 }
 .cam-setting-error { font-size: 0.8rem; color: var(--danger); margin-top: 4px; }
 
-/* ─── Image filter panel ─── */
-.panel-filter {
-  top: var(--topbar-h); left: 492px; width: 320px;
-  max-height: calc(100vh - var(--topbar-h) - 16px); overflow-y: auto;
-  --card-accent: var(--accent-1);
-}
 /* ─── Calibration overlay panel ─── */
 .panel-calibration {
   top: var(--topbar-h); left: 340px; width: 360px;
@@ -2300,7 +2273,6 @@ input[type="range"]::-moz-range-thumb {
 
 .filter-slider label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .filter-exact-value { width: 6.5em; padding: 4px; color: inherit; background: var(--bg, #181b22); border: 1px solid var(--dim, #666); border-radius: 4px; }
-.camera-setting-group input[type="range"] { --card-accent: var(--accent-1); display: block; margin: 10px 0; }
 .control-highlight { outline: 3px solid #8ce0c6 !important; outline-offset: 3px; }
 .action-search-hint { color: var(--text-muted, #a8b3c2); margin: 4px; font-size: 12px; }
 /* Training captures use a fixed, full-frame coordinate system. */
@@ -2325,6 +2297,7 @@ body.training-mode { --training-panel: 392px; }
 .training-mode #webcamVideo,
 .training-mode #webcamFrame,
 .training-mode .filter-canvas,
+.training-mode .auto-move-overlay,
 .training-mode #cellposeMask {
   inset: var(--topbar-h) auto auto 0;
   width: calc(100vw - var(--training-panel));
@@ -2359,7 +2332,7 @@ body.training-mode { --training-panel: 392px; }
 .training-crop-row figure { flex: 0 0 76px; }
 .training-crop-row figure svg { width: 76px; height: 76px; }
 @media (max-width: 800px) {
-  .training-mode #webcamVideo, .training-mode #webcamFrame, .training-mode .filter-canvas, .training-mode #cellposeMask {
+  .training-mode #webcamVideo, .training-mode #webcamFrame, .training-mode .filter-canvas, .training-mode .auto-move-overlay, .training-mode #cellposeMask {
     width: 100vw; height: calc((100dvh - var(--topbar-h)) * .45);
   }
   .training-mode .panel-training { top: calc(var(--topbar-h) + (100dvh - var(--topbar-h)) * .45); bottom: 8px; }
@@ -2632,29 +2605,26 @@ body.training-mode { --training-panel: 392px; }
 .panel-training .training-footer p { margin: 0; }
 
 /* Image filter: one line per slider, exposure warnings in one block */
-.panel-filter { width: 344px; }
-.panel-filter .panel-header .filter-power { min-height: 24px; padding: 2px 9px; }
-.panel-filter .panel-header .filter-power.active { background: var(--accent-1); border-color: var(--accent-1); color: #000; }
-.panel-filter .filter-group { margin-top: 8px; padding-top: 8px; }
-.panel-filter .filter-group:first-child, .panel-filter .panel-body > .filter-note + .filter-group { margin-top: 6px; }
-.panel-filter .panel-body > .filter-group:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
-.panel-filter .filter-label { font-size: 0.56rem; letter-spacing: 0.8px; }
-.panel-filter .cockpit-section-head .filter-check { margin: 0 0 0 auto; }
-.panel-filter .filter-check { margin-top: 0; gap: 6px; font-size: 0.64rem; min-height: 22px; }
-.panel-filter .exposure-histogram { margin: 0 0 6px; }
-.panel-filter .exposure-histogram svg { height: 64px; border-radius: 4px; }
-.panel-filter .exposure-histogram-axis { margin-top: 2px; font-family: 'JetBrains Mono', monospace; font-size: 0.56rem; }
+.panel-camera-setting .filter-power { min-height: 24px; padding: 2px 9px; }
+.panel-camera-setting .filter-power.active { background: var(--accent-1); border-color: var(--accent-1); color: #000; }
+.panel-camera-setting .filter-group { margin-top: 8px; padding-top: 8px; }
+.panel-camera-setting .filter-label { font-size: 0.56rem; letter-spacing: 0.8px; }
+.panel-camera-setting .cockpit-section-head :is(.filter-check, .cockpit-icon-button) { margin: 0 0 0 auto; }
+.panel-camera-setting .filter-check { margin-top: 0; gap: 6px; font-size: 0.64rem; min-height: 22px; }
+.panel-camera-setting .exposure-histogram { margin: 0 0 6px; }
+.panel-camera-setting .exposure-histogram svg { height: 64px; border-radius: 4px; }
+.panel-camera-setting .exposure-histogram-axis { margin-top: 2px; font-family: 'JetBrains Mono', monospace; font-size: 0.56rem; }
 .exposure-warning-row { display: grid; gap: 0; }
-.panel-filter .exposure-thresholds { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 6px; align-items: center; margin-top: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.64rem; white-space: nowrap; }
-.panel-filter .exposure-thresholds input { width: 52px; }
-.panel-filter .exposure-thresholds select { width: 100%; }
-.panel-filter .filter-slider { display: grid; grid-template-columns: 104px minmax(0, 1fr) 62px; gap: 8px; align-items: center; margin-top: 0; min-height: 28px; }
-.panel-filter .filter-slider label { display: contents; }
-.panel-filter .filter-slider label > span { display: inline-flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.6px; white-space: nowrap; }
-.panel-filter .filter-slider label > span .ui-icon { width: 14px; height: 14px; flex-basis: 14px; }
-.panel-filter .filter-slider .filter-exact-value { order: 3; width: 100%; }
-.panel-filter .filter-slider input[type="range"] { order: 2; width: 100%; }
-.panel-filter .cockpit-grid .filter-check { align-self: center; }
+.panel-camera-setting .exposure-thresholds { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 6px; align-items: center; margin-top: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.64rem; white-space: nowrap; }
+.panel-camera-setting .exposure-thresholds input { width: 52px; }
+.panel-camera-setting .exposure-thresholds select { width: 100%; }
+.panel-camera-setting .filter-slider { display: grid; grid-template-columns: 104px minmax(0, 1fr) 62px; gap: 8px; align-items: center; margin-top: 0; min-height: 28px; }
+.panel-camera-setting .filter-slider label { display: contents; }
+.panel-camera-setting .filter-slider label > span { display: inline-flex; align-items: center; gap: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--dim); text-transform: uppercase; letter-spacing: 0.6px; white-space: nowrap; }
+.panel-camera-setting .filter-slider label > span .ui-icon { width: 14px; height: 14px; flex-basis: 14px; }
+.panel-camera-setting .filter-slider .filter-exact-value { order: 3; width: 100%; }
+.panel-camera-setting .filter-slider input[type="range"] { order: 2; width: 100%; }
+.panel-camera-setting .cockpit-grid .filter-check { align-self: center; }
 
 /* Statistics: one table, a column per motor */
 .panel-stats { width: 372px; }
@@ -2822,7 +2792,7 @@ body.training-mode { --training-panel: 392px; }
 .panel-slide-library .map-select-empty { padding: 6px; }
 
 /* Auto move, Auto stitch, Macro */
-.panel-auto-move { width: 320px; }
+.panel-auto-move { width: 320px; --card-accent: var(--accent-1); }
 .auto-move-config { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 8px; margin: 8px 0; }
 .auto-move-config .scan-field { margin: 0; }
 .auto-move-config .scan-field input[type="number"] { width: 100%; text-align: left; }
